@@ -26,6 +26,7 @@ export default function AdminTracks() {
   const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 25, pages: 1 });
   const [editingTrack, setEditingTrack] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [saveError, setSaveError] = useState(null);
 
   // Debounce search
   useEffect(() => {
@@ -73,17 +74,26 @@ export default function AdminTracks() {
 
   const handleEditSave = async (trackId, updates) => {
     try {
+      setSaveError(null);
+      console.log('Saving track:', trackId, updates);
       const res = await fetch(`${API}/tracks/${trackId}`, {
         method: 'PUT',
         headers: authHeaders(true),
         body: JSON.stringify(updates)
       });
       const data = await res.json();
+      console.log('Save response:', data);
       if (data.success) {
         setEditingTrack(null);
         fetchTracks(pagination.page);
+      } else {
+        setSaveError(data.message || 'Failed to save track');
+        console.error('Save failed:', data.message);
       }
-    } catch (err) { console.error('Update failed:', err); }
+    } catch (err) {
+      setSaveError(err.message || 'Network error');
+      console.error('Update failed:', err);
+    }
   };
 
   const getTonality = (t) => {
@@ -405,7 +415,7 @@ export default function AdminTracks() {
 
       {/* Edit Modal */}
       {editingTrack && (
-        <EditTrackModal track={editingTrack} onClose={() => setEditingTrack(null)} onSave={handleEditSave} />
+        <EditTrackModal track={editingTrack} onClose={() => { setEditingTrack(null); setSaveError(null); }} onSave={handleEditSave} saveError={saveError} />
       )}
 
       {/* Upload Modal */}
@@ -430,7 +440,7 @@ export default function AdminTracks() {
   );
 }
 
-function EditTrackModal({ track, onClose, onSave }) {
+function EditTrackModal({ track, onClose, onSave, saveError }) {
   const [title, setTitle] = useState(track.title || '');
   const [artist, setArtist] = useState(track.artist || '');
   const [bpm, setBpm] = useState(track.bpm || '');
@@ -542,6 +552,11 @@ function EditTrackModal({ track, onClose, onSave }) {
             </div>
           </div>
         </div>
+        {saveError && (
+          <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
+            <p className="text-sm text-red-400">{saveError}</p>
+          </div>
+        )}
         <div className="flex gap-3 mt-6">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white font-medium transition-colors">Cancel</button>
           <button onClick={() => onSave(track._id, { title, artist, bpm: parseInt(bpm) || undefined, genre })} className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-colors">Save</button>

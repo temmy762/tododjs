@@ -44,15 +44,29 @@ export const getAllTracks = async (req, res) => {
 
     const tracks = await Track.find(query)
       .populate('sourceId', 'name')
-      .populate('albumId', 'name coverArt')
+      .populate('albumId', 'name coverArt coverArtKey')
       .sort(sort)
       .skip(skip)
       .limit(parseInt(limit))
       .lean();
 
+    // Resolve signed URLs for cover art
+    const tracksWithUrls = await Promise.all(tracks.map(async (t) => {
+      let cover = '';
+      if (t.coverArtKey) {
+        try { cover = await getSignedDownloadUrl(t.coverArtKey, 3600); } catch (e) { /* fallback */ }
+      }
+      if (!cover && t.coverArt) cover = t.coverArt;
+      if (!cover && t.albumId?.coverArtKey) {
+        try { cover = await getSignedDownloadUrl(t.albumId.coverArtKey, 3600); } catch (e) { /* fallback */ }
+      }
+      if (!cover && t.albumId?.coverArt) cover = t.albumId.coverArt;
+      return { ...t, coverArt: cover || '' };
+    }));
+
     res.status(200).json({
       success: true,
-      data: tracks,
+      data: tracksWithUrls,
       pagination: {
         total,
         page: parseInt(page),

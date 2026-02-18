@@ -40,7 +40,7 @@
     "nodemailer": "^6.9.7",
     "openai": "^6.17.0",
     "resend": "^6.9.2",
-    "stripe": "^14.10.0",
+    "stripe": "^14.25.0",
     "yauzl": "^3.2.0"
   },
   "devDependencies": {

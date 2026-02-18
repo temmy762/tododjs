@@ -2,7 +2,7 @@ import Album from '../models/Album.js';
 import Source from '../models/Source.js';
 import DatePack from '../models/DatePack.js';
 import Track from '../models/Track.js';
-import { uploadToWasabi, deleteFromWasabi } from '../config/wasabi.js';
+import { uploadToWasabi, deleteFromWasabi, getSignedDownloadUrl } from '../config/wasabi.js';
 import { resolveSignedUrls, resolveSignedUrl } from '../utils/signedUrls.js';
 import { extractMetadataFromZip, detectDuplicates } from '../utils/metadataExtractor.js';
 import { detectTonality } from '../services/tonalityDetection.js';
@@ -86,21 +86,15 @@ export const uploadAlbum = async (req, res) => {
       uploadedBy: req.user.id
     });
 
-    // Upload ZIP to Wasabi for bulk download
-    const zipKey = `sources/${source.name}-${source.year}/albums/${album.name}/album.zip`;
-    const zipUpload = await uploadToWasabi(zipFile.buffer, zipKey, 'application/zip');
-    album.zipUrl = zipUpload.location;
-    album.zipKey = zipUpload.key;
-
-    // Respond immediately, process tracks in background
+    // Respond immediately — ZIP upload + track processing happen in background
     res.status(201).json({
       success: true,
       message: `Album created. Processing ${mp3Files.length} tracks in background.`,
-      data: album
+      data: { album }
     });
 
-    // Background: process tracks
-    processAlbumTracksAsync(album, mp3Files, source, datePack, coverArtUrl, req.user.id);
+    // Background: upload ZIP to Wasabi + process tracks
+    processAlbumTracksAsync(album, mp3Files, source, datePack, coverArtUrl, req.user.id, zipFile);
   } catch (error) {
     console.error('Album upload error:', error);
     res.status(500).json({
@@ -110,11 +104,32 @@ export const uploadAlbum = async (req, res) => {
   }
 };
 
-async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverArtUrl, userId) {
+async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverArtUrl, userId, zipFile) {
   let totalSize = 0;
   let processedCount = 0;
 
+  console.log(`\n🔄 Starting background track processing for album: ${album.name}`);
+  console.log(`   Album ID: ${album._id}`);
+  console.log(`   Tracks to process: ${mp3Files.length}`);
+
+  // Set initial processing status
+  album.processingStatus = 'processing';
+  album.processingProgress = 0;
+  album.processedTracks = 0;
+  await album.save();
+
   try {
+    // Upload ZIP to Wasabi for bulk download (in background)
+    if (zipFile) {
+      console.log(`   📦 Uploading ZIP to Wasabi...`);
+      const zipKey = `sources/${source.name}-${source.year}/albums/${album.name}/album.zip`;
+      const zipUpload = await uploadToWasabi(zipFile.buffer, zipKey, 'application/zip');
+      album.zipUrl = zipUpload.location;
+      album.zipKey = zipUpload.key;
+      await album.save();
+      console.log(`   ✓ ZIP uploaded to Wasabi`);
+    }
+
     for (const mp3Entry of mp3Files) {
       const mp3Buffer = mp3Entry.getData();
       const mp3Name = path.basename(mp3Entry.entryName);
@@ -166,13 +181,13 @@ async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverA
       const trackCoverArt = embeddedCoverUrl || coverArtUrl;
       const trackCoverArtKey = embeddedCoverKey || null;
 
-      await Track.create({
+      const track = await Track.create({
         sourceId: source._id,
         datePackId: datePack._id,
         albumId: album._id,
         title: metadata.title,
         artist: metadata.artist,
-        genre: album.genre || 'House',
+        genre: album.genre || source.name || 'Various',
         bpm: detectedBpm || metadata.bpm || 128,
         tonality,
         pool: source.name,
@@ -189,15 +204,27 @@ async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverA
         uploadedBy: userId,
         status: 'published'
       });
+      
+      console.log(`   ✓ Created track with albumId: ${track.albumId}, genre: ${track.genre}`);
 
       totalSize += mp3Buffer.length;
       processedCount++;
-      console.log(`   ✓ Track ${processedCount}/${mp3Files.length}: ${metadata.title}`);
+      
+      // Update progress in real-time
+      const progress = Math.round((processedCount / mp3Files.length) * 100);
+      album.processingProgress = progress;
+      album.processedTracks = processedCount;
+      await album.save();
+      
+      console.log(`   ✓ Track ${processedCount}/${mp3Files.length}: ${metadata.title} (${progress}%)`);
     }
 
-    // Update album stats
+    // Update album stats and mark as completed
     album.totalSize = totalSize;
     album.trackCount = processedCount;
+    album.processingStatus = 'completed';
+    album.processingProgress = 100;
+    album.processedTracks = processedCount;
     await album.save();
 
     // Update date card stats
@@ -213,7 +240,21 @@ async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverA
 
     console.log(`\n✅ Album "${album.name}" complete: ${processedCount} tracks, ${(totalSize / 1024 / 1024).toFixed(1)} MB`);
   } catch (error) {
-    console.error(`❌ Album processing error for "${album.name}":`, error);
+    console.error(`\n❌ CRITICAL: Album processing failed for "${album.name}"`);
+    console.error(`   Album ID: ${album._id}`);
+    console.error(`   Processed: ${processedCount}/${mp3Files.length} tracks`);
+    console.error(`   Error:`, error.message);
+    console.error(`   Stack:`, error.stack);
+    
+    // Mark album as failed
+    try {
+      album.processingStatus = 'failed';
+      album.processingError = error.message;
+      album.processedTracks = processedCount;
+      await album.save();
+    } catch (saveErr) {
+      console.error(`   Failed to save error status:`, saveErr.message);
+    }
   }
 }
 
@@ -394,6 +435,53 @@ export const getAlbums = async (req, res) => {
   }
 };
 
+// @desc    Get album processing status
+// @route   GET /api/albums/:id/status
+// @access  Public
+export const getAlbumStatus = async (req, res) => {
+  try {
+    const album = await Album.findById(req.params.id)
+      .select('processingStatus processingProgress processedTracks trackCount processingError name updatedAt');
+
+    if (!album) {
+      return res.status(404).json({
+        success: false,
+        message: 'Album not found'
+      });
+    }
+
+    // Detect stale processing: if no progress update for >60 minutes, report as failed
+    // Only report — don't save, to avoid overwriting active background processing
+    let reportedStatus = album.processingStatus;
+    let reportedError = album.processingError;
+    if (album.processingStatus === 'processing') {
+      const minutesSinceUpdate = (Date.now() - new Date(album.updatedAt).getTime()) / 60000;
+      if (minutesSinceUpdate > 60) {
+        reportedStatus = 'failed';
+        reportedError = 'Processing stalled — server may have restarted. Please delete and re-upload.';
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        albumId: album._id,
+        name: album.name,
+        status: reportedStatus,
+        progress: album.processingProgress,
+        processedTracks: album.processedTracks,
+        totalTracks: album.trackCount,
+        error: reportedError
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 // @desc    Get single album with tracks
 // @route   GET /api/albums/:id
 // @access  Public
@@ -413,14 +501,45 @@ export const getAlbum = async (req, res) => {
     const albumWithUrl = await resolveSignedUrl(album, ['coverArt']);
 
     // Get tracks for this album
+    console.log(`🔍 Fetching tracks for album ID: ${album._id}`);
+    console.log(`   Album ID type: ${typeof album._id}, value: ${album._id}`);
+    
+    // Check total tracks in database
+    const totalTracks = await Track.countDocuments({});
+    console.log(`   Total tracks in DB: ${totalTracks}`);
+    
+    // Try to find any tracks for this album
     const tracks = await Track.find({ albumId: album._id })
       .sort({ title: 1 });
+    console.log(`📊 Found ${tracks.length} tracks for album "${album.name}"`);
+    
+    // If no tracks found, check if tracks exist with string albumId
+    if (tracks.length === 0) {
+      const tracksWithStringId = await Track.find({ albumId: album._id.toString() });
+      console.log(`   Tracks with string albumId: ${tracksWithStringId.length}`);
+      
+      // Check sample tracks to see their albumId format
+      const sampleTracks = await Track.find({}).limit(3).select('title albumId');
+      console.log(`   Sample tracks:`, sampleTracks.map(t => ({ title: t.title, albumId: t.albumId, type: typeof t.albumId })));
+    }
+
+    // Resolve signed URLs for track cover art and audio files
+    const tracksWithUrls = await Promise.all(tracks.map(async (track) => {
+      const trackObj = track.toObject();
+      if (trackObj.coverArt && trackObj.coverArtKey) {
+        trackObj.coverArt = await getSignedDownloadUrl(trackObj.coverArtKey, 7200);
+      }
+      if (trackObj.audioFile?.key) {
+        trackObj.audioFile.url = await getSignedDownloadUrl(trackObj.audioFile.key, 7200);
+      }
+      return trackObj;
+    }));
 
     res.status(200).json({
       success: true,
       data: {
         album: albumWithUrl,
-        tracks
+        tracks: tracksWithUrls
       }
     });
   } catch (error) {
@@ -466,5 +585,50 @@ export const deleteAlbum = async (req, res) => {
       success: false,
       message: error.message
     });
+  }
+};
+
+// @desc    Toggle featured status on an album
+// @route   PUT /api/albums/:id/featured
+// @access  Private/Admin
+export const toggleFeatured = async (req, res) => {
+  try {
+    const album = await Album.findById(req.params.id);
+    if (!album) {
+      return res.status(404).json({ success: false, message: 'Album not found' });
+    }
+
+    album.isFeatured = !album.isFeatured;
+    await album.save();
+
+    res.status(200).json({
+      success: true,
+      data: { isFeatured: album.isFeatured },
+      message: album.isFeatured ? 'Album marked as featured' : 'Album removed from featured'
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get all featured albums
+// @route   GET /api/albums/featured
+// @access  Public
+export const getFeaturedAlbums = async (req, res) => {
+  try {
+    const albums = await Album.find({ isFeatured: true, isActive: true })
+      .sort({ updatedAt: -1 })
+      .limit(20)
+      .populate('sourceId', 'name year platform thumbnail');
+
+    const albumsWithUrls = await resolveSignedUrls(albums, ['coverArt']);
+
+    res.status(200).json({
+      success: true,
+      count: albumsWithUrls.length,
+      data: albumsWithUrls
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };

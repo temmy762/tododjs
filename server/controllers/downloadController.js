@@ -6,6 +6,7 @@ import User from '../models/User.js';
 import { getSignedDownloadUrl } from '../config/wasabi.js';
 import s3Client from '../config/wasabi.js';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import archiver from 'archiver';
 
 const buildSafeFilename = (name) => {
@@ -205,18 +206,19 @@ export const downloadTrackFile = async (req, res) => {
       });
     }
 
+    const filename = buildSafeFilename(`${track.artist || 'Unknown Artist'} - ${track.title || 'Unknown Title'}.mp3`);
     const command = new GetObjectCommand({
       Bucket: process.env.WASABI_BUCKET_NAME,
-      Key: track.audioFile.key
+      Key: track.audioFile.key,
+      ResponseContentDisposition: `attachment; filename="${filename}"`
     });
-    const s3Response = await s3Client.send(command);
+    const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
 
-    const filename = buildSafeFilename(`${track.artist || 'Unknown Artist'} - ${track.title || 'Unknown Title'}.mp3`);
-    res.setHeader('Content-Type', s3Response.ContentType || 'audio/mpeg');
-    if (s3Response.ContentLength) res.setHeader('Content-Length', String(s3Response.ContentLength));
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-
-    s3Response.Body.pipe(res);
+    return res.status(200).json({
+      success: true,
+      downloadUrl: signedUrl,
+      filename
+    });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -300,16 +302,20 @@ export const downloadAlbum = async (req, res) => {
 // @access  Private
 export const downloadAlbumFile = async (req, res) => {
   try {
+    console.log(`📥 downloadAlbumFile called for album: ${req.params.id}`);
     const album = await Album.findById(req.params.id);
 
     if (!album) {
+      console.log('   ❌ Album not found');
       return res.status(404).json({
         success: false,
         message: 'Album not found'
       });
     }
+    console.log(`   ✓ Album found: "${album.name}", zipKey: ${album.zipKey || 'NONE'}`);
 
     const user = await User.findById(req.user.id);
+    console.log(`   ✓ User: ${user.email}, role: ${user.role}`);
 
     // Check subscription (bulk downloads require at least premium)
     if (user.role !== 'admin' && user.subscription.plan === 'free') {
@@ -341,25 +347,29 @@ export const downloadAlbumFile = async (req, res) => {
       }
     }
 
-    // If a pre-built ZIP exists on Wasabi, stream it directly
+    // If a pre-built ZIP exists on Wasabi, redirect to a signed URL for fast direct download
+    console.log(`   📦 Checking for pre-built ZIP...`);
     if (album.zipKey) {
+      console.log(`   📦 Generating signed URL for direct download: ${album.zipKey}`);
+      const zipFilename = buildSafeFilename(`${album.name || 'Album'}.zip`);
       const command = new GetObjectCommand({
         Bucket: process.env.WASABI_BUCKET_NAME,
-        Key: album.zipKey
+        Key: album.zipKey,
+        ResponseContentDisposition: `attachment; filename="${zipFilename}"`
       });
-      const s3Response = await s3Client.send(command);
-
-      const filename = buildSafeFilename(`${album.name || 'Album'}.zip`);
-      res.setHeader('Content-Type', 'application/zip');
-      if (s3Response.ContentLength) res.setHeader('Content-Length', String(s3Response.ContentLength));
-      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-
-      s3Response.Body.pipe(res);
-      return;
+      const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+      console.log(`   ✅ Redirecting to signed URL`);
+      return res.status(200).json({
+        success: true,
+        downloadUrl: signedUrl,
+        filename: zipFilename
+      });
     }
 
     // No pre-built ZIP — build one on-the-fly from the album's tracks
+    console.log(`   🔧 No pre-built ZIP, building on-the-fly...`);
     const tracks = await Track.find({ albumId: album._id });
+    console.log(`   📊 Found ${tracks.length} tracks to zip`);
 
     if (!tracks || tracks.length === 0) {
       return res.status(400).json({
@@ -402,7 +412,7 @@ export const downloadAlbumFile = async (req, res) => {
 
     await archive.finalize();
   } catch (error) {
-    console.error('downloadAlbumFile error:', error);
+    console.error('downloadAlbumFile error:', error.message, error.stack);
     if (!res.headersSent) {
       res.status(500).json({
         success: false,

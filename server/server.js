@@ -29,6 +29,8 @@ import settingsRoutes from './routes/settings.js';
 import adminRoutes from './routes/admin.js';
 import favoriteRoutes from './routes/favorites.js';
 import mashupRoutes from './routes/mashup.js';
+import subscriptionRoutes from './routes/subscriptions.js';
+import stripeRoutes from './routes/stripe.js';
 
 const app = express();
 
@@ -51,7 +53,11 @@ app.use(cors({
     const allowedOrigins = [
       process.env.FRONTEND_URL,
       'http://localhost:5173',
-      /^http:\/\/127\.0\.0\.1:\d+$/  // Allow any port on 127.0.0.1 for browser preview
+      'https://tododjs.com',
+      'https://www.tododjs.com',
+      'https://api.tododjs.com',
+      /^http:\/\/127\.0\.0\.1:\d+$/,  // Allow any port on 127.0.0.1 for browser preview
+      /^https?:\/\/(.*\.)?tododjs\.com$/  // Allow all tododjs.com subdomains
     ];
     
     const isAllowed = allowedOrigins.some(allowed => {
@@ -74,8 +80,9 @@ app.use(cors({
 
 // Body parser (except for webhook and file upload routes)
 app.use((req, res, next) => {
-  // Skip body parser for routes that handle multipart/form-data (file uploads)
+  // Skip body parser for routes that handle multipart/form-data (file uploads) or raw body (webhooks)
   if (req.originalUrl === '/api/payment/webhook' || 
+      req.originalUrl === '/api/stripe/webhook' ||
       req.originalUrl.includes('/api/collections') ||
       req.originalUrl.includes('/api/albums') ||
       req.originalUrl.startsWith('/api/tracks/upload') ||
@@ -129,6 +136,8 @@ app.use('/api/settings', settingsRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/mashups', mashupRoutes);
+app.use('/api/subscriptions', subscriptionRoutes);
+app.use('/api/stripe', stripeRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

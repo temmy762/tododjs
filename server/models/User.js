@@ -38,21 +38,58 @@ const userSchema = new mongoose.Schema({
     default: 'user'
   },
   subscription: {
-    plan: {
+    planId: {
       type: String,
-      enum: ['free', 'premium', 'pro'],
-      default: 'free'
+      default: null
     },
     status: {
       type: String,
-      enum: ['active', 'inactive', 'cancelled', 'past_due'],
-      default: 'active'
+      enum: ['active', 'inactive', 'expired', 'cancelled', 'past_due'],
+      default: 'inactive'
+    },
+    startDate: {
+      type: Date,
+      default: null
+    },
+    endDate: {
+      type: Date,
+      default: null
+    },
+    autoRenew: {
+      type: Boolean,
+      default: false
     },
     stripeCustomerId: String,
     stripeSubscriptionId: String,
-    currentPeriodEnd: Date,
-    cancelAtPeriodEnd: Boolean
+    stripePaymentIntentId: String,
+    paymentMethod: String,
+    sharedWith: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    }],
+    sharedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      default: null
+    },
+    devices: [{
+      deviceId: { type: String, required: true },
+      deviceInfo: { type: String, default: 'Unknown Device' },
+      ipAddress: { type: String },
+      lastActive: { type: Date, default: Date.now },
+      addedAt: { type: Date, default: Date.now }
+    }]
   },
+  subscriptionHistory: [{
+    planId: String,
+    startDate: Date,
+    endDate: Date,
+    amount: Number,
+    currency: String,
+    status: String,
+    stripePaymentIntentId: String,
+    createdAt: { type: Date, default: Date.now }
+  }],
   downloads: {
     today: { type: Number, default: 0 },
     total: { type: Number, default: 0 },
@@ -84,6 +121,11 @@ const userSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  preferredLanguage: {
+    type: String,
+    enum: ['en', 'es'],
+    default: 'en'
   },
   registeredDevices: [{
     deviceId: { type: String, required: true },

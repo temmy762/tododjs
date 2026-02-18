@@ -1,7 +1,8 @@
 import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import { getSignedDownloadUrl } from '../config/wasabi.js';
-import { sendWelcomeEmail } from '../services/emailService.js';
+import { sendWelcomeEmail, sendPasswordResetEmail } from '../services/emailService.js';
 
 // Sign avatar URL if it's stored in Wasabi
 const signAvatarUrl = async (user) => {
@@ -82,7 +83,7 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
 // @access  Public
 export const register = async (req, res) => {
   try {
-    const { name, email, password, phoneNumber } = req.body;
+    const { name, email, password, phoneNumber, preferredLanguage } = req.body;
 
     // Check if user exists
     const userExists = await User.findOne({ email });
@@ -93,12 +94,17 @@ export const register = async (req, res) => {
       });
     }
 
+    // Detect language from request or default to 'en'
+    const language = preferredLanguage || 
+                    (req.headers['accept-language']?.startsWith('es') ? 'es' : 'en');
+
     // Create user
     const user = await User.create({
       name,
       email,
       password,
-      phoneNumber: phoneNumber || undefined
+      phoneNumber: phoneNumber || undefined,
+      preferredLanguage: language
     });
 
     // Send welcome email (non-blocking)
@@ -286,6 +292,99 @@ export const updatePassword = async (req, res) => {
     }
 
     user.password = req.body.newPassword;
+    await user.save();
+
+    await sendTokenResponse(user, 200, res, req);
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// @desc    Forgot password
+// @route   POST /api/auth/forgotpassword
+// @access  Public
+export const forgotPassword = async (req, res) => {
+  try {
+    const user = await User.findOne({ email: req.body.email });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'No user found with that email'
+      });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+
+    // Hash token and set to resetPasswordToken field
+    user.resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(resetToken)
+      .digest('hex');
+
+    // Set expire time (1 hour)
+    user.resetPasswordExpire = Date.now() + 60 * 60 * 1000;
+
+    await user.save({ validateBeforeSave: false });
+
+    // Send email
+    try {
+      await sendPasswordResetEmail(user, resetToken);
+
+      res.status(200).json({
+        success: true,
+        message: 'Password reset email sent'
+      });
+    } catch (err) {
+      console.error('Error sending password reset email:', err);
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save({ validateBeforeSave: false });
+
+      return res.status(500).json({
+        success: false,
+        message: 'Email could not be sent'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// @desc    Reset password
+// @route   PUT /api/auth/resetpassword/:resettoken
+// @access  Public
+export const resetPassword = async (req, res) => {
+  try {
+    // Get hashed token
+    const resetPasswordToken = crypto
+      .createHash('sha256')
+      .update(req.params.resettoken)
+      .digest('hex');
+
+    const user = await User.findOne({
+      resetPasswordToken,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or expired token'
+      });
+    }
+
+    // Set new password
+    user.password = req.body.password;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
     await user.save();
 
     await sendTokenResponse(user, 200, res, req);

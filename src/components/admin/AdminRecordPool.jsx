@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star, Minimize2, Maximize2 } from 'lucide-react';
 import ManageAlbumModal from './ManageAlbumModal';
 
 const API = 'http://localhost:5000/api';
@@ -327,9 +327,32 @@ function DateCardItem({ dateCard, onView, onEdit, onDelete }) {
 }
 
 // Album Card
-function AlbumCard({ album, onView, onDelete }) {
+function AlbumCard({ album, onView, onDelete, onToggleFeatured }) {
   const [reanalyzing, setReanalyzing] = useState(false);
   const [reanalyzeMsg, setReanalyzeMsg] = useState(null);
+  const [featured, setFeatured] = useState(album.isFeatured || false);
+  const [togglingFeatured, setTogglingFeatured] = useState(false);
+
+  const handleToggleFeatured = async (e) => {
+    e.stopPropagation();
+    if (togglingFeatured) return;
+    setTogglingFeatured(true);
+    try {
+      const res = await fetch(`${API}/albums/${album._id}/featured`, {
+        method: 'PUT',
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFeatured(data.data.isFeatured);
+        onToggleFeatured?.(album._id, data.data.isFeatured);
+      }
+    } catch (err) {
+      console.error('Error toggling featured:', err);
+    } finally {
+      setTogglingFeatured(false);
+    }
+  };
 
   const handleReanalyze = async (e) => {
     e.stopPropagation();
@@ -352,29 +375,51 @@ function AlbumCard({ album, onView, onDelete }) {
 
   return (
     <div className="bg-dark-elevated rounded-xl border border-white/10 overflow-hidden hover:border-accent/40 transition-all duration-300 group">
-      <div className="relative aspect-square overflow-hidden cursor-pointer" onClick={onView}>
-        {album.coverArt ? (
-          <img src={album.coverArt} alt={album.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-        ) : (
-          <div className="w-full h-full bg-dark-surface flex items-center justify-center"><Disc size={48} className="text-white/10" /></div>
+      {/* Featured toggle above the card image */}
+      <div className="relative aspect-square overflow-hidden">
+        <div className="cursor-pointer w-full h-full" onClick={onView}>
+          {album.coverArt ? (
+            <img src={album.coverArt} alt={album.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          ) : (
+            <div className="w-full h-full bg-dark-surface flex items-center justify-center"><Disc size={48} className="text-white/10" /></div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        </div>
+        {/* Featured toggle — top left */}
+        <button
+          onClick={handleToggleFeatured}
+          disabled={togglingFeatured}
+          className={`absolute top-2 left-2 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-200 disabled:opacity-50 shadow-lg backdrop-blur-sm ${
+            featured
+              ? 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white scale-110'
+              : 'bg-black/50 text-white/60 hover:bg-black/70 hover:text-yellow-400 hover:scale-110'
+          }`}
+          title={featured ? 'Remove from featured' : 'Mark as featured'}
+        >
+          {togglingFeatured ? <Loader size={14} className="animate-spin" /> : <Star size={14} className={featured ? 'fill-white' : ''} />}
+        </button>
+        {/* Featured badge — top right */}
+        {featured && (
+          <div className="absolute top-2 right-2 px-2 py-1 rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shadow-lg">
+            <Star size={10} className="fill-white" /> Featured
+          </div>
         )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
-      <div className="p-4">
-        <h3 className="font-bold truncate mb-1">{album.name}</h3>
-        <div className="flex items-center justify-between text-sm mb-3">
+      <div className="p-3 sm:p-4">
+        <h3 className="font-bold truncate mb-1 text-sm sm:text-base">{album.name}</h3>
+        <div className="flex items-center justify-between text-xs sm:text-sm mb-3">
           <span className="text-accent font-semibold"><Music size={13} className="inline mr-1" />{album.trackCount || 0} tracks</span>
           <span className="text-brand-text-tertiary">{album.totalDownloads || 0} downloads</span>
         </div>
         {reanalyzeMsg && <p className="text-xs text-green-400 mb-2">{reanalyzeMsg}</p>}
-        <div className="flex gap-2">
-          <button onClick={onView} className="flex-1 flex items-center justify-center gap-1 px-3 py-2 bg-accent hover:bg-accent-hover rounded-lg font-medium text-sm transition-colors">
+        <div className="flex gap-1.5 sm:gap-2">
+          <button onClick={onView} className="flex-1 flex items-center justify-center gap-1 px-2 sm:px-3 py-2 bg-accent hover:bg-accent-hover rounded-lg font-medium text-xs sm:text-sm transition-colors">
             <Eye size={14} /> Manage
           </button>
-          <button onClick={handleReanalyze} disabled={reanalyzing} className="px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 rounded-lg transition-colors disabled:opacity-50" title="Re-analyze key & BPM with Essentia.js">
+          <button onClick={handleReanalyze} disabled={reanalyzing} className="px-2 sm:px-3 py-2 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/50 rounded-lg transition-colors disabled:opacity-50" title="Re-analyze key & BPM with Essentia.js">
             {reanalyzing ? <Loader size={14} className="animate-spin" /> : <Music size={14} />}
           </button>
-          <button onClick={() => onDelete(album)} className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-colors">
+          <button onClick={() => onDelete(album)} className="px-2 sm:px-3 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-colors">
             <Trash2 size={14} />
           </button>
         </div>
@@ -562,136 +607,374 @@ function DateCardModal({ sourceId, dateCard, onClose, onSuccess }) {
   );
 }
 
-// Album Upload Modal
+// Album Upload Modal — supports batch uploading multiple ZIPs with minimize
 function AlbumUploadModal({ sourceId, datePackId, sourceName, dateCardName, onClose, onSuccess }) {
-  const [file, setFile] = useState(null);
-  const [coverFile, setCoverFile] = useState(null);
-  const [albumName, setAlbumName] = useState('');
-  const [genre, setGenre] = useState('');
-  const [uploading, setUploading] = useState(false);
-  const [progress, setProgress] = useState(0);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState('');
+  const [queue, setQueue] = useState([]);
+  const [globalGenre, setGlobalGenre] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+  const fileInputRef = useRef(null);
+  const pollRefs = useRef({});
 
-  const handleFileChange = (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    if (f.name.toLowerCase().endsWith('.zip') || f.type.includes('zip')) {
-      setFile(f);
-      setError('');
-      if (!albumName) setAlbumName(f.name.replace('.zip', ''));
-    } else {
-      setError('Please select a ZIP file');
-    }
+  useEffect(() => {
+    return () => {
+      Object.values(pollRefs.current).forEach(clearInterval);
+    };
+  }, []);
+
+  const addFiles = (files) => {
+    const zips = Array.from(files).filter(f => f.name.toLowerCase().endsWith('.zip') || f.type.includes('zip'));
+    if (zips.length === 0) return;
+    const newItems = zips.map(f => ({
+      id: Math.random().toString(36).substr(2, 9),
+      file: f,
+      name: f.name.replace(/\.zip$/i, ''),
+      genre: globalGenre,
+      coverFile: null,
+      coverPreview: null,
+      stage: 'idle',
+      uploadProgress: 0,
+      processingProgress: 0,
+      processedTracks: 0,
+      totalTracks: 0,
+      error: '',
+      albumId: null,
+    }));
+    setQueue(prev => [...prev, ...newItems]);
   };
 
-  const handleUpload = async () => {
-    if (!file) { setError('Please select a ZIP file'); return; }
-    setUploading(true);
-    setError('');
-    setProgress(0);
+  const updateItem = (id, updates) => {
+    setQueue(prev => prev.map(item => item.id === id ? { ...item, ...updates } : item));
+  };
 
-    const fd = new FormData();
-    fd.append('albumZip', file);
-    fd.append('sourceId', sourceId);
-    fd.append('datePackId', datePackId);
-    fd.append('albumName', albumName);
-    if (genre) fd.append('genre', genre);
-    if (coverFile) fd.append('coverArt', coverFile);
+  const removeItem = (id) => {
+    if (pollRefs.current[id]) { clearInterval(pollRefs.current[id]); delete pollRefs.current[id]; }
+    setQueue(prev => prev.filter(item => item.id !== id));
+  };
 
-    try {
+  const startPolling = (itemId, albumId) => {
+    let count = 0;
+    if (pollRefs.current[itemId]) clearInterval(pollRefs.current[itemId]);
+
+    pollRefs.current[itemId] = setInterval(async () => {
+      count++;
+      if (count > 1800) {
+        clearInterval(pollRefs.current[itemId]);
+        delete pollRefs.current[itemId];
+        updateItem(itemId, { stage: 'failed', error: 'Processing timed out' });
+        return;
+      }
+      try {
+        const res = await fetch(`${API}/albums/${albumId}/status`);
+        const data = await res.json();
+        if (data.success) {
+          updateItem(itemId, {
+            processingProgress: data.data.progress || 0,
+            processedTracks: data.data.processedTracks || 0,
+            totalTracks: data.data.totalTracks || 0,
+          });
+          if (data.data.status === 'completed') {
+            clearInterval(pollRefs.current[itemId]);
+            delete pollRefs.current[itemId];
+            updateItem(itemId, { stage: 'completed', processingProgress: 100 });
+          } else if (data.data.status === 'failed') {
+            clearInterval(pollRefs.current[itemId]);
+            delete pollRefs.current[itemId];
+            updateItem(itemId, { stage: 'failed', error: data.data.error || 'Processing failed' });
+          }
+        }
+      } catch (err) {
+        console.error('Poll error:', err);
+      }
+    }, 2000);
+  };
+
+  const uploadSingle = (item) => {
+    return new Promise((resolve) => {
+      const fd = new FormData();
+      fd.append('albumZip', item.file);
+      fd.append('sourceId', sourceId);
+      fd.append('datePackId', datePackId);
+      fd.append('albumName', item.name);
+      if (item.genre) fd.append('genre', item.genre);
+      if (item.coverFile) fd.append('coverArt', item.coverFile);
+
+      updateItem(item.id, { stage: 'uploading', uploadProgress: 0 });
+
       const xhr = new XMLHttpRequest();
       xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) setProgress(Math.round((e.loaded / e.total) * 100));
+        if (e.lengthComputable) updateItem(item.id, { uploadProgress: Math.round((e.loaded / e.total) * 100) });
       };
       xhr.onload = () => {
         try {
           const data = JSON.parse(xhr.responseText);
           if (xhr.status === 201 && data.success) {
-            setResult(data);
-            setTimeout(() => onSuccess(), 2000);
+            const aId = data.data.album._id;
+            updateItem(item.id, { stage: 'processing', uploadProgress: 100, albumId: aId, totalTracks: data.data.album.trackCount });
+            startPolling(item.id, aId);
           } else {
-            setError(data.message || 'Upload failed');
-            setUploading(false);
+            updateItem(item.id, { stage: 'failed', error: data.message || 'Upload failed' });
           }
-        } catch { setError('Upload failed'); setUploading(false); }
+        } catch {
+          updateItem(item.id, { stage: 'failed', error: 'Upload failed' });
+        }
+        resolve();
       };
-      xhr.onerror = () => { setError('Network error'); setUploading(false); };
+      xhr.onerror = () => { updateItem(item.id, { stage: 'failed', error: 'Network error' }); resolve(); };
       xhr.open('POST', `${API}/albums/upload`);
       xhr.setRequestHeader('Authorization', `Bearer ${getToken()}`);
       xhr.timeout = 0;
       xhr.send(fd);
-    } catch { setError('Upload failed'); setUploading(false); }
+    });
   };
 
-  return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-dark-elevated rounded-xl max-w-lg w-full p-6 my-8 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h2 className="text-xl font-bold">Upload Album</h2>
-            <p className="text-sm text-brand-text-tertiary mt-0.5">{sourceName} / {dateCardName}</p>
+  const uploadAll = async () => {
+    const pending = queue.filter(q => q.stage === 'idle' || q.stage === 'failed');
+    if (pending.length === 0) return;
+    setIsUploading(true);
+    for (const item of pending) {
+      await uploadSingle(item);
+    }
+    setIsUploading(false);
+  };
+
+  const handleClose = () => {
+    onSuccess();
+    onClose();
+  };
+
+  const allDone = queue.length > 0 && queue.every(q => q.stage === 'completed' || q.stage === 'failed');
+  const completedCount = queue.filter(q => q.stage === 'completed').length;
+  const failedCount = queue.filter(q => q.stage === 'failed').length;
+  const activeCount = queue.filter(q => q.stage === 'uploading' || q.stage === 'processing').length;
+  const hasIdle = queue.some(q => q.stage === 'idle' || q.stage === 'failed');
+  const activeItem = queue.find(q => q.stage === 'uploading' || q.stage === 'processing');
+
+  // Overall progress for minimized view
+  const overallProgress = queue.length > 0
+    ? Math.round(((completedCount + failedCount) / queue.length) * 100)
+    : 0;
+
+  // ─── Minimized floating widget ───
+  if (minimized) {
+    return (
+      <div className="fixed bottom-4 right-4 z-50 w-80 bg-dark-elevated border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden animate-in slide-in-from-bottom-4">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 bg-dark-surface border-b border-white/10">
+          <div className="flex items-center gap-2 min-w-0">
+            {activeCount > 0 ? (
+              <Loader size={16} className="text-accent animate-spin flex-shrink-0" />
+            ) : allDone ? (
+              <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
+            ) : (
+              <Upload size={16} className="text-accent flex-shrink-0" />
+            )}
+            <span className="text-sm font-semibold text-white truncate">
+              {activeCount > 0 ? `Uploading ${completedCount + 1}/${queue.length}` : allDone ? 'Uploads complete' : 'Upload Albums'}
+            </span>
           </div>
-          <button onClick={onClose} disabled={uploading} className="text-brand-text-tertiary hover:text-white disabled:opacity-50"><X size={22} /></button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button onClick={() => setMinimized(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-brand-text-tertiary hover:text-white transition-colors" title="Expand">
+              <Maximize2 size={14} />
+            </button>
+            {!isUploading && (
+              <button onClick={handleClose} className="p-1.5 rounded-lg hover:bg-white/10 text-brand-text-tertiary hover:text-white transition-colors" title="Close">
+                <X size={14} />
+              </button>
+            )}
+          </div>
         </div>
 
-        {error && <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg flex items-center gap-2 text-red-400 text-sm"><AlertCircle size={16} />{error}</div>}
-
-        {result ? (
-          <div className="p-4 bg-green-500/20 border border-green-500/50 rounded-lg">
-            <div className="flex items-center gap-2 text-green-400 font-medium"><CheckCircle size={18} />{result.message}</div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Album Name</label>
-              <input type="text" value={albumName} onChange={e => setAlbumName(e.target.value)} disabled={uploading} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent disabled:opacity-50" placeholder="Auto-detected from ZIP name" />
+        {/* Overall progress bar */}
+        {queue.length > 0 && (
+          <div className="px-4 pt-3">
+            <div className="flex justify-between text-[10px] text-brand-text-tertiary mb-1">
+              <span>{completedCount} of {queue.length} done</span>
+              {failedCount > 0 && <span className="text-red-400">{failedCount} failed</span>}
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Genre (optional)</label>
-              <input type="text" value={genre} onChange={e => setGenre(e.target.value)} disabled={uploading} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent disabled:opacity-50" placeholder="e.g., House, Tech House" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Cover Art (optional)</label>
-              <input type="file" accept="image/*" onChange={e => setCoverFile(e.target.files[0])} disabled={uploading} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent disabled:opacity-50 file:mr-3 file:py-1 file:px-3 file:rounded-lg file:border-0 file:bg-accent file:text-white file:cursor-pointer file:text-sm" />
-              {coverFile && <img src={URL.createObjectURL(coverFile)} alt="Cover" className="mt-2 w-24 h-24 object-cover rounded-lg border border-white/10" />}
-            </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Album ZIP (MP3s) *</label>
-              <div className="border-2 border-dashed border-white/20 rounded-lg p-6 text-center hover:border-accent transition-colors">
-                <input type="file" accept=".zip" onChange={handleFileChange} disabled={uploading} className="hidden" id="album-zip-upload" />
-                <label htmlFor="album-zip-upload" className="cursor-pointer">
-                  <Upload size={32} className="mx-auto mb-2 text-brand-text-tertiary" />
-                  {file ? (
-                    <div><p className="font-medium text-white">{file.name}</p><p className="text-sm text-brand-text-tertiary">{(file.size / (1024 * 1024)).toFixed(1)} MB</p></div>
-                  ) : (
-                    <p className="text-brand-text-tertiary text-sm">Click to select ZIP file</p>
-                  )}
-                </label>
-              </div>
-            </div>
-
-            {uploading && (
-              <div>
-                <div className="flex items-center justify-between mb-1 text-sm">
-                  <span className="text-brand-text-tertiary">Uploading...</span>
-                  <span className="text-accent font-medium">{progress}%</span>
-                </div>
-                <div className="w-full bg-white/10 rounded-full h-2">
-                  <div className="bg-accent h-2 rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
-                </div>
-                <p className="text-xs text-brand-text-tertiary mt-2 flex items-center gap-1"><Loader size={12} className="animate-spin" /> Processing tracks with tonality detection...</p>
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-2">
-              <button type="button" onClick={onClose} disabled={uploading} className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-lg font-medium transition-colors disabled:opacity-50">Cancel</button>
-              <button onClick={handleUpload} disabled={!file || uploading} className="flex-1 px-4 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
-                {uploading ? <><Loader size={16} className="animate-spin" /> Uploading...</> : <><Upload size={16} /> Upload</>}
-              </button>
+            <div className="w-full bg-white/10 rounded-full h-1.5">
+              <div className={`h-1.5 rounded-full transition-all duration-500 ${allDone && failedCount === 0 ? 'bg-green-500' : 'bg-accent'}`} style={{ width: `${overallProgress}%` }} />
             </div>
           </div>
         )}
+
+        {/* Current active item */}
+        {activeItem && (
+          <div className="px-4 py-2">
+            <p className="text-xs text-white font-medium truncate">{activeItem.name}</p>
+            <div className="flex items-center gap-2 mt-1">
+              {activeItem.stage === 'uploading' && (
+                <>
+                  <div className="flex-1 bg-white/10 rounded-full h-1">
+                    <div className="bg-accent h-1 rounded-full transition-all duration-300" style={{ width: `${activeItem.uploadProgress}%` }} />
+                  </div>
+                  <span className="text-[10px] text-accent font-medium">{activeItem.uploadProgress}%</span>
+                </>
+              )}
+              {activeItem.stage === 'processing' && (
+                <>
+                  <div className="flex-1 bg-white/10 rounded-full h-1">
+                    <div className="bg-yellow-400 h-1 rounded-full transition-all duration-300" style={{ width: `${activeItem.processingProgress}%` }} />
+                  </div>
+                  <span className="text-[10px] text-yellow-400 font-medium">{activeItem.processedTracks}/{activeItem.totalTracks}</span>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Done summary */}
+        {allDone && (
+          <div className="px-4 py-2">
+            <p className="text-xs text-green-400">{completedCount} album(s) uploaded{failedCount > 0 ? `, ${failedCount} failed` : ''}</p>
+          </div>
+        )}
+
+        <div className="px-4 pb-3 pt-1">
+          <button onClick={() => setMinimized(false)} className="w-full text-center text-xs text-accent hover:text-accent-hover font-medium py-1 transition-colors">
+            {allDone ? 'View details' : 'Show full view'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── Full modal ───
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-dark-elevated rounded-xl max-w-2xl w-full p-6 my-8 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-xl font-bold">Upload Albums</h2>
+            <p className="text-sm text-brand-text-tertiary mt-0.5">{sourceName} / {dateCardName}</p>
+          </div>
+          <div className="flex items-center gap-1">
+            {(isUploading || activeCount > 0) && (
+              <button onClick={() => setMinimized(true)} className="p-2 rounded-lg hover:bg-white/10 text-brand-text-tertiary hover:text-white transition-colors" title="Minimize — uploads continue in background">
+                <Minimize2 size={18} />
+              </button>
+            )}
+            <button onClick={() => { if (!isUploading && activeCount === 0) handleClose(); }} disabled={isUploading || activeCount > 0} className="p-2 rounded-lg hover:bg-white/10 text-brand-text-tertiary hover:text-white disabled:opacity-30 transition-colors" title={isUploading ? 'Minimize to continue in background' : 'Close'}>
+              <X size={18} />
+            </button>
+          </div>
+        </div>
+
+        {/* Global genre */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium mb-1">Default Genre (applies to new items)</label>
+          <input type="text" value={globalGenre} onChange={e => setGlobalGenre(e.target.value)} disabled={isUploading} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent disabled:opacity-50 text-sm" placeholder="e.g., House, Tech House" />
+        </div>
+
+        {/* Drop zone */}
+        <div
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setIsDragging(false); }}
+          onDrop={(e) => { e.preventDefault(); setIsDragging(false); addFiles(e.dataTransfer.files); }}
+          onClick={() => fileInputRef.current?.click()}
+          className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-all duration-200 mb-4 ${isDragging ? 'border-accent bg-accent/10' : 'border-white/20 hover:border-accent/50 hover:bg-white/5'}`}
+        >
+          <Upload size={28} className={`mx-auto mb-2 ${isDragging ? 'text-accent' : 'text-brand-text-tertiary'}`} />
+          <p className="text-sm font-medium text-white mb-1">{isDragging ? 'Drop ZIP files here' : 'Click or drop ZIP files'}</p>
+          <p className="text-xs text-brand-text-tertiary">Select multiple ZIPs — each becomes a separate album. No limit.</p>
+          <input ref={fileInputRef} type="file" accept=".zip" multiple onChange={(e) => { addFiles(e.target.files); e.target.value = ''; }} className="hidden" />
+        </div>
+
+        {/* Queue */}
+        {queue.length > 0 && (
+          <div className="space-y-2 mb-4 max-h-[40vh] overflow-y-auto pr-1">
+            {queue.map((item) => (
+              <div key={item.id} className="bg-dark-surface rounded-lg p-3 border border-white/10">
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="flex-shrink-0">
+                    {item.stage === 'idle' && <Disc size={18} className="text-brand-text-tertiary" />}
+                    {item.stage === 'uploading' && <Loader size={18} className="text-accent animate-spin" />}
+                    {item.stage === 'processing' && <Loader size={18} className="text-yellow-400 animate-spin" />}
+                    {item.stage === 'completed' && <CheckCircle size={18} className="text-green-400" />}
+                    {item.stage === 'failed' && <AlertCircle size={18} className="text-red-400" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {item.stage === 'idle' ? (
+                      <input
+                        type="text"
+                        value={item.name}
+                        onChange={(e) => updateItem(item.id, { name: e.target.value })}
+                        className="w-full bg-transparent text-white text-sm font-medium focus:outline-none border-b border-transparent focus:border-accent/50 pb-0.5"
+                        placeholder="Album name"
+                      />
+                    ) : (
+                      <p className="text-sm font-medium text-white truncate">{item.name}</p>
+                    )}
+                    <p className="text-[10px] text-brand-text-tertiary">{(item.file.size / (1024 * 1024)).toFixed(1)} MB</p>
+                  </div>
+                  {(item.stage === 'idle' || item.stage === 'failed') && (
+                    <button onClick={() => removeItem(item.id)} className="text-brand-text-tertiary hover:text-red-400 flex-shrink-0 p-1">
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+
+                {/* Upload progress */}
+                {item.stage === 'uploading' && (
+                  <div>
+                    <div className="flex justify-between text-[10px] text-brand-text-tertiary mb-1">
+                      <span>Uploading...</span><span>{item.uploadProgress}%</span>
+                    </div>
+                    <div className="w-full bg-white/10 rounded-full h-1.5">
+                      <div className="bg-accent h-1.5 rounded-full transition-all duration-300" style={{ width: `${item.uploadProgress}%` }} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Processing progress */}
+                {item.stage === 'processing' && (
+                  <div>
+                    <div className="flex justify-between text-[10px] text-brand-text-tertiary mb-1">
+                      <span>Processing tracks ({item.processedTracks}/{item.totalTracks})</span><span>{item.processingProgress}%</span>
+                    </div>
+                    <div className="w-full bg-white/10 rounded-full h-1.5">
+                      <div className="bg-yellow-400 h-1.5 rounded-full transition-all duration-300" style={{ width: `${item.processingProgress}%` }} />
+                    </div>
+                  </div>
+                )}
+
+                {item.stage === 'completed' && (
+                  <p className="text-[10px] text-green-400">Completed — {item.processedTracks} tracks processed</p>
+                )}
+
+                {item.stage === 'failed' && item.error && (
+                  <p className="text-[10px] text-red-400">{item.error}</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Summary when all done */}
+        {allDone && (
+          <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg text-center">
+            <p className="text-green-400 font-medium text-sm">{completedCount} of {queue.length} album(s) uploaded successfully</p>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-3">
+          {isUploading || activeCount > 0 ? (
+            <button onClick={() => setMinimized(true)} className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-lg font-medium transition-colors text-sm flex items-center justify-center gap-2">
+              <Minimize2 size={16} /> Minimize
+            </button>
+          ) : (
+            <button onClick={handleClose} className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-lg font-medium transition-colors text-sm">
+              {allDone ? 'Done' : 'Cancel'}
+            </button>
+          )}
+          {hasIdle && (
+            <button onClick={uploadAll} disabled={isUploading || queue.length === 0} className="flex-1 px-4 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm">
+              {isUploading ? <><Loader size={16} className="animate-spin" /> Uploading...</> : <><Upload size={16} /> Upload All ({queue.filter(q => q.stage === 'idle' || q.stage === 'failed').length})</>}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

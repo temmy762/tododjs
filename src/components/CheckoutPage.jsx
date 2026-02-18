@@ -1,84 +1,101 @@
-import { useState } from 'react';
-import { Check, X, CreditCard, Shield, Zap, Download, Music, Crown } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Check, X, CreditCard, Shield, Zap, Download, Music, Crown, Users } from 'lucide-react';
+import API_URL from '../config/api';
 
-export default function CheckoutPage({ onClose, selectedPlan = 'premium' }) {
-  const [billingPeriod, setBillingPeriod] = useState('monthly');
+export default function CheckoutPage({ onClose, selectedPlan }) {
+  const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [fetchingPlan, setFetchingPlan] = useState(true);
 
-  // Map plan names from AuthModal to CheckoutPage format
-  const planMapping = {
-    'basic': 'premium',
-    'pro': 'pro',
-    'enterprise': 'pro' // Map enterprise to pro for now
-  };
+  useEffect(() => {
+    if (selectedPlan) {
+      // If selectedPlan is already a plan object, use it
+      if (typeof selectedPlan === 'object') {
+        setPlan(selectedPlan);
+        setFetchingPlan(false);
+      } else {
+        // Otherwise fetch the plan by ID
+        fetchPlanById(selectedPlan);
+      }
+    }
+  }, [selectedPlan]);
 
-  const mappedPlan = planMapping[selectedPlan] || selectedPlan;
-
-  const plans = {
-    premium: {
-      name: 'Premium',
-      monthlyPrice: 9.99,
-      yearlyPrice: 99.99,
-      color: 'from-purple-500 to-pink-500',
-      icon: Music,
-      features: [
-        '50 downloads per day',
-        'WAV & MP3 quality',
-        'Priority support',
-        'Exclusive content',
-        'No ads',
-        'Offline downloads'
-      ]
-    },
-    pro: {
-      name: 'Pro',
-      monthlyPrice: 19.99,
-      yearlyPrice: 199.99,
-      color: 'from-orange-500 to-red-500',
-      icon: Crown,
-      features: [
-        'Unlimited downloads',
-        'WAV & FLAC quality',
-        '24/7 priority support',
-        'Early access to new tracks',
-        'API access',
-        'Advanced analytics',
-        'Custom playlists',
-        'No ads'
-      ]
+  const fetchPlanById = async (planId) => {
+    try {
+      const res = await fetch(`${API_URL}/subscriptions/plans`);
+      const data = await res.json();
+      if (data.success) {
+        const foundPlan = data.data.find(p => p.planId === planId);
+        if (foundPlan) {
+          setPlan(foundPlan);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching plan:', error);
+    } finally {
+      setFetchingPlan(false);
     }
   };
 
-  const plan = plans[mappedPlan];
-  const Icon = plan.icon;
-  const price = billingPeriod === 'monthly' ? plan.monthlyPrice : plan.yearlyPrice;
-  const savings = billingPeriod === 'yearly' 
-    ? Math.round((1 - (plan.yearlyPrice / (plan.monthlyPrice * 12))) * 100)
-    : 0;
+  const getPlanIcon = (type) => {
+    return type === 'shared' ? Users : Crown;
+  };
+
+  if (fetchingPlan || !plan) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-sm flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  const Icon = getPlanIcon(plan.type);
+  const price = plan.price;
+
+  const getPlanFeatures = () => {
+    const features = [];
+    if (plan.features.unlimitedDownloads) {
+      features.push('Unlimited Downloads');
+    }
+    if (plan.features.fullWebAccess) {
+      features.push('Full Web Access');
+    }
+    if (plan.features.whatsappSupport) {
+      features.push('WhatsApp Support');
+    }
+    if (plan.features.noCommitment) {
+      features.push('No Commitment');
+    }
+    if (plan.type === 'shared') {
+      features.push('Access for 2 Users');
+      features.push('2 Devices/IP');
+    }
+    if (plan.duration === 'quarterly') {
+      features.push(`${plan.durationDays} days access`);
+    }
+    return features;
+  };
 
   const handleCheckout = async () => {
     setLoading(true);
     
     try {
-      // Get auth token from localStorage or context
       const token = localStorage.getItem('token');
       
-      const response = await fetch('http://localhost:5000/api/payment/create-checkout-session', {
+      const response = await fetch(`${API_URL}/payment/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          plan: mappedPlan,
-          billingPeriod
+          planId: plan.planId
         })
       });
 
       const data = await response.json();
 
       if (data.success) {
-        // Redirect to Stripe Checkout
         window.location.href = data.url;
       } else {
         alert('Error creating checkout session. Please try again.');
@@ -112,65 +129,33 @@ export default function CheckoutPage({ onClose, selectedPlan = 'premium' }) {
           {/* Left: Plan Details */}
           <div>
             {/* Selected Plan Card */}
-            <div className={`bg-gradient-to-br ${plan.color} rounded-2xl p-6 mb-6`}>
+            <div className="bg-gradient-to-br from-accent to-purple-500 rounded-2xl p-6 mb-6">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 rounded-xl bg-white/20 flex items-center justify-center">
                   <Icon className="w-6 h-6 text-white" />
                 </div>
                 <div>
                   <h3 className="text-2xl font-bold text-white">{plan.name}</h3>
-                  <p className="text-white/80 text-sm">Perfect for DJs</p>
+                  <p className="text-white/80 text-sm capitalize">{plan.type} • {plan.duration}</p>
                 </div>
               </div>
 
               <div className="flex items-baseline gap-2 mb-2">
-                <span className="text-5xl font-bold text-white">${price}</span>
-                <span className="text-white/80">/{billingPeriod === 'monthly' ? 'month' : 'year'}</span>
+                <span className="text-5xl font-bold text-white">€{price}</span>
+                <span className="text-white/80">/ {plan.durationDays} days</span>
               </div>
-              {savings > 0 && (
+              {plan.duration === 'quarterly' && (
                 <div className="inline-block px-3 py-1 rounded-full bg-white/20 text-white text-sm font-semibold">
-                  Save {savings}% with yearly billing
+                  Best value - {plan.durationDays} days access
                 </div>
               )}
-            </div>
-
-            {/* Billing Period Toggle */}
-            <div className="bg-dark-surface rounded-xl p-4 mb-6">
-              <p className="text-sm font-semibold text-white mb-3">Billing Period</p>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  onClick={() => setBillingPeriod('monthly')}
-                  className={`px-4 py-3 rounded-lg font-medium transition-all duration-200 ${
-                    billingPeriod === 'monthly'
-                      ? 'bg-accent text-white'
-                      : 'bg-dark-elevated text-brand-text-tertiary hover:text-white'
-                  }`}
-                >
-                  Monthly
-                </button>
-                <button
-                  onClick={() => setBillingPeriod('yearly')}
-                  className={`px-4 py-3 rounded-lg font-medium transition-all duration-200 relative ${
-                    billingPeriod === 'yearly'
-                      ? 'bg-accent text-white'
-                      : 'bg-dark-elevated text-brand-text-tertiary hover:text-white'
-                  }`}
-                >
-                  Yearly
-                  {savings > 0 && (
-                    <span className="absolute -top-2 -right-2 px-2 py-0.5 rounded-full bg-green-500 text-white text-[10px] font-bold">
-                      Save {savings}%
-                    </span>
-                  )}
-                </button>
-              </div>
             </div>
 
             {/* Features List */}
             <div className="bg-dark-surface rounded-xl p-6">
               <h4 className="text-lg font-bold text-white mb-4">What's Included</h4>
               <div className="space-y-3">
-                {plan.features.map((feature, index) => (
+                {getPlanFeatures().map((feature, index) => (
                   <div key={index} className="flex items-center gap-3">
                     <div className="w-5 h-5 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0">
                       <Check className="w-3 h-3 text-accent" strokeWidth={3} />
@@ -194,23 +179,21 @@ export default function CheckoutPage({ onClose, selectedPlan = 'premium' }) {
                   <span className="text-white font-medium">{plan.name}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-brand-text-tertiary">Billing</span>
-                  <span className="text-white font-medium capitalize">{billingPeriod}</span>
+                  <span className="text-brand-text-tertiary">Type</span>
+                  <span className="text-white font-medium capitalize">{plan.type}</span>
                 </div>
-                {savings > 0 && (
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-brand-text-tertiary">Discount</span>
-                    <span className="text-green-400 font-medium">-{savings}%</span>
-                  </div>
-                )}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-brand-text-tertiary">Duration</span>
+                  <span className="text-white font-medium">{plan.durationDays} days</span>
+                </div>
               </div>
 
               <div className="flex items-center justify-between mb-6">
                 <span className="text-lg font-bold text-white">Total</span>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-white">${price}</div>
+                  <div className="text-2xl font-bold text-white">€{price}</div>
                   <div className="text-xs text-brand-text-tertiary">
-                    {billingPeriod === 'monthly' ? 'per month' : 'per year'}
+                    one-time payment
                   </div>
                 </div>
               </div>

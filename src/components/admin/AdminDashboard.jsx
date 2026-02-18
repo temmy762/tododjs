@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { 
   LayoutDashboard, 
   Music, 
@@ -31,24 +32,26 @@ import AdminRecordPool from './AdminRecordPool';
 import AdminDownloadStats from './AdminDownloadStats';
 import UploadProgressTracker from './UploadProgressTracker';
 import AdminMashups from './AdminMashups';
+import ErrorBoundary from '../ErrorBoundary';
 
 export default function AdminDashboard({ onClose, user, onUserUpdate }) {
+  const { t } = useTranslation();
   const [activeSection, setActiveSection] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const navItems = [
-    { id: 'overview', label: 'Overview', icon: LayoutDashboard },
-    { id: 'recordpool', label: 'Record Pool', icon: FolderOpen },
-    { id: 'mashups', label: 'Mashups', icon: ListMusic },
-    { id: 'uploads', label: 'Upload Tracker', icon: Upload },
-    { id: 'downloads', label: 'Downloads', icon: TrendingUp },
-    { id: 'tracks', label: 'Tracks', icon: Music },
-    { id: 'users', label: 'Members', icon: Users },
-    { id: 'subscriptions', label: 'Memberships', icon: CreditCard },
-    { id: 'analytics', label: 'Analytics', icon: Database },
-    { id: 'genres', label: 'DJ Genres', icon: Palette },
-    { id: 'settings', label: 'Settings', icon: Settings },
-    { id: 'security', label: 'Security', icon: Shield },
+    { id: 'overview', label: t('admin.overview'), icon: LayoutDashboard },
+    { id: 'recordpool', label: t('admin.recordPool'), icon: FolderOpen },
+    { id: 'mashups', label: t('admin.mashups'), icon: ListMusic },
+    { id: 'uploads', label: t('admin.uploadTracks'), icon: Upload },
+    { id: 'downloads', label: t('library.downloads'), icon: TrendingUp },
+    { id: 'tracks', label: t('admin.tracks'), icon: Music },
+    { id: 'users', label: t('admin.users'), icon: Users },
+    { id: 'subscriptions', label: t('admin.subscriptions'), icon: CreditCard },
+    { id: 'analytics', label: t('admin.analytics'), icon: Database },
+    { id: 'genres', label: t('admin.genres'), icon: Palette },
+    { id: 'settings', label: t('admin.settings'), icon: Settings },
+    { id: 'security', label: t('admin.security'), icon: Shield },
   ];
 
   const renderContent = () => {
@@ -155,7 +158,9 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
 
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto bg-dark-bg">
-          {renderContent()}
+          <ErrorBoundary key={activeSection}>
+            {renderContent()}
+          </ErrorBoundary>
         </div>
       </div>
     </div>

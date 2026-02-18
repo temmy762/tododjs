@@ -62,9 +62,32 @@ const albumSchema = new mongoose.Schema({
     ref: 'User',
     required: true
   },
+  isFeatured: {
+    type: Boolean,
+    default: false
+  },
   isActive: {
     type: Boolean,
     default: true
+  },
+  processingStatus: {
+    type: String,
+    enum: ['pending', 'processing', 'completed', 'failed'],
+    default: 'pending'
+  },
+  processingProgress: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100
+  },
+  processedTracks: {
+    type: Number,
+    default: 0
+  },
+  processingError: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true

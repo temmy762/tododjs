@@ -27,7 +27,10 @@ const wasabiConfig = {
     accessKeyId: process.env.WASABI_ACCESS_KEY_ID,
     secretAccessKey: process.env.WASABI_SECRET_ACCESS_KEY
   },
-  forcePathStyle: true
+  forcePathStyle: true,
+  requestTimeout: 300000, // 5 minutes
+  maxAttempts: 5, // Increase retry attempts
+  retryMode: 'adaptive'
 };
 
 const s3Client = new S3Client(wasabiConfig);
@@ -81,7 +84,10 @@ export const uploadToWasabi = async (fileData, key, contentType, progressCallbac
         Body: fileData,
         ContentType: contentType,
         ACL: 'private' // Files are private, accessed via signed URLs
-      }
+      },
+      queueSize: 4, // Number of concurrent uploads
+      partSize: 10 * 1024 * 1024, // 10MB parts for multipart upload
+      leavePartsOnError: false
     });
 
     // Track upload progress

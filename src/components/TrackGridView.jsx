@@ -31,10 +31,10 @@ const getTonalityColor = (tonality) => {
   return colors[tonality] || '#FFFFFF';
 };
 
-export default function TrackGridView({ tracks, onTrackInteraction }) {
+export default function TrackGridView({ tracks, onTrackInteraction, userFavorites = new Set() }) {
   const [playingTrackId, setPlayingTrackId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [likedTracks, setLikedTracks] = useState(new Set());
+  const likedTracks = userFavorites;
 
   const handlePlayPause = (track) => {
     if (playingTrackId === track.id) {
@@ -46,16 +46,8 @@ export default function TrackGridView({ tracks, onTrackInteraction }) {
     onTrackInteraction?.('play', track);
   };
 
-  const toggleLike = (trackId) => {
-    setLikedTracks(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(trackId)) {
-        newSet.delete(trackId);
-      } else {
-        newSet.add(trackId);
-      }
-      return newSet;
-    });
+  const toggleLike = (track) => {
+    onTrackInteraction?.('favorite', track);
   };
 
   return (
@@ -158,7 +150,7 @@ export default function TrackGridView({ tracks, onTrackInteraction }) {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    toggleLike(track.id);
+                    toggleLike(track);
                   }}
                   className="hover:scale-110 transition-transform duration-150"
                 >

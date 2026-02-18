@@ -1,4 +1,5 @@
 import { Music, Home, Zap, Mic, Music2, Cloud, Volume2, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const genres = [
   { id: 'all', name: 'All Genres', Icon: Music },
@@ -12,11 +13,13 @@ const genres = [
 ];
 
 export default function GenreFilterHorizontal({ activeGenre, onGenreChange }) {
+  const { t } = useTranslation();
+  
   return (
     <div className="relative px-4 md:px-10 pt-4 md:pt-5 pb-4 md:pb-5 bg-gradient-to-b from-dark-bg via-dark-bg/98 to-dark-bg/95">
       <div className="mb-3 md:mb-4">
-        <h2 className="text-lg md:text-xl font-bold text-white tracking-tight">Browse by Genre</h2>
-        <p className="text-[10px] md:text-xs text-brand-text-tertiary/80 mt-1">Discover your perfect sound</p>
+        <h2 className="text-lg md:text-xl font-bold text-white tracking-tight">{t('common.browse')} {t('common.by') || 'by'} {t('tracks.genre')}</h2>
+        <p className="text-[10px] md:text-xs text-brand-text-tertiary/80 mt-1">{t('common.discover')} {t('common.your')} {t('common.perfect') || 'perfect'} {t('common.sound')}</p>
       </div>
       
       <div className="relative">

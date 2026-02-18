@@ -22,9 +22,13 @@ import UserDashboard from './components/UserDashboard';
 import BackgroundGradients from './components/BackgroundGradients';
 import MusicControlPanel from './components/MusicControlPanel';
 import TrendingSection from './components/TrendingSection';
+import PricingPage from './components/PricingPage';
+import CheckoutModal from './components/CheckoutModal';
+import SubscriptionDashboard from './components/SubscriptionDashboard';
 import { contentRows, mockTracks, artistsAndLabels, albums as mockAlbums, playlists } from './data/mockData';
+import API_URL from './config/api';
 
-const API = 'http://localhost:5000/api';
+const API = API_URL;
 
 function App() {
   console.log('App component rendering...');
@@ -47,11 +51,16 @@ function App() {
   const [selectedAlbumDetail, setSelectedAlbumDetail] = useState(null);
   const [albumDetailTracks, setAlbumDetailTracks] = useState([]);
   const [albumDetailLoading, setAlbumDetailLoading] = useState(false);
+  const [albumAutoPlay, setAlbumAutoPlay] = useState(false);
   const [showTonalityButton, setShowTonalityButton] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
   const [showUserDashboard, setShowUserDashboard] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('premium');
+  const [showPricing, setShowPricing] = useState(false);
+  const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+  const [selectedSubscriptionPlan, setSelectedSubscriptionPlan] = useState(null);
+  const [showSubscriptionDashboard, setShowSubscriptionDashboard] = useState(false);
   const tonalityRef = useRef(null);
   const [liveTracks, setLiveTracks] = useState([]);
   const [liveAlbums, setLiveAlbums] = useState([]);
@@ -184,24 +193,24 @@ function App() {
     setSearchQuery('');
   };
 
-  // Fetch user favorites when user logs in
+  // Fetch all user favorites when user logs in
   useEffect(() => {
     if (user) {
       const token = localStorage.getItem('token');
-      fetch(`${API}/favorites/check`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ trackIds: liveTracks.map(t => t.id || t._id) })
+      fetch(`${API}/favorites`, {
+        headers: { Authorization: `Bearer ${token}` },
       })
         .then(res => res.json())
         .then(data => {
-          if (data.success) setUserFavorites(new Set(data.data));
+          if (data.success) {
+            setUserFavorites(new Set(data.data.map(t => t._id || t)));
+          }
         })
         .catch(() => {});
     } else {
       setUserFavorites(new Set());
     }
-  }, [user, liveTracks]);
+  }, [user]);
 
   const handleTrackInteraction = (action, track) => {
     if (action === 'play') {
@@ -286,19 +295,13 @@ function App() {
         headers: { Authorization: `Bearer ${token}` },
       })
         .then(async (res) => {
+          const data = await res.json().catch(() => null);
           if (!res.ok) {
-            const data = await res.json().catch(() => null);
             throw new Error(data?.message || 'Download failed. Please try again.');
           }
-          const blob = await res.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${track.artist} - ${track.title}.mp3`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
+          if (data?.downloadUrl) {
+            window.location.href = data.downloadUrl;
+          }
         })
         .catch(err => alert(err.message || 'Download failed. Please try again.'));
       return;
@@ -372,14 +375,18 @@ function App() {
     setSelectedPlaylist(playlist);
   };
 
-  const handleAlbumPageClick = async (album) => {
+  const handleAlbumPageClick = async (album, { autoPlay = false } = {}) => {
     // If album has _id, fetch real data from API
     if (album._id) {
+      console.log('🎵 Fetching album:', album._id);
       setAlbumDetailLoading(true);
+      setAlbumAutoPlay(autoPlay);
       setSelectedAlbumDetail(album);
       try {
-        const res = await fetch(`http://localhost:5000/api/albums/${album._id}`);
+        const res = await fetch(`${API}/albums/${album._id}`);
         const data = await res.json();
+        console.log('📦 API Response:', data);
+        console.log('📊 Tracks received:', data.data?.tracks?.length || 0);
         if (data.success) {
           const fetchedAlbum = data.data.album;
           setSelectedAlbumDetail({
@@ -404,10 +411,11 @@ function App() {
             coverArt: t.coverArt || fetchedAlbum.coverArt || '',
             duration: t.audioFile?.duration || 0,
           }));
+          console.log('✅ Mapped tracks:', mappedTracks.length, mappedTracks);
           setAlbumDetailTracks(mappedTracks);
         }
       } catch (err) {
-        console.error('Error fetching album details:', err);
+        console.error('❌ Error fetching album details:', err);
       } finally {
         setAlbumDetailLoading(false);
       }
@@ -449,19 +457,13 @@ function App() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (res) => {
+        const data = await res.json().catch(() => null);
         if (!res.ok) {
-          const data = await res.json().catch(() => null);
           throw new Error(data?.message || 'Download failed. Please try again.');
         }
-        const blob = await res.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${album?.name || album?.title || 'Album'}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        window.URL.revokeObjectURL(url);
+        if (data?.downloadUrl) {
+          window.location.href = data.downloadUrl;
+        }
       })
       .catch(err => alert(err.message || 'Download failed. Please try again.'));
   };
@@ -508,6 +510,7 @@ function App() {
         activeTonality={activeTonality}
         onTonalityChange={setActiveTonality}
         user={user}
+        onNavigate={handleNavigate}
         onSubscribe={() => {
           if (user) {
             setSelectedPlan('premium');
@@ -540,6 +543,7 @@ function App() {
         {activePage === 'library' ? (
           <LibraryPage 
             onTrackInteraction={handleTrackInteraction}
+            userFavorites={userFavorites}
           />
         ) : activePage === 'album' ? (
           <RecordPoolPage 
@@ -557,6 +561,24 @@ function App() {
             user={user}
             onLogout={handleLogout}
             onUserUpdate={setUser}
+          />
+        ) : activePage === 'pricing' ? (
+          <PricingPage 
+            onSelectPlan={(plan) => {
+              setSelectedSubscriptionPlan(plan);
+              setShowCheckoutModal(true);
+            }}
+            user={user}
+          />
+        ) : activePage === 'subscription' ? (
+          <SubscriptionDashboard 
+            user={user}
+            onUpdate={() => {
+              // Refresh user data
+              if (user) {
+                authService.getCurrentUser().then(setUser);
+              }
+            }}
           />
         ) : activePage === 'home' ? (
           <>
@@ -584,9 +606,9 @@ function App() {
               />
             </div>
 
-            <AlbumsSection albums={albums} onAlbumClick={handleAlbumClick} activeGenre={activeGenre} />
+            <AlbumsSection albums={albums} onAlbumClick={handleAlbumPageClick} activeGenre={activeGenre} />
             
-            <PlaylistsSection playlists={playlists} onPlaylistClick={handlePlaylistClick} activeGenre={activeGenre} />
+            <PlaylistsSection onAlbumClick={handleAlbumPageClick} activeGenre={activeGenre} />
           </>
         ) : null}
         </main>
@@ -654,8 +676,11 @@ function App() {
         <AlbumDetailView 
           album={selectedAlbumDetail}
           tracks={albumDetailLoading ? [] : albumDetailTracks}
-          onClose={() => { setSelectedAlbumDetail(null); setAlbumDetailTracks([]); }}
+          isLoading={albumDetailLoading}
+          autoPlay={albumAutoPlay}
+          onClose={() => { setSelectedAlbumDetail(null); setAlbumDetailTracks([]); setAlbumAutoPlay(false); }}
           onTrackInteraction={handleTrackInteraction}
+          userFavorites={userFavorites}
           user={user}
           onAuthRequired={handleOpenAuth}
           onSubscribe={() => {
@@ -680,6 +705,18 @@ function App() {
           onUserUpdate={setUser}
           onLogout={handleLogout}
           onTrackInteraction={handleTrackInteraction}
+        />
+      )}
+
+      {showCheckoutModal && selectedSubscriptionPlan && (
+        <CheckoutModal
+          isOpen={showCheckoutModal}
+          onClose={() => {
+            setShowCheckoutModal(false);
+            setSelectedSubscriptionPlan(null);
+          }}
+          plan={selectedSubscriptionPlan}
+          user={user}
         />
       )}
 

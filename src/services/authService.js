@@ -1,4 +1,6 @@
-const API_URL = 'http://localhost:5000/api/auth';
+import API_URL from '../config/api.js';
+
+const AUTH_API_URL = `${API_URL}/auth`;
 
 function getDeviceId() {
   let deviceId = localStorage.getItem('deviceId');
@@ -11,7 +13,7 @@ function getDeviceId() {
 
 export const authService = {
   async login(email, password) {
-    const response = await fetch(`${API_URL}/login`, {
+    const response = await fetch(`${AUTH_API_URL}/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -31,7 +33,7 @@ export const authService = {
   },
 
   async register(name, email, password) {
-    const response = await fetch(`${API_URL}/register`, {
+    const response = await fetch(`${AUTH_API_URL}/register`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -58,7 +60,7 @@ export const authService = {
     }
 
     try {
-      const response = await fetch(`${API_URL}/me`, {
+      const response = await fetch(`${AUTH_API_URL}/me`, {
         headers: {
           'Authorization': `Bearer ${token}`
         },
@@ -82,7 +84,7 @@ export const authService = {
   async logout() {
     try {
       const token = localStorage.getItem('token');
-      await fetch(`${API_URL}/logout`, {
+      await fetch(`${AUTH_API_URL}/logout`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
         credentials: 'include'
       });

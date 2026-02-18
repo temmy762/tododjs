@@ -1,7 +1,9 @@
 import { X, Download, FileAudio, CheckCircle2 } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default function DownloadModal({ isOpen, onClose, track, onDownload }) {
+  const { t } = useTranslation();
   const [selectedFormat, setSelectedFormat] = useState('mp3-320');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
 
@@ -36,7 +38,7 @@ export default function DownloadModal({ isOpen, onClose, track, onDownload }) {
               <Download className="w-7 h-7 text-accent" strokeWidth={1.5} />
             </div>
             <h2 className="text-xl font-bold text-white mb-2">
-              Download Track
+              {t('actions.download')} {t('tracks.title')}
             </h2>
             <p className="text-sm text-brand-text-tertiary">
               {track.title} • {track.artist}
@@ -44,7 +46,7 @@ export default function DownloadModal({ isOpen, onClose, track, onDownload }) {
           </div>
 
           <div className="mb-6">
-            <h3 className="text-xs font-bold text-brand-text-tertiary uppercase tracking-wider mb-3">Select Format</h3>
+            <h3 className="text-xs font-bold text-brand-text-tertiary uppercase tracking-wider mb-3">{t('actions.selectFormat') || 'Select Format'}</h3>
             <div className="space-y-2">
               {formats.map((format) => (
                 <button
@@ -104,7 +106,7 @@ export default function DownloadModal({ isOpen, onClose, track, onDownload }) {
               onClick={onClose}
               className="flex-1 py-2.5 rounded-lg bg-white hover:bg-brand-text-secondary border border-brand-black/10 hover:border-brand-black/20 text-black text-sm font-semibold transition-all duration-150"
             >
-              Cancel
+              {t('actions.cancel')}
             </button>
             <button
               onClick={handleDownload}
@@ -116,7 +118,7 @@ export default function DownloadModal({ isOpen, onClose, track, onDownload }) {
               }`}
             >
               <Download className="w-4 h-4" strokeWidth={2} />
-              Download
+              {t('actions.download')}
             </button>
           </div>
 

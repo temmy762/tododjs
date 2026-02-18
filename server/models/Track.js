@@ -17,8 +17,7 @@ const trackSchema = new mongoose.Schema({
   },
   genre: {
     type: String,
-    required: [true, 'Genre is required for publishing'],
-    enum: ['House', 'Tech House', 'Afro House', 'Amapiano', 'Techno', 'Hip-Hop', 'Jazz', 'Ambient', 'Dubstep', 'Trance', 'EDM']
+    required: [true, 'Genre is required for publishing']
   },
   versionType: {
     type: String,

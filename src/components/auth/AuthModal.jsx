@@ -1,5 +1,9 @@
 import { useState } from 'react';
 import { X, Mail, Lock, User, Eye, EyeOff, AlertCircle, Phone } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import API_URL from '../../config/api';
+import ForgotPasswordModal from '../ForgotPasswordModal';
+import i18n from '../../i18n/config';
 
 // Generate or retrieve a persistent device ID for this browser
 function getDeviceId() {
@@ -12,18 +16,21 @@ function getDeviceId() {
 }
 
 export default function AuthModal({ onClose, onSuccess }) {
+  const { t } = useTranslation();
   const [mode, setMode] = useState('login'); // 'login' or 'register'
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phoneNumber: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    preferredLanguage: i18n.language || 'en'
   });
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -33,7 +40,7 @@ export default function AuthModal({ onClose, onSuccess }) {
     try {
       if (mode === 'register') {
         if (formData.password !== formData.confirmPassword) {
-          setError('Passwords do not match');
+          setError(t('messages.passwordMismatch') || 'Passwords do not match');
           setLoading(false);
           return;
         }
@@ -47,7 +54,7 @@ export default function AuthModal({ onClose, onSuccess }) {
           }
         }
 
-        const response = await fetch('http://localhost:5000/api/auth/register', {
+        const response = await fetch(`${API_URL}/auth/register`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -58,7 +65,8 @@ export default function AuthModal({ onClose, onSuccess }) {
             email: formData.email,
             phoneNumber: formData.phoneNumber,
             password: formData.password,
-            deviceId: getDeviceId()
+            deviceId: getDeviceId(),
+            preferredLanguage: formData.preferredLanguage
           })
         });
 
@@ -71,11 +79,11 @@ export default function AuthModal({ onClose, onSuccess }) {
           }
           onSuccess(data.user);
         } else {
-          setError(data.message || 'Registration failed');
+          setError(data.message || t('messages.signupError'));
         }
       } else {
         console.log('Attempting login with:', formData.email);
-        const response = await fetch('http://localhost:5000/api/auth/login', {
+        const response = await fetch(`${API_URL}/auth/login`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -129,7 +137,7 @@ export default function AuthModal({ onClose, onSuccess }) {
       <div className="bg-dark-elevated rounded-lg max-w-md w-full p-6 my-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold">
-            {mode === 'login' ? 'Welcome Back' : 'Create Account'}
+            {mode === 'login' ? t('auth.welcomeBack') : t('auth.createAccount')}
           </h2>
           <button onClick={onClose} className="text-brand-text-tertiary hover:text-white">
             <X size={24} />
@@ -147,7 +155,7 @@ export default function AuthModal({ onClose, onSuccess }) {
           {mode === 'register' && (
             <>
               <div>
-                <label className="block text-sm font-medium mb-2">Full Name</label>
+                <label className="block text-sm font-medium mb-2">{t('auth.name')}</label>
                 <div className="relative">
                   <User size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                   <input
@@ -161,7 +169,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Phone Number</label>
+                <label className="block text-sm font-medium mb-2">{t('auth.phoneNumber') || 'Phone Number'}</label>
                 <div className="relative">
                   <Phone size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                   <input
@@ -173,11 +181,32 @@ export default function AuthModal({ onClose, onSuccess }) {
                   />
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  Preferred Language <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.preferredLanguage}
+                  onChange={(e) => {
+                    const newLang = e.target.value;
+                    setFormData({ ...formData, preferredLanguage: newLang });
+                    i18n.changeLanguage(newLang);
+                  }}
+                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white"
+                  required
+                >
+                  <option value="en" className="bg-dark-elevated">English</option>
+                  <option value="es" className="bg-dark-elevated">Español</option>
+                </select>
+                <p className="text-xs text-brand-text-tertiary mt-1">
+                  This will be used for all communications and interface
+                </p>
+              </div>
             </>
           )}
 
           <div>
-            <label className="block text-sm font-medium mb-2">Email</label>
+            <label className="block text-sm font-medium mb-2">{t('auth.email')}</label>
             <div className="relative">
               <Mail size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
               <input
@@ -192,7 +221,7 @@ export default function AuthModal({ onClose, onSuccess }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">Password</label>
+            <label className="block text-sm font-medium mb-2">{t('auth.password')}</label>
             <div className="relative">
               <Lock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
               <input
@@ -216,7 +245,7 @@ export default function AuthModal({ onClose, onSuccess }) {
 
           {mode === 'register' && (
             <div>
-              <label className="block text-sm font-medium mb-2">Confirm Password</label>
+              <label className="block text-sm font-medium mb-2">{t('auth.confirmPassword') || 'Confirm Password'}</label>
               <div className="relative">
                 <Lock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                 <input
@@ -241,8 +270,15 @@ export default function AuthModal({ onClose, onSuccess }) {
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="w-4 h-4 rounded border-white/10 bg-white/5 text-accent focus:ring-accent focus:ring-offset-0"
                 />
-                <span className="text-sm text-brand-text-tertiary">Remember me</span>
+                <span className="text-sm text-brand-text-tertiary">{t('auth.rememberMe')}</span>
               </label>
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-sm text-accent hover:text-accent-hover transition-colors"
+              >
+                {t('auth.forgotPassword')}
+              </button>
             </div>
           )}
 
@@ -251,22 +287,27 @@ export default function AuthModal({ onClose, onSuccess }) {
             disabled={loading}
             className="w-full py-3 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+            {loading ? t('common.loading') : mode === 'login' ? t('auth.loginButton') : t('auth.signupButton')}
           </button>
         </form>
 
         <div className="mt-6 text-center">
           <p className="text-brand-text-tertiary">
-            {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+            {mode === 'login' ? t('auth.dontHaveAccount') + ' ' : t('auth.alreadyHaveAccount') + ' '}
             <button
               onClick={switchMode}
               className="text-accent hover:text-accent-hover font-medium"
             >
-              {mode === 'login' ? 'Sign Up' : 'Sign In'}
+              {mode === 'login' ? t('auth.signupHere') : t('auth.loginHere')}
             </button>
           </p>
         </div>
       </div>
+
+      <ForgotPasswordModal 
+        isOpen={showForgotPassword} 
+        onClose={() => setShowForgotPassword(false)} 
+      />
     </div>
   );
 }

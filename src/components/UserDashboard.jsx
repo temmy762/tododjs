@@ -17,6 +17,10 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
   const [loadingFavorites, setLoadingFavorites] = useState(false);
 
   useEffect(() => {
+    fetchFavorites();
+  }, []);
+
+  useEffect(() => {
     if (activeTab === 'favorites') {
       fetchFavorites();
     }
@@ -78,7 +82,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
   const stats = [
     { label: 'Downloads', value: user?.downloads?.total?.toString() || '0', icon: Download },
     { label: 'Playlists', value: user?.playlists?.length?.toString() || '0', icon: Music },
-    { label: 'Favorites', value: user?.favorites?.length?.toString() || '0', icon: Heart },
+    { label: 'Favorites', value: favorites.length > 0 ? favorites.length.toString() : (user?.favorites?.length?.toString() || '0'), icon: Heart },
   ];
 
   const clearMessage = () => setMessage({ type: '', text: '' });

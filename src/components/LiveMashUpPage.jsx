@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
 import { List, Grid3x3, ArrowUpDown, X, Loader, Music } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import TrackListView from './TrackListView';
 import TrackGridView from './TrackGridView';
 import GenericCoverArt from './GenericCoverArt';
+import API_URL from '../config/api';
 
-const API = 'http://localhost:5000/api';
 
 export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
+  const { t } = useTranslation();
   const [mashups, setMashups] = useState([]);
   const [settings, setSettings] = useState({ videoUrl: '', pageTitle: 'Mash Ups', pageDescription: '' });
   const [loading, setLoading] = useState(true);
@@ -23,7 +25,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
   const fetchMashups = async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API}/mashups`);
+      const res = await fetch(`${API_URL}/mashups`);
       const data = await res.json();
       if (data.success) {
         setMashups(data.data || []);
@@ -37,7 +39,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
 
   const fetchSettings = async () => {
     try {
-      const res = await fetch(`${API}/mashups/settings`);
+      const res = await fetch(`${API_URL}/mashups/settings`);
       const data = await res.json();
       if (data.success) setSettings(data.data);
     } catch {}
@@ -173,9 +175,9 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
       <div className="sticky top-14 md:top-16 z-20 bg-dark-bg/95 backdrop-blur-md border-b border-white/5 px-4 md:px-10 py-3 md:py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl md:text-3xl font-bold text-white">{settings.pageTitle || 'Mash Ups'}</h1>
+            <h1 className="text-xl md:text-3xl font-bold text-white">{settings.pageTitle || t('admin.mashups')}</h1>
             <p className="text-[10px] md:text-sm text-brand-text-tertiary mt-1">
-              {settings.pageDescription || `${processedTracks.length} mashup tracks available`}
+              {settings.pageDescription || `${processedTracks.length} ${t('admin.mashups').toLowerCase()} ${t('common.available') || 'available'}`}
             </p>
           </div>
           

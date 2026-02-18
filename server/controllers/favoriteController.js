@@ -1,5 +1,6 @@
 import User from '../models/User.js';
 import Track from '../models/Track.js';
+import { getSignedDownloadUrl } from '../config/wasabi.js';
 
 // @desc    Toggle favorite (add/remove)
 // @route   POST /api/favorites/toggle/:trackId
@@ -51,10 +52,25 @@ export const getFavorites = async (req, res) => {
       populate: { path: 'sourceId', select: 'name platform' }
     });
 
+    // Generate signed URLs for cover art
+    const tracksWithUrls = await Promise.all(
+      user.favorites.map(async (track) => {
+        const trackObj = track.toObject ? track.toObject() : { ...track };
+        if (trackObj.coverArtKey) {
+          try {
+            trackObj.coverArt = await getSignedDownloadUrl(trackObj.coverArtKey, 7200);
+          } catch (e) {
+            console.error('Error signing coverArt for favorite track:', e.message);
+          }
+        }
+        return trackObj;
+      })
+    );
+
     res.status(200).json({
       success: true,
-      count: user.favorites.length,
-      data: user.favorites
+      count: tracksWithUrls.length,
+      data: tracksWithUrls
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

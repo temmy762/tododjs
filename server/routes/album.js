@@ -6,7 +6,10 @@ import {
   getAlbums,
   getAlbum,
   getAlbumTracks,
-  deleteAlbum
+  getAlbumStatus,
+  deleteAlbum,
+  toggleFeatured,
+  getFeaturedAlbums
 } from '../controllers/albumController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -39,9 +42,18 @@ router.post('/upload', protect, authorize('admin'), albumUpload.fields([
 router.route('/')
   .get(getAlbums);
 
+router.route('/featured')
+  .get(getFeaturedAlbums);
+
 router.route('/:id')
   .get(getAlbum)
   .delete(protect, authorize('admin'), deleteAlbum);
+
+router.route('/:id/featured')
+  .put(protect, authorize('admin'), toggleFeatured);
+
+router.route('/:id/status')
+  .get(getAlbumStatus);
 
 router.route('/:id/tracks')
   .get(getAlbumTracks)

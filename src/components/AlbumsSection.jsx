@@ -1,6 +1,8 @@
 import GenericCoverArt from './GenericCoverArt';
+import { useTranslation } from 'react-i18next';
 
 export default function AlbumsSection({ albums, onAlbumClick, activeGenre = 'all' }) {
+  const { t } = useTranslation();
   const filteredAlbums = activeGenre === 'all'
     ? albums
     : albums.filter(album =>
@@ -14,8 +16,8 @@ export default function AlbumsSection({ albums, onAlbumClick, activeGenre = 'all
   return (
     <div className="my-8 md:my-12 px-4 md:px-10">
       <div className="mb-4 md:mb-6">
-        <h2 className="text-lg md:text-2xl font-bold text-white">New Albums</h2>
-        <p className="text-xs md:text-sm text-brand-text-tertiary mt-1">Fresh releases from your favorite artists</p>
+        <h2 className="text-lg md:text-2xl font-bold text-white">{t('tracks.newReleases')} {t('nav.albums')}</h2>
+        <p className="text-xs md:text-sm text-brand-text-tertiary mt-1">{t('common.fresh')} {t('common.releases')} {t('common.from')} {t('common.your')} {t('common.favorite')} {t('common.artists')}</p>
       </div>
       
       <div className="relative">
@@ -43,7 +45,7 @@ export default function AlbumsSection({ albums, onAlbumClick, activeGenre = 'all
                   
                   {album.isNew && (
                     <div className="absolute top-2 right-2 px-2 py-1 rounded-full bg-accent text-white text-[10px] font-bold uppercase tracking-wider">
-                      New
+                      {t('common.new') || 'New'}
                     </div>
                   )}
                 </div>

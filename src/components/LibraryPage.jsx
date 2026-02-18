@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { List, Grid3x3, SlidersHorizontal, ArrowUpDown, X, Loader } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import TrackListView from './TrackListView';
 import TrackGridView from './TrackGridView';
+import API_URL from '../config/api';
 
-const API = 'http://localhost:5000/api';
 
 const GENRES = ['House', 'Tech House', 'Afro House', 'Amapiano', 'Techno', 'Hip-Hop', 'Jazz', 'Ambient', 'Dubstep', 'Trance', 'EDM'];
 
@@ -22,7 +23,8 @@ const mapTrack = (t) => ({
   duration: t.audioFile?.duration || 0,
 });
 
-export default function LibraryPage({ onTrackInteraction }) {
+export default function LibraryPage({ onTrackInteraction, userFavorites = new Set() }) {
+  const { t } = useTranslation();
   const [tracks, setTracks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
@@ -82,7 +84,7 @@ export default function LibraryPage({ onTrackInteraction }) {
       if (filterGenre !== 'all') params.set('genre', filterGenre);
       if (filterTonality !== 'all') params.set('tonality', filterTonality);
 
-      const res = await fetch(`${API}/tracks/browse?${params}`);
+      const res = await fetch(`${API_URL}/tracks/browse?${params}`);
       if (!res.ok) { console.error('Library fetch error:', res.status); return; }
       const json = await res.json();
       if (json.success) {
@@ -164,9 +166,9 @@ export default function LibraryPage({ onTrackInteraction }) {
       <div className="sticky top-14 md:top-16 z-20 bg-dark-bg/95 backdrop-blur-md border-b border-white/5 px-4 md:px-10 py-3">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h1 className="text-lg md:text-2xl font-bold text-white">Your Library</h1>
+            <h1 className="text-lg md:text-2xl font-bold text-white">{t('library.myLibrary')}</h1>
             <p className="text-[10px] md:text-xs text-brand-text-tertiary mt-0.5">
-              {totalTracks.toLocaleString()} tracks • Page {currentPage} of {totalPages}
+              {totalTracks.toLocaleString()} {t('admin.tracks').toLowerCase()} • {t('common.page') || 'Page'} {currentPage} {t('common.of')} {totalPages}
             </p>
           </div>
           
@@ -181,7 +183,7 @@ export default function LibraryPage({ onTrackInteraction }) {
                 className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30 hover:border-accent/50 transition-all duration-200 shadow-lg shadow-accent/10"
               >
                 <X className="w-4 h-4" />
-                <span className="text-xs font-semibold">Reset Tonality</span>
+                <span className="text-xs font-semibold">{t('actions.reset') || 'Reset'} {t('tracks.tonality')}</span>
               </button>
             )}
             <button
@@ -283,11 +285,13 @@ export default function LibraryPage({ onTrackInteraction }) {
         <TrackListView 
           tracks={tracks}
           onTrackInteraction={onTrackInteraction}
+          userFavorites={userFavorites}
         />
       ) : (
         <TrackGridView 
           tracks={tracks}
           onTrackInteraction={onTrackInteraction}
+          userFavorites={userFavorites}
         />
       )}
 

@@ -1,6 +1,8 @@
-import { useState, useCallback } from 'react';
-import { X, Play, Pause, Heart, Download, MoreHorizontal, Clock, Share2, Archive, Check } from 'lucide-react';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import { Play, Download, Heart, Clock, Music, X, Loader, Archive, Share2, Pause, Check } from 'lucide-react';
+import GenericCoverArt from './GenericCoverArt';
 import PremiumPrompt from './PremiumPrompt';
+import API_URL from '../config/api';
 
 const getTonalityColor = (tonality) => {
   const colors = {
@@ -32,18 +34,21 @@ const getTonalityColor = (tonality) => {
   return colors[tonality] || '#FFFFFF';
 };
 
-export default function AlbumDetailView({ album, tracks, onClose, onTrackInteraction, user, onAuthRequired, onSubscribe }) {
+export default function AlbumDetailView({ album, tracks = [], isLoading = false, autoPlay = false, onClose, onTrackInteraction, userFavorites = new Set(), user, onAuthRequired, onSubscribe }) {
   const [playingTrackId, setPlayingTrackId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [likedTracks, setLikedTracks] = useState(new Set());
+  const likedTracks = userFavorites;
   const [promptType, setPromptType] = useState(null); // 'signup' | 'subscribe' | null
   const [shareToast, setShareToast] = useState(false);
   const [downloadingTrackId, setDownloadingTrackId] = useState(null);
   const [downloadingZip, setDownloadingZip] = useState(false);
 
-  const isPremium = user && user.subscription?.plan && user.subscription.plan !== 'free';
+  const isAdmin = user?.role === 'admin';
+  const isPremium = isAdmin || (user && user.subscription?.plan && user.subscription.plan !== 'free');
+  const autoPlayTriggered = useRef(false);
 
   const handlePlayPause = (track) => {
+    if (!track || !track.id) return;
     if (playingTrackId === track.id) {
       setIsPlaying(!isPlaying);
     } else {
@@ -52,6 +57,14 @@ export default function AlbumDetailView({ album, tracks, onClose, onTrackInterac
     }
     onTrackInteraction?.('play', track);
   };
+
+  // Auto-play first track when tracks load and autoPlay is enabled
+  useEffect(() => {
+    if (autoPlay && !autoPlayTriggered.current && !isLoading && tracks.length > 0) {
+      autoPlayTriggered.current = true;
+      handlePlayPause(tracks[0]);
+    }
+  }, [autoPlay, isLoading, tracks]);
 
   const requireAuth = useCallback((action) => {
     if (!user) {
@@ -73,87 +86,81 @@ export default function AlbumDetailView({ album, tracks, onClose, onTrackInterac
     setDownloadingTrackId(trackId);
     try {
       const token = localStorage.getItem('token');
-      const res = await fetch(`http://localhost:5000/api/downloads/track/${trackId}/file`, {
+      const res = await fetch(`${API_URL}/downloads/track/${trackId}/file`, {
         method: 'GET',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
         throw new Error(data?.message || 'Download failed');
       }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${track.artist} - ${track.title}.mp3`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      if (data?.downloadUrl) {
+        window.location.href = data.downloadUrl;
+      }
     } catch (err) {
       console.error('Download failed:', err);
+      alert(err.message || 'Download failed');
     } finally {
       setDownloadingTrackId(null);
     }
   }, [requireAuth]);
 
   const handleDownloadZip = useCallback(async () => {
-    if (!requireAuth('downloadZip')) return;
+    if (!album || !requireAuth('downloadZip')) return;
     setDownloadingZip(true);
     try {
       const token = localStorage.getItem('token');
-      const albumId = album?.id || album?._id;
+      const albumId = album.id || album._id;
       if (!albumId) throw new Error('Album id is missing');
-      const res = await fetch(`http://localhost:5000/api/downloads/album/${albumId}/file`, {
+      const res = await fetch(`${API_URL}/downloads/album/${albumId}/file`, {
         method: 'GET',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
+      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
         throw new Error(data?.message || 'ZIP download failed');
       }
-      const blob = await res.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${album?.name || 'Album'}.zip`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      // If backend returns a signed URL, open it directly for fast download
+      if (data?.downloadUrl) {
+        window.location.href = data.downloadUrl;
+      }
     } catch (err) {
       console.error('ZIP download failed:', err);
+      alert(err.message || 'Download failed');
     } finally {
       setDownloadingZip(false);
     }
-  }, [requireAuth, tracks]);
+  }, [album, requireAuth, tracks]);
 
-  const toggleLike = useCallback((trackId, e) => {
+  const toggleLike = useCallback((track, e) => {
     e?.stopPropagation();
     if (!user) {
       setPromptType('signup');
       return;
     }
-    setLikedTracks(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(trackId)) {
-        newSet.delete(trackId);
-      } else {
-        newSet.add(trackId);
-      }
-      return newSet;
-    });
-  }, [user]);
+    onTrackInteraction?.('favorite', track);
+  }, [user, onTrackInteraction]);
+
+  const allTracksLiked = tracks.length > 0 && tracks.every(t => likedTracks.has(t.id || t._id));
 
   const handleLikeAlbum = useCallback(() => {
     if (!user) {
       setPromptType('signup');
       return;
     }
-    // Toggle album like (visual only for now)
-  }, [user]);
+    // Toggle favorite on all tracks that aren't already in the desired state
+    tracks.forEach(track => {
+      const trackId = track.id || track._id;
+      const isLiked = likedTracks.has(trackId);
+      // If all are liked, unlike all; otherwise, like the ones that aren't liked yet
+      if (allTracksLiked || !isLiked) {
+        onTrackInteraction?.('favorite', track);
+      }
+    });
+  }, [user, tracks, likedTracks, allTracksLiked, onTrackInteraction]);
 
   const handleShare = useCallback(() => {
+    if (!album) return;
     const url = window.location.href;
     const text = `Check out "${album.title}" by ${album.artist}`;
     if (navigator.share) {
@@ -171,6 +178,11 @@ export default function AlbumDetailView({ album, tracks, onClose, onTrackInterac
       handlePlayPause(tracks[0]);
     }
   };
+
+  // Safety check for album prop - must be after all hooks
+  if (!album) {
+    return null;
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-dark-bg animate-in fade-in duration-300">
@@ -218,7 +230,7 @@ export default function AlbumDetailView({ album, tracks, onClose, onTrackInterac
                       </span>
                     )}
                     <h1 className="text-lg md:text-2xl font-bold text-white mb-1 md:mb-2 leading-tight">
-                      {album.title}
+                      {album.title || album.name}
                     </h1>
                     <p className="text-sm md:text-lg text-brand-text-secondary font-medium">
                       {album.artist}
@@ -255,7 +267,7 @@ export default function AlbumDetailView({ album, tracks, onClose, onTrackInterac
                       onClick={handleLikeAlbum}
                       className="px-4 py-3 rounded-lg bg-dark-elevated hover:bg-dark-elevated/80 transition-all duration-200 hover:scale-105 group"
                     >
-                      <Heart className="w-4 h-4 text-white group-hover:text-accent transition-colors" />
+                      <Heart className={`w-4 h-4 transition-colors ${allTracksLiked ? 'text-accent fill-accent' : 'text-white group-hover:text-accent'}`} />
                     </button>
                     <button
                       onClick={handleShare}
@@ -288,7 +300,7 @@ export default function AlbumDetailView({ album, tracks, onClose, onTrackInterac
 
                 {/* Compact Track List */}
                 <div className="divide-y divide-white/5">
-                  {tracks.length === 0 && (
+                  {isLoading && (
                     <div className="flex items-center justify-center py-16 text-brand-text-tertiary">
                       <svg className="animate-spin h-5 w-5 mr-3 text-accent" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
@@ -297,7 +309,16 @@ export default function AlbumDetailView({ album, tracks, onClose, onTrackInterac
                       Loading tracks...
                     </div>
                   )}
-                  {tracks.map((track, index) => {
+                  
+                  {!isLoading && tracks.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-16 text-brand-text-tertiary">
+                      <Music className="h-12 w-12 mb-4 opacity-50" />
+                      <p className="text-lg font-medium">No tracks available</p>
+                      <p className="text-sm mt-2 opacity-75">This album is being processed or has no tracks yet.</p>
+                    </div>
+                  )}
+                  
+                  {!isLoading && tracks.map((track, index) => {
                     const isCurrentlyPlaying = playingTrackId === track.id && isPlaying;
                     const isLiked = likedTracks.has(track.id);
 
@@ -381,7 +402,7 @@ export default function AlbumDetailView({ album, tracks, onClose, onTrackInterac
                           {/* Action Buttons */}
                           <div className="flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
                             <button
-                              onClick={(e) => toggleLike(track.id, e)}
+                              onClick={(e) => toggleLike(track, e)}
                               className="hover:scale-110 transition-transform duration-150"
                               title={isLiked ? 'Unlike' : 'Like'}
                             >

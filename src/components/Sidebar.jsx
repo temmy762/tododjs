@@ -1,20 +1,26 @@
 import { useState } from 'react';
-import { Home, Disc, Library, Layers, Shield, LogIn, LogOut } from 'lucide-react';
+import { Home, Disc, Library, Layers, Shield, LogIn, LogOut, CreditCard } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function Sidebar({ activePage = 'home', onNavigate, onAdminClick, user, onLoginClick, onLogout, onProfileClick }) {
+  const { t } = useTranslation();
+  
+  const isAdmin = user?.role === 'admin';
+
   const navItems = [
-    { id: 'home', label: 'Home', icon: Home },
-    { id: 'library', label: 'Library', icon: Library },
-    { id: 'album', label: 'Record Pool', icon: Disc },
-    { id: 'mashup', label: 'Mash Ups', icon: Layers }
+    { id: 'home', label: t('nav.home'), icon: Home },
+    { id: 'library', label: t('nav.library'), icon: Library },
+    { id: 'album', label: t('nav.recordPool'), icon: Disc },
+    { id: 'mashup', label: t('nav.liveMashup'), icon: Layers },
+    ...(!isAdmin ? [{ id: 'pricing', label: t('subscription.pricing'), icon: CreditCard }] : [])
   ];
 
   return (
     <>
       {/* ── Desktop Sidebar ── */}
-      <aside className="hidden md:flex fixed left-0 top-16 h-[calc(100vh-4rem)] w-20 bg-dark-surface/80 backdrop-blur-xl border-r border-white/5 z-30 flex-col items-center py-8">
+      <aside className="hidden md:flex fixed left-0 top-16 h-[calc(100vh-4rem)] w-20 bg-dark-surface/80 backdrop-blur-xl border-r border-white/5 z-30 flex-col items-center py-4 overflow-y-auto">
 
-        <nav className="flex-1 flex flex-col gap-6">
+        <nav className="flex-1 flex flex-col gap-4 py-2">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activePage === item.id;
@@ -66,7 +72,7 @@ export default function Sidebar({ activePage = 'home', onNavigate, onAdminClick,
                 <Shield className="w-5 h-5 text-white" strokeWidth={2} />
               </div>
               <span className="text-[10px] font-medium text-brand-text-tertiary group-hover:text-brand-text-secondary transition-colors duration-300">
-                Admin
+                {t('nav.admin')}
               </span>
             </button>
           )}
@@ -102,7 +108,7 @@ export default function Sidebar({ activePage = 'home', onNavigate, onAdminClick,
                 <LogIn className="w-5 h-5 text-brand-text-tertiary group-hover:text-white transition-colors" strokeWidth={2} />
               </div>
               <span className="text-[10px] font-medium text-brand-text-tertiary group-hover:text-brand-text-secondary transition-colors duration-300">
-                Login
+                {t('nav.login')}
               </span>
             </button>
           )}
@@ -152,7 +158,7 @@ export default function Sidebar({ activePage = 'home', onNavigate, onAdminClick,
               <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-red-500 to-pink-500">
                 <Shield className="w-5 h-5 text-white" strokeWidth={2} />
               </div>
-              <span className="text-[9px] font-medium text-brand-text-tertiary">Admin</span>
+              <span className="text-[9px] font-medium text-brand-text-tertiary">{t('nav.admin')}</span>
             </button>
           )}
 
@@ -169,7 +175,7 @@ export default function Sidebar({ activePage = 'home', onNavigate, onAdminClick,
                   <span className="text-white font-bold text-[10px]">{user.name?.charAt(0).toUpperCase()}</span>
                 )}
               </div>
-              <span className="text-[9px] font-medium text-brand-text-tertiary">Profile</span>
+              <span className="text-[9px] font-medium text-brand-text-tertiary">{t('nav.profile')}</span>
             </button>
           ) : (
             <button
@@ -179,7 +185,7 @@ export default function Sidebar({ activePage = 'home', onNavigate, onAdminClick,
               <div className="w-9 h-9 rounded-xl flex items-center justify-center">
                 <LogIn className="w-5 h-5 text-brand-text-tertiary" strokeWidth={2} />
               </div>
-              <span className="text-[9px] font-medium text-brand-text-tertiary">Login</span>
+              <span className="text-[9px] font-medium text-brand-text-tertiary">{t('nav.login')}</span>
             </button>
           )}
         </div>

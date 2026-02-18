@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Disc, Calendar, Music, ChevronRight, ArrowLeft, Loader, Download, Play } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import API_URL from '../config/api';
 
-const API = 'http://localhost:5000/api';
 
 export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackInteraction }) {
+  const { t } = useTranslation();
   const [view, setView] = useState('sources'); // sources | source | dateCard
   const [sources, setSources] = useState([]);
   const [dateCards, setDateCards] = useState([]);
@@ -15,7 +17,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
   const fetchSources = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API}/sources`);
+      const res = await fetch(`${API_URL}/sources`);
       const data = await res.json();
       if (data.success) setSources(data.data);
     } catch (err) { console.error('Error fetching sources:', err); }
@@ -25,7 +27,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
   const fetchDateCards = useCallback(async (sourceId) => {
     try {
       setLoading(true);
-      const res = await fetch(`${API}/date-packs/source/${sourceId}`);
+      const res = await fetch(`${API_URL}/date-packs/source/${sourceId}`);
       const data = await res.json();
       if (data.success) setDateCards(data.data);
     } catch (err) { console.error('Error fetching date cards:', err); }
@@ -35,7 +37,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
   const fetchAlbums = useCallback(async (dateCardId) => {
     try {
       setLoading(true);
-      const res = await fetch(`${API}/date-packs/${dateCardId}/albums`);
+      const res = await fetch(`${API_URL}/date-packs/${dateCardId}/albums`);
       const data = await res.json();
       if (data.success) setAlbums(data.data);
     } catch (err) { console.error('Error fetching albums:', err); }
@@ -127,6 +129,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
                 album={album}
                 index={i}
                 onClick={() => onAlbumClick?.(album)}
+                onPlay={() => onAlbumClick?.(album, { autoPlay: true })}
                 onDownload={() => onAlbumDownload?.(album)}
               />
             ))}
@@ -266,7 +269,7 @@ function DateCard({ dateCard, index, onClick }) {
 }
 
 // Album Card with hover animation
-function AlbumCard({ album, index, onClick, onDownload }) {
+function AlbumCard({ album, index, onClick, onPlay, onDownload }) {
   return (
     <div
       onClick={onClick}
@@ -284,12 +287,20 @@ function AlbumCard({ album, index, onClick, onDownload }) {
           <div className="w-full h-full flex items-center justify-center"><Music size={48} className="text-white/10" /></div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-        {/* Play button on hover */}
+        {/* Play and Download buttons on hover */}
         <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-500">
           <div className="flex items-center gap-3">
-            <div className="w-14 h-14 rounded-full bg-accent shadow-lg shadow-accent/40 flex items-center justify-center transform scale-75 group-hover:scale-100 transition-transform duration-500">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPlay?.();
+              }}
+              className="w-14 h-14 rounded-full bg-accent shadow-lg shadow-accent/40 flex items-center justify-center transform scale-75 group-hover:scale-100 transition-transform duration-500"
+              title="Play Album"
+            >
               <Play size={24} className="text-white ml-1" fill="white" />
-            </div>
+            </button>
             <button
               type="button"
               onClick={(e) => {
