@@ -10,7 +10,8 @@ import {
   removeDevice,
   shareSubscription,
   removeSharedUser,
-  getSubscriptionHistory
+  getSubscriptionHistory,
+  checkWhatsAppEligibility
 } from '../controllers/subscriptionController.js';
 import { protect } from '../middleware/auth.js';
 
@@ -30,5 +31,6 @@ router.delete('/devices/:deviceId', protect, removeDevice);
 router.post('/share', protect, shareSubscription);
 router.delete('/share/:userId', protect, removeSharedUser);
 router.get('/history', protect, getSubscriptionHistory);
+router.get('/whatsapp-eligibility', protect, checkWhatsAppEligibility);
 
 export default router;

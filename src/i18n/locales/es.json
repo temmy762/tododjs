@@ -151,6 +151,16 @@
     "unlockFeatures": "Desbloquear Funciones Premium",
     "startingFrom": "Desde"
   },
+  "whatsapp": {
+    "chatWithUs": "Chatea con nosotros",
+    "supportTitle": "Soporte WhatsApp",
+    "greeting": "¡Hola! ¿Cómo podemos ayudarte hoy?",
+    "placeholder": "Escribe tu mensaje...",
+    "send": "Enviar",
+    "poweredBy": "Impulsado por WhatsApp",
+    "online": "En línea",
+    "responseTime": "Normalmente responde en minutos"
+  },
   "tracks": {
     "title": "Título",
     "artist": "Artista",

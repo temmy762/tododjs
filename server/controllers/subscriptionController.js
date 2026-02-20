@@ -402,6 +402,55 @@ export const removeSharedUser = async (req, res) => {
   }
 };
 
+// @desc    Check WhatsApp support eligibility
+// @route   GET /api/subscriptions/whatsapp-eligibility
+// @access  Private
+export const checkWhatsAppEligibility = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user.subscription.planId || user.subscription.status !== 'active') {
+      return res.status(200).json({
+        success: true,
+        data: { eligible: false, reason: 'no_active_subscription' }
+      });
+    }
+
+    // Check if subscription expired
+    if (user.subscription.endDate && new Date() > user.subscription.endDate) {
+      return res.status(200).json({
+        success: true,
+        data: { eligible: false, reason: 'subscription_expired' }
+      });
+    }
+
+    const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
+
+    if (!plan || !plan.features.whatsappSupport) {
+      return res.status(200).json({
+        success: true,
+        data: { eligible: false, reason: 'plan_no_whatsapp' }
+      });
+    }
+
+    const whatsappNumber = process.env.WHATSAPP_NUMBER || '';
+
+    res.status(200).json({
+      success: true,
+      data: {
+        eligible: true,
+        whatsappNumber,
+        planName: plan.name
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
 // @desc    Get subscription history
 // @route   GET /api/subscriptions/history
 // @access  Private

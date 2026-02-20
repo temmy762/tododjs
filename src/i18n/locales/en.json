@@ -142,6 +142,16 @@
     "unlockFeatures": "Unlock Premium Features",
     "startingFrom": "Starting from"
   },
+  "whatsapp": {
+    "chatWithUs": "Chat with us",
+    "supportTitle": "WhatsApp Support",
+    "greeting": "Hi! How can we help you today?",
+    "placeholder": "Type your message...",
+    "send": "Send",
+    "poweredBy": "Powered by WhatsApp",
+    "online": "Online",
+    "responseTime": "Usually replies within minutes"
+  },
   "tracks": {
     "title": "Title",
     "artist": "Artist",
