@@ -1,5 +1,6 @@
 import Stripe from 'stripe';
 import User from '../models/User.js';
+import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentReceiptEmail, sendSubscriptionCancelledEmail, sendPaymentFailedEmail } from '../services/emailService.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -69,8 +70,8 @@ export const createCheckoutSession = async (req, res) => {
         }
       ],
       mode: 'subscription',
-      success_url: `${process.env.FRONTEND_URL}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/checkout/cancel`,
+      success_url: `${process.env.FRONTEND_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.FRONTEND_URL}/subscription/cancel`,
       metadata: {
         userId: req.user._id.toString(),
         plan,
@@ -147,15 +148,32 @@ async function handleCheckoutSessionCompleted(session) {
 
   const subscription = await stripe.subscriptions.retrieve(session.subscription);
 
-  await User.findByIdAndUpdate(userId, {
-    'subscription.plan': plan,
-    'subscription.status': 'active',
-    'subscription.stripeSubscriptionId': subscription.id,
-    'subscription.currentPeriodEnd': new Date(subscription.current_period_end * 1000),
-    'subscription.cancelAtPeriodEnd': false
-  });
+  const user = await User.findById(userId);
+  if (user) {
+    user.subscription.plan = plan;
+    user.subscription.status = 'active';
+    user.subscription.stripeSubscriptionId = subscription.id;
+    user.subscription.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    user.subscription.cancelAtPeriodEnd = false;
+    await user.save();
 
-  console.log(`Subscription activated for user ${userId}`);
+    console.log(`Subscription activated for user ${userId}`);
+
+    // Notify user of payment receipt (non-blocking)
+    const amount = subscription.items?.data?.[0]?.price?.unit_amount
+      ? (subscription.items.data[0].price.unit_amount / 100).toFixed(2)
+      : 'N/A';
+    const currency = subscription.currency?.toUpperCase() || 'EUR';
+    const periodEnd = subscription.current_period_end
+      ? new Date(subscription.current_period_end * 1000)
+      : null;
+    sendPaymentReceiptEmail(user, plan, amount, currency, periodEnd)
+      .catch(err => console.error('User payment receipt email failed:', err));
+
+    // Notify admin of new payment (non-blocking)
+    notifyAdminNewPayment(user, plan, amount, currency)
+      .catch(err => console.error('Admin payment notification failed:', err));
+  }
 }
 
 // Handle subscription update
@@ -177,15 +195,26 @@ async function handleSubscriptionDeleted(subscription) {
   const customer = await stripe.customers.retrieve(subscription.customer);
   const userId = customer.metadata.userId;
 
-  await User.findByIdAndUpdate(userId, {
-    'subscription.plan': 'free',
-    'subscription.status': 'cancelled',
-    'subscription.stripeSubscriptionId': null,
-    'subscription.currentPeriodEnd': null,
-    'subscription.cancelAtPeriodEnd': false
-  });
+  const user = await User.findById(userId);
+  if (user) {
+    const oldPlan = user.subscription.plan;
+    user.subscription.plan = 'free';
+    user.subscription.status = 'cancelled';
+    user.subscription.stripeSubscriptionId = null;
+    user.subscription.currentPeriodEnd = null;
+    user.subscription.cancelAtPeriodEnd = false;
+    await user.save();
 
-  console.log(`Subscription cancelled for user ${userId}`);
+    console.log(`Subscription cancelled for user ${userId}`);
+
+    // Notify user of cancellation (non-blocking)
+    sendSubscriptionCancelledEmail(user, oldPlan, null)
+      .catch(err => console.error('User cancellation email failed:', err));
+
+    // Notify admin of cancellation (non-blocking)
+    notifyAdminCancelledSubscription(user, oldPlan)
+      .catch(err => console.error('Admin cancellation notification failed:', err));
+  }
 }
 
 // Handle payment failure
@@ -193,11 +222,17 @@ async function handlePaymentFailed(invoice) {
   const customer = await stripe.customers.retrieve(invoice.customer);
   const userId = customer.metadata.userId;
 
-  await User.findByIdAndUpdate(userId, {
+  const user = await User.findByIdAndUpdate(userId, {
     'subscription.status': 'past_due'
-  });
+  }, { new: true });
 
   console.log(`Payment failed for user ${userId}`);
+
+  // Notify user of payment failure (non-blocking)
+  if (user) {
+    sendPaymentFailedEmail(user)
+      .catch(err => console.error('User payment failed email failed:', err));
+  }
 }
 
 // @desc    Cancel subscription
@@ -222,6 +257,17 @@ export const cancelSubscription = async (req, res) => {
     // Update user
     req.user.subscription.cancelAtPeriodEnd = true;
     await req.user.save();
+
+    // Notify user of pending cancellation (non-blocking)
+    const accessUntil = subscription.current_period_end
+      ? new Date(subscription.current_period_end * 1000)
+      : null;
+    sendSubscriptionCancelledEmail(req.user, req.user.subscription.plan || 'N/A', accessUntil)
+      .catch(err => console.error('User cancellation email failed:', err));
+
+    // Notify admin of pending cancellation (non-blocking)
+    notifyAdminCancelledSubscription(req.user, req.user.subscription.plan || 'N/A')
+      .catch(err => console.error('Admin cancellation notification failed:', err));
 
     res.status(200).json({
       success: true,

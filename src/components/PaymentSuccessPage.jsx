@@ -41,6 +41,19 @@ export default function PaymentSuccessPage() {
       if (data.success) {
         setSuccess(true);
         setSubscriptionData(data.data);
+
+        // Refresh user session to sync cookie with localStorage token
+        // This ensures App.checkAuth() picks up the correct user
+        if (token) {
+          try {
+            await fetch(`${API_URL}/auth/me`, {
+              headers: { 'Authorization': `Bearer ${token}` },
+              credentials: 'include'
+            });
+          } catch (e) {
+            // Non-critical — App will still use localStorage token
+          }
+        }
         
         // Redirect to home after 5 seconds
         setTimeout(() => {

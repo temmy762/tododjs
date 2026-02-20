@@ -3,7 +3,14 @@ import {
   getWelcomeEmailTemplate,
   getPasswordResetEmailTemplate,
   getSubscriptionEmailTemplate,
-  getDownloadReceiptEmailTemplate
+  getDownloadReceiptEmailTemplate,
+  getPaymentReceiptEmailTemplate,
+  getSubscriptionCancelledEmailTemplate,
+  getPaymentFailedEmailTemplate,
+  getAdminNewSignupTemplate,
+  getAdminNewPaymentTemplate,
+  getAdminCancelledSubscriptionTemplate,
+  getAdminExpiredSubscriptionTemplate
 } from './emailTemplates.js';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
@@ -117,10 +124,111 @@ export async function sendNotificationEmail(to, subject, message) {
   return sendEmail({ to, subject, html, text: message });
 }
 
+// ─── User Payment & Subscription Emails ───
+
+/**
+ * Payment receipt email sent to user after successful payment
+ */
+export async function sendPaymentReceiptEmail(user, planName, amount, currency, endDate) {
+  const lang = user.preferredLanguage || 'en';
+  const { subject, html, text } = getPaymentReceiptEmailTemplate(user, planName, amount, currency, endDate, lang);
+  
+  return sendEmail({
+    to: user.email,
+    subject,
+    html,
+    text
+  });
+}
+
+/**
+ * Subscription cancelled email sent to user
+ */
+export async function sendSubscriptionCancelledEmail(user, planName, accessUntilDate) {
+  const lang = user.preferredLanguage || 'en';
+  const { subject, html, text } = getSubscriptionCancelledEmailTemplate(user, planName, accessUntilDate, lang);
+  
+  return sendEmail({
+    to: user.email,
+    subject,
+    html,
+    text
+  });
+}
+
+/**
+ * Payment failed email sent to user
+ */
+export async function sendPaymentFailedEmail(user) {
+  const lang = user.preferredLanguage || 'en';
+  const { subject, html, text } = getPaymentFailedEmailTemplate(user, lang);
+  
+  return sendEmail({
+    to: user.email,
+    subject,
+    html,
+    text
+  });
+}
+
+// ─── Admin Notification Emails ───
+
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+
+/**
+ * Send admin notification (skips silently if ADMIN_EMAIL is not set)
+ */
+async function sendAdminNotification({ subject, html, text }) {
+  if (!ADMIN_EMAIL) {
+    console.log('ADMIN_EMAIL not set — skipping admin notification:', subject);
+    return { success: false, error: 'ADMIN_EMAIL not configured' };
+  }
+  return sendEmail({ to: ADMIN_EMAIL, subject, html, text });
+}
+
+/**
+ * Notify admin of a new user signup
+ */
+export async function notifyAdminNewSignup(user) {
+  const { subject, html, text } = getAdminNewSignupTemplate(user);
+  return sendAdminNotification({ subject, html, text });
+}
+
+/**
+ * Notify admin of a new payment
+ */
+export async function notifyAdminNewPayment(user, planName, amount, currency) {
+  const { subject, html, text } = getAdminNewPaymentTemplate(user, planName, amount, currency);
+  return sendAdminNotification({ subject, html, text });
+}
+
+/**
+ * Notify admin of a cancelled subscription
+ */
+export async function notifyAdminCancelledSubscription(user, planName) {
+  const { subject, html, text } = getAdminCancelledSubscriptionTemplate(user, planName);
+  return sendAdminNotification({ subject, html, text });
+}
+
+/**
+ * Notify admin of an expired subscription
+ */
+export async function notifyAdminExpiredSubscription(user, planName) {
+  const { subject, html, text } = getAdminExpiredSubscriptionTemplate(user, planName);
+  return sendAdminNotification({ subject, html, text });
+}
+
 export default {
   sendWelcomeEmail,
   sendPasswordResetEmail,
   sendSubscriptionEmail,
   sendDownloadReceiptEmail,
-  sendNotificationEmail
+  sendNotificationEmail,
+  sendPaymentReceiptEmail,
+  sendSubscriptionCancelledEmail,
+  sendPaymentFailedEmail,
+  notifyAdminNewSignup,
+  notifyAdminNewPayment,
+  notifyAdminCancelledSubscription,
+  notifyAdminExpiredSubscription
 };

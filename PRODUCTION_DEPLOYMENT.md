@@ -1,289 +1,273 @@
-# Production Deployment Guide for TodoDJs
+# TodoDJs — Production Deployment Guide
+## Hostinger VPS KVM 4 · Ubuntu · tododjs.com
 
-This guide will help you deploy your TodoDJs application to production with your domain `tododjs.com` and Resend email service.
+---
+
+## Architecture
+
+```
+tododjs.com (frontend)  ──►  Nginx  ──►  /var/www/tododjs/dist (static)
+api.tododjs.com (API)   ──►  Nginx  ──►  PM2 → Node.js :5000
+```
+
+- **Frontend**: Vite React SPA served as static files by Nginx
+- **Backend**: Express.js API running on port 5000, managed by PM2
+- **Reverse proxy**: Nginx handles SSL, compression, and routing
+- **SSL**: Let's Encrypt via Certbot (auto-renewing)
+
+---
 
 ## Prerequisites
 
-- Domain: `tododjs.com` configured
-- Resend DNS configured
-- MongoDB Atlas account (for production database)
-- Stripe account (production keys)
-- Wasabi S3 bucket configured
-- Hosting provider (e.g., Vercel, Netlify, DigitalOcean, AWS)
+Before starting, ensure you have:
 
-## 1. Backend Configuration
+- [ ] Hostinger VPS KVM 4 with Ubuntu (fresh install)
+- [ ] Domain `tododjs.com` purchased and accessible
+- [ ] SSH access to the VPS (root or sudo user)
+- [ ] MongoDB Atlas cluster ready
+- [ ] Stripe account with **live** keys
+- [ ] Resend account with API key and DNS verified for `tododjs.com`
+- [ ] Wasabi S3 bucket configured
+- [ ] Git repository pushed to GitHub
 
-### Environment Variables
+---
 
-Copy `server/.env.production` to `server/.env` on your production server and update with your actual values:
+## Step 1 — DNS Configuration (Hostinger Panel)
 
-```bash
-# Production Server Configuration
-PORT=5000
-NODE_ENV=production
+In your Hostinger DNS Zone Editor, add these **A records** pointing to your VPS IP:
 
-# Database - MongoDB Atlas
-MONGODB_URI=mongodb+srv://username:password@cluster.mongodb.net/tododjs?retryWrites=true&w=majority
+| Type  | Name  | Value (VPS IP)   | TTL  |
+|-------|-------|------------------|------|
+| A     | @     | `YOUR_VPS_IP`    | 3600 |
+| A     | www   | `YOUR_VPS_IP`    | 3600 |
+| A     | api   | `YOUR_VPS_IP`    | 3600 |
 
-# JWT Secret - Generate a strong random secret
-JWT_SECRET=<generate-a-strong-random-secret-here>
-JWT_EXPIRE=7d
+Also add Resend email DNS records (from Resend dashboard):
+- **SPF** — TXT record
+- **DKIM** — TXT record
+- **DMARC** — TXT record (recommended)
 
-# Stripe Production Keys
-STRIPE_SECRET_KEY=sk_live_your_actual_stripe_secret_key
-STRIPE_PUBLISHABLE_KEY=pk_live_your_actual_stripe_publishable_key
-STRIPE_WEBHOOK_SECRET=whsec_your_actual_webhook_secret
+> Wait 5–15 minutes for DNS propagation before proceeding.
 
-# Resend Email Configuration
-RESEND_API_KEY=re_your_actual_resend_api_key
-RESEND_FROM_EMAIL=TodoDJs <noreply@tododjs.com>
+---
 
-# Frontend URL - Production Domain
-FRONTEND_URL=https://tododjs.com
+## Step 2 — Automated Setup (Recommended)
 
-# Wasabi S3 Configuration (already configured)
-WASABI_ACCESS_KEY_ID=your_wasabi_access_key
-WASABI_SECRET_ACCESS_KEY=your_wasabi_secret_key
-WASABI_BUCKET=tododj
-WASABI_REGION=eu-west-1
-WASABI_ENDPOINT=s3.eu-west-1.wasabisys.com
-
-# File Upload
-MAX_FILE_SIZE=50000000
-UPLOAD_PATH=./uploads
-
-# OpenAI (if using AI features)
-OPENAI_API_KEY=your_openai_api_key
-```
-
-### Deploy Backend
-
-**Option 1: VPS/DigitalOcean/AWS EC2**
-
-1. SSH into your server
-2. Clone the repository
-3. Install dependencies:
-   ```bash
-   cd server
-   npm install --production
-   ```
-4. Set up environment variables (copy .env.production to .env and update values)
-5. Use PM2 to run the server:
-   ```bash
-   npm install -g pm2
-   pm2 start server.js --name tododjs-api
-   pm2 save
-   pm2 startup
-   ```
-6. Configure Nginx as reverse proxy:
-   ```nginx
-   server {
-       listen 80;
-       server_name api.tododjs.com;
-       
-       location / {
-           proxy_pass http://localhost:5000;
-           proxy_http_version 1.1;
-           proxy_set_header Upgrade $http_upgrade;
-           proxy_set_header Connection 'upgrade';
-           proxy_set_header Host $host;
-           proxy_cache_bypass $http_upgrade;
-       }
-   }
-   ```
-7. Set up SSL with Let's Encrypt:
-   ```bash
-   sudo certbot --nginx -d api.tododjs.com
-   ```
-
-**Option 2: Heroku**
-
-1. Create a new Heroku app
-2. Add environment variables in Heroku dashboard
-3. Deploy:
-   ```bash
-   git subtree push --prefix server heroku main
-   ```
-
-## 2. Frontend Configuration
-
-### Environment Variables
-
-Update `.env.production` with your production API URL:
+SSH into your VPS and run the setup script:
 
 ```bash
-# Production Frontend Environment Variables
-VITE_API_URL=https://api.tododjs.com/api
-VITE_STRIPE_PUBLISHABLE_KEY=pk_live_your_actual_stripe_publishable_key
+ssh root@YOUR_VPS_IP
+
+# Download and run setup script
+git clone https://github.com/temmy762/tododjs.git /var/www/tododjs
+cd /var/www/tododjs
+chmod +x deploy/setup-vps.sh
+sudo ./deploy/setup-vps.sh
 ```
 
-### Deploy Frontend
+The script handles: system updates, Node.js 20, PM2, Nginx, SSL, firewall, and app build.
 
-**Option 1: Vercel (Recommended)**
+**OR** follow the manual steps below.
 
-1. Install Vercel CLI:
-   ```bash
-   npm install -g vercel
-   ```
-2. Deploy:
-   ```bash
-   vercel --prod
-   ```
-3. Configure domain in Vercel dashboard to point to `tododjs.com`
-4. Vercel will automatically use `.env.production` for production builds
+---
 
-**Option 2: Netlify**
+## Step 3 — Manual Setup (Alternative)
 
-1. Install Netlify CLI:
-   ```bash
-   npm install -g netlify-cli
-   ```
-2. Build the project:
-   ```bash
-   npm run build
-   ```
-3. Deploy:
-   ```bash
-   netlify deploy --prod --dir=dist
-   ```
-4. Configure domain in Netlify dashboard
+### 3.1 System Packages
 
-**Option 3: Static Hosting (S3, CloudFlare Pages, etc.)**
+```bash
+sudo apt update && sudo apt upgrade -y
+sudo apt install -y curl wget git build-essential ufw fail2ban nginx
+```
 
-1. Build the project:
-   ```bash
-   npm run build
-   ```
-2. Upload the `dist` folder to your hosting provider
-3. Configure domain to point to your hosting
+### 3.2 Firewall
 
-## 3. DNS Configuration
+```bash
+sudo ufw default deny incoming
+sudo ufw default allow outgoing
+sudo ufw allow ssh
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw --force enable
+```
 
-### For tododjs.com
+### 3.3 Node.js 20 + PM2
 
-**Main Domain (Frontend)**
-- Type: A or CNAME
-- Name: @ or tododjs.com
-- Value: Your frontend hosting IP/domain
+```bash
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+sudo npm install -g pm2
+pm2 startup systemd
+```
 
-**API Subdomain (Backend)**
-- Type: A
-- Name: api
-- Value: Your backend server IP
+### 3.4 Clone & Build
 
-**WWW Subdomain (Optional)**
-- Type: CNAME
-- Name: www
-- Value: tododjs.com
+```bash
+cd /var/www/tododjs
+npm install && npm run build
+cd server && npm install --production
+```
 
-### Resend Email DNS
+### 3.5 Configure Server Environment
 
-Ensure you've added the required DNS records from Resend:
-- SPF record
-- DKIM record
-- DMARC record (optional but recommended)
+```bash
+cp /var/www/tododjs/deploy/env.server.template /var/www/tododjs/server/.env
+nano /var/www/tododjs/server/.env
+```
 
-You can verify these in your Resend dashboard.
+Fill in **all** values — see `deploy/env.server.template` for the full list.
 
-## 4. Post-Deployment Checklist
+### 3.6 Nginx
+
+```bash
+sudo cp /var/www/tododjs/deploy/nginx/tododjs.conf /etc/nginx/sites-available/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo ln -sf /etc/nginx/sites-available/tododjs.conf /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### 3.7 SSL (Let's Encrypt)
+
+```bash
+sudo apt install -y certbot python3-certbot-nginx
+sudo certbot --nginx -d tododjs.com -d www.tododjs.com -d api.tododjs.com \
+  --non-interactive --agree-tos --email info@tododjs.com
+
+# Auto-renewal cron
+echo "0 3 * * * certbot renew --quiet --post-hook 'systemctl reload nginx'" | sudo crontab -
+```
+
+### 3.8 Start Application
+
+```bash
+cd /var/www/tododjs
+pm2 start ecosystem.config.cjs
+pm2 save
+```
+
+---
+
+## Step 4 — Stripe Webhook (Production)
+
+1. Go to [Stripe Dashboard → Webhooks](https://dashboard.stripe.com/webhooks)
+2. Add endpoint: `https://api.tododjs.com/api/stripe/webhook`
+3. Select events:
+   - `checkout.session.completed`
+   - `payment_intent.succeeded`
+   - `payment_intent.payment_failed`
+   - `customer.subscription.deleted`
+4. Copy the webhook signing secret → update `STRIPE_WEBHOOK_SECRET` in `server/.env`
+5. Restart: `pm2 restart tododjs-api`
+
+---
+
+## Step 5 — Verify Deployment
+
+```bash
+# Check API health
+curl https://api.tododjs.com/api/health
+
+# Check PM2 status
+pm2 status
+
+# Check Nginx
+sudo nginx -t
+
+# Check SSL
+curl -I https://tododjs.com
+curl -I https://api.tododjs.com
+```
+
+---
+
+## Post-Deployment Checklist
 
 ### Backend
-- [ ] MongoDB Atlas connection working
+- [ ] `curl https://api.tododjs.com/api/health` returns success
+- [ ] MongoDB Atlas connection working (whitelist VPS IP)
 - [ ] Wasabi S3 uploads working
-- [ ] Resend emails sending successfully
-- [ ] Stripe webhooks configured
-- [ ] CORS allowing tododjs.com domain
-- [ ] SSL certificate installed
-- [ ] PM2 or process manager running
+- [ ] Resend emails sending (check Resend dashboard)
+- [ ] Stripe webhooks receiving events (check Stripe dashboard)
+- [ ] Admin notifications arriving at info@tododjs.com
 
 ### Frontend
-- [ ] API calls connecting to production backend
-- [ ] Authentication working
+- [ ] https://tododjs.com loads correctly
+- [ ] Login / Register working
+- [ ] Stripe checkout redirects and returns properly
 - [ ] File uploads working
-- [ ] Stripe checkout working
-- [ ] All pages loading correctly
-- [ ] SSL certificate installed
+- [ ] Downloads working
 
-### Testing
-- [ ] Create a test user account
-- [ ] Test login/logout
-- [ ] Test password reset email
-- [ ] Test file upload
-- [ ] Test download functionality
-- [ ] Test Stripe payment flow
-- [ ] Test admin dashboard (if applicable)
+### Security
+- [ ] HTTPS enforced (HTTP redirects to HTTPS)
+- [ ] Firewall active (`sudo ufw status`)
+- [ ] fail2ban running (`sudo systemctl status fail2ban`)
+- [ ] No sensitive data in git (check `.gitignore`)
 
-## 5. Monitoring & Maintenance
+---
 
-### Backend Monitoring
+## Redeployment (After Code Changes)
+
 ```bash
-# View logs
-pm2 logs tododjs-api
-
-# Monitor process
-pm2 monit
-
-# Restart server
+cd /var/www/tododjs
+git pull origin main
+npm install && npm run build
+cd server && npm install --production
 pm2 restart tododjs-api
 ```
 
-### Database Backups
-Set up automated backups in MongoDB Atlas dashboard.
-
-### Email Monitoring
-Monitor email delivery in Resend dashboard.
-
-### SSL Renewal
-If using Let's Encrypt, set up auto-renewal:
+Or use the script:
 ```bash
-sudo certbot renew --dry-run
+chmod +x deploy/redeploy.sh
+./deploy/redeploy.sh
 ```
 
-## 6. Environment-Specific API Calls
+---
 
-The application is now configured to automatically use the correct API URL based on the environment:
+## Monitoring & Logs
 
-- **Development**: `http://localhost:5000/api`
-- **Production**: `https://api.tododjs.com/api`
+```bash
+pm2 status                # App status
+pm2 logs tododjs-api      # Live logs
+pm2 logs tododjs-api --lines 100  # Last 100 lines
+pm2 monit                 # CPU/Memory monitor
+pm2 restart tododjs-api   # Restart
+pm2 reload tododjs-api    # Zero-downtime reload
 
-This is handled by the `src/config/api.js` file which reads from environment variables.
+# Nginx logs
+sudo tail -f /var/log/nginx/access.log
+sudo tail -f /var/log/nginx/error.log
+```
 
-## 7. Troubleshooting
+---
 
-### CORS Errors
-- Verify `FRONTEND_URL` in backend `.env` matches your frontend domain
-- Check that `tododjs.com` is in the allowed origins list in `server/server.js`
+## Troubleshooting
 
-### Email Not Sending
-- Verify Resend API key is correct
-- Check DNS records are properly configured
-- Review Resend dashboard for delivery logs
+| Issue | Fix |
+|-------|-----|
+| CORS errors | Check `FRONTEND_URL` in `server/.env` matches `https://tododjs.com` |
+| 502 Bad Gateway | `pm2 status` — API may be down. `pm2 restart tododjs-api` |
+| SSL errors | `sudo certbot renew --force-renewal` then `sudo systemctl reload nginx` |
+| MongoDB connection | Whitelist VPS IP in Atlas → Network Access |
+| Uploads failing | Check `client_max_body_size` in Nginx config (set to 500M) |
+| Emails not sending | Verify Resend API key + DNS records in Resend dashboard |
+| Stripe webhooks failing | Check webhook URL and signing secret match |
 
-### Database Connection Issues
-- Verify MongoDB Atlas IP whitelist includes your server IP
-- Check connection string format
-- Ensure database user has proper permissions
+---
 
-### File Upload Issues
-- Verify Wasabi credentials
-- Check bucket permissions
-- Ensure CORS is configured on Wasabi bucket
+## File Structure on VPS
 
-## 8. Security Best Practices
-
-- [ ] Use strong JWT secret (minimum 32 characters)
-- [ ] Enable rate limiting (already configured)
-- [ ] Keep dependencies updated
-- [ ] Use HTTPS everywhere
-- [ ] Set secure cookie flags
-- [ ] Implement proper error handling (don't expose sensitive info)
-- [ ] Regular security audits
-- [ ] Monitor for suspicious activity
-
-## Support
-
-For issues or questions, refer to:
-- MongoDB Atlas: https://docs.atlas.mongodb.com/
-- Resend: https://resend.com/docs
-- Stripe: https://stripe.com/docs
-- Wasabi: https://wasabi.com/help/
+```
+/var/www/tododjs/
+├── dist/                  ← Frontend build (served by Nginx)
+├── server/
+│   ├── .env               ← Production environment variables
+│   ├── server.js           ← Express API entry point
+│   └── ...
+├── deploy/
+│   ├── nginx/tododjs.conf  ← Nginx configuration
+│   ├── env.server.template ← Environment template
+│   ├── setup-vps.sh        ← Initial VPS setup script
+│   └── redeploy.sh         ← Quick redeploy script
+├── ecosystem.config.cjs    ← PM2 configuration
+└── ...
+```

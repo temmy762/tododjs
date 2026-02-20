@@ -2,7 +2,7 @@ import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { getSignedDownloadUrl } from '../config/wasabi.js';
-import { sendWelcomeEmail, sendPasswordResetEmail } from '../services/emailService.js';
+import { sendWelcomeEmail, sendPasswordResetEmail, notifyAdminNewSignup } from '../services/emailService.js';
 
 // Sign avatar URL if it's stored in Wasabi
 const signAvatarUrl = async (user) => {
@@ -34,7 +34,7 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
     expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
-    sameSite: 'strict'
+    sameSite: 'lax'
   };
 
   // Register or update device
@@ -109,6 +109,9 @@ export const register = async (req, res) => {
 
     // Send welcome email (non-blocking)
     sendWelcomeEmail(user).catch(err => console.error('Welcome email failed:', err));
+
+    // Notify admin of new signup (non-blocking)
+    notifyAdminNewSignup(user).catch(err => console.error('Admin signup notification failed:', err));
 
     await sendTokenResponse(user, 201, res, req);
   } catch (error) {
@@ -197,6 +200,23 @@ export const getMe = async (req, res) => {
     const userData = user.toObject();
     userData.avatar = avatar;
 
+    // Re-sync the httpOnly cookie with the current Bearer token
+    // This prevents stale cookies (e.g. from a previous admin session)
+    // from persisting after a cross-site redirect (e.g. Stripe checkout)
+    let token;
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+      token = req.headers.authorization.split(' ')[1];
+    }
+    if (token) {
+      const cookieOptions = {
+        expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+      };
+      res.cookie('token', token, cookieOptions);
+    }
+
     res.status(200).json({
       success: true,
       data: userData
@@ -238,7 +258,9 @@ export const logout = async (req, res) => {
 
   res.cookie('token', 'none', {
     expires: new Date(Date.now() + 10 * 1000),
-    httpOnly: true
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax'
   });
 
   res.status(200).json({

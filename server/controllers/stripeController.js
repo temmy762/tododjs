@@ -1,6 +1,7 @@
 import stripe from '../config/stripe.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import User from '../models/User.js';
+import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentReceiptEmail, sendSubscriptionCancelledEmail, sendPaymentFailedEmail } from '../services/emailService.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
@@ -142,6 +143,14 @@ export const verifyPayment = async (req, res) => {
 
     await user.save();
 
+    // Notify user of payment receipt (non-blocking)
+    sendPaymentReceiptEmail(user, plan.name, plan.price, plan.currency, endDate)
+      .catch(err => console.error('User payment receipt email failed:', err));
+
+    // Notify admin of new payment (non-blocking)
+    notifyAdminNewPayment(user, plan.name, plan.price, plan.currency)
+      .catch(err => console.error('Admin payment notification failed:', err));
+
     res.status(200).json({
       success: true,
       message: 'Subscription activated successfully',
@@ -247,12 +256,32 @@ async function handleCheckoutCompleted(session) {
 
   await user.save();
   console.log(`Subscription activated for user ${userId}`);
+
+  // Notify user of payment receipt (non-blocking)
+  sendPaymentReceiptEmail(user, plan.name, plan.price, plan.currency, endDate)
+    .catch(err => console.error('User webhook payment receipt email failed:', err));
+
+  // Notify admin of new payment (non-blocking)
+  notifyAdminNewPayment(user, plan.name, plan.price, plan.currency)
+    .catch(err => console.error('Admin webhook payment notification failed:', err));
 }
 
 // Helper function to handle payment failures
 async function handlePaymentFailed(paymentIntent) {
   console.log('Payment failed for:', paymentIntent.customer);
-  // You can add logic here to notify the user or update their status
+  
+  if (paymentIntent.customer) {
+    try {
+      const user = await User.findOne({ 'subscription.stripeCustomerId': paymentIntent.customer });
+      if (user) {
+        // Notify user of payment failure (non-blocking)
+        sendPaymentFailedEmail(user)
+          .catch(err => console.error('User payment failed email failed:', err));
+      }
+    } catch (err) {
+      console.error('Error finding user for payment failure notification:', err);
+    }
+  }
 }
 
 // Helper function to handle subscription deletion
@@ -260,10 +289,19 @@ async function handleSubscriptionDeleted(subscription) {
   const user = await User.findOne({ 'subscription.stripeSubscriptionId': subscription.id });
   
   if (user) {
+    const planId = user.subscription.planId;
     user.subscription.status = 'cancelled';
     user.subscription.autoRenew = false;
     await user.save();
     console.log(`Subscription cancelled for user ${user._id}`);
+
+    // Notify user of cancellation (non-blocking)
+    sendSubscriptionCancelledEmail(user, planId, null)
+      .catch(err => console.error('User cancellation email failed:', err));
+
+    // Notify admin of cancellation (non-blocking)
+    notifyAdminCancelledSubscription(user, planId)
+      .catch(err => console.error('Admin cancellation notification failed:', err));
   }
 }
 

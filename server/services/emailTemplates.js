@@ -41,6 +41,45 @@ const translations = {
       message: 'Here\'s a summary of your recent downloads:',
       downloadedOn: 'Downloaded on',
       copyright: 'All rights reserved.'
+    },
+    paymentReceipt: {
+      subject: 'Payment Confirmed — TodoDJs',
+      title: 'Payment Received!',
+      greeting: 'Hey',
+      message: 'Your payment has been successfully processed. Here are the details:',
+      plan: 'Plan',
+      amount: 'Amount',
+      date: 'Date',
+      status: 'Status',
+      statusPaid: 'Paid',
+      validUntil: 'Valid Until',
+      footer: 'Thank you for your support! Enjoy your premium access.',
+      button: 'Start Browsing',
+      copyright: 'All rights reserved.'
+    },
+    subscriptionCancelled: {
+      subject: 'Subscription Cancelled — TodoDJs',
+      title: 'Subscription Cancelled',
+      greeting: 'Hey',
+      message: 'Your subscription has been cancelled. Here are the details:',
+      plan: 'Plan',
+      cancelledOn: 'Cancelled On',
+      accessUntil: 'Access Until',
+      accessNote: 'You will continue to have access until the end of your current billing period.',
+      reactivate: 'Changed your mind? You can reactivate anytime.',
+      button: 'Reactivate Subscription',
+      footer: 'We\'re sorry to see you go. You can always come back!',
+      copyright: 'All rights reserved.'
+    },
+    paymentFailed: {
+      subject: 'Payment Failed — TodoDJs',
+      title: 'Payment Failed',
+      greeting: 'Hey',
+      message: 'We were unable to process your payment. Please update your payment method to continue your subscription.',
+      reason: 'This could be due to insufficient funds, an expired card, or a declined transaction.',
+      button: 'Update Payment Method',
+      footer: 'If you need help, please contact our support team.',
+      copyright: 'All rights reserved.'
     }
   },
   es: {
@@ -79,6 +118,45 @@ const translations = {
       greeting: 'Hola',
       message: 'Aquí está el resumen de tus descargas recientes:',
       downloadedOn: 'Descargado el',
+      copyright: 'Todos los derechos reservados.'
+    },
+    paymentReceipt: {
+      subject: 'Pago Confirmado — TodoDJs',
+      title: '¡Pago Recibido!',
+      greeting: 'Hola',
+      message: 'Tu pago ha sido procesado exitosamente. Aquí están los detalles:',
+      plan: 'Plan',
+      amount: 'Monto',
+      date: 'Fecha',
+      status: 'Estado',
+      statusPaid: 'Pagado',
+      validUntil: 'Válido Hasta',
+      footer: '¡Gracias por tu apoyo! Disfruta de tu acceso premium.',
+      button: 'Comenzar a Explorar',
+      copyright: 'Todos los derechos reservados.'
+    },
+    subscriptionCancelled: {
+      subject: 'Suscripción Cancelada — TodoDJs',
+      title: 'Suscripción Cancelada',
+      greeting: 'Hola',
+      message: 'Tu suscripción ha sido cancelada. Aquí están los detalles:',
+      plan: 'Plan',
+      cancelledOn: 'Cancelado El',
+      accessUntil: 'Acceso Hasta',
+      accessNote: 'Continuarás teniendo acceso hasta el final de tu período de facturación actual.',
+      reactivate: '¿Cambiaste de opinión? Puedes reactivar en cualquier momento.',
+      button: 'Reactivar Suscripción',
+      footer: 'Lamentamos verte ir. ¡Siempre puedes volver!',
+      copyright: 'Todos los derechos reservados.'
+    },
+    paymentFailed: {
+      subject: 'Pago Fallido — TodoDJs',
+      title: 'Pago Fallido',
+      greeting: 'Hola',
+      message: 'No pudimos procesar tu pago. Por favor actualiza tu método de pago para continuar con tu suscripción.',
+      reason: 'Esto podría deberse a fondos insuficientes, una tarjeta vencida o una transacción rechazada.',
+      button: 'Actualizar Método de Pago',
+      footer: 'Si necesitas ayuda, por favor contacta a nuestro equipo de soporte.',
       copyright: 'Todos los derechos reservados.'
     }
   }
@@ -231,9 +309,320 @@ export function getDownloadReceiptEmailTemplate(user, tracks, lang = 'en') {
   };
 }
 
+// ─── User Payment & Subscription Templates ───
+
+export function getPaymentReceiptEmailTemplate(user, planName, amount, currency, endDate, lang = 'en') {
+  const locale = lang === 'es' ? 'es-ES' : 'en-US';
+  const dateOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+  const formattedDate = new Date().toLocaleDateString(locale, dateOptions);
+  const formattedEndDate = endDate ? new Date(endDate).toLocaleDateString(locale, dateOptions) : '';
+  const currencySymbol = currency === 'EUR' || currency === '€' ? '€' : currency === 'USD' || currency === '$' ? '$' : currency || '€';
+
+  const content = `
+    <div style="padding: 30px;">
+      <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">${t(lang, 'paymentReceipt.greeting')} <strong>${user.name}</strong>,</p>
+      <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'paymentReceipt.message')}</p>
+      <div style="margin: 20px 0; background: #111; border: 1px solid #1a1a1a; border-radius: 10px; padding: 20px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 10px 0; font-size: 13px; color: #888; border-bottom: 1px solid #1a1a1a;">${t(lang, 'paymentReceipt.plan')}</td>
+            <td style="padding: 10px 0; font-size: 14px; color: #10b981; font-weight: 700; text-align: right; border-bottom: 1px solid #1a1a1a;">${planName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; font-size: 13px; color: #888; border-bottom: 1px solid #1a1a1a;">${t(lang, 'paymentReceipt.amount')}</td>
+            <td style="padding: 10px 0; font-size: 14px; color: #ffffff; font-weight: 700; text-align: right; border-bottom: 1px solid #1a1a1a;">${currencySymbol}${amount}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; font-size: 13px; color: #888; border-bottom: 1px solid #1a1a1a;">${t(lang, 'paymentReceipt.date')}</td>
+            <td style="padding: 10px 0; font-size: 14px; color: #e0e0e0; text-align: right; border-bottom: 1px solid #1a1a1a;">${formattedDate}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; font-size: 13px; color: #888; border-bottom: 1px solid #1a1a1a;">${t(lang, 'paymentReceipt.status')}</td>
+            <td style="padding: 10px 0; font-size: 14px; color: #10b981; font-weight: 600; text-align: right; border-bottom: 1px solid #1a1a1a;">✓ ${t(lang, 'paymentReceipt.statusPaid')}</td>
+          </tr>
+          ${formattedEndDate ? `<tr>
+            <td style="padding: 10px 0; font-size: 13px; color: #888;">${t(lang, 'paymentReceipt.validUntil')}</td>
+            <td style="padding: 10px 0; font-size: 14px; color: #e0e0e0; text-align: right;">${formattedEndDate}</td>
+          </tr>` : ''}
+        </table>
+      </div>
+      <div style="margin: 25px 0;">
+        <a href="${FRONTEND_URL}" style="display: inline-block; background: #10b981; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">${t(lang, 'paymentReceipt.button')}</a>
+      </div>
+      <p style="font-size: 14px; color: #666; line-height: 1.6;">${t(lang, 'paymentReceipt.footer')}</p>
+    </div>
+  `;
+
+  const titleContent = `
+    <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 40px 30px; text-align: center;">
+      <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #ffffff;">${t(lang, 'paymentReceipt.title')}</h1>
+    </div>
+  `;
+
+  const year = new Date().getFullYear();
+  const copyright = t(lang, 'paymentReceipt.copyright');
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0a0a0a; color: #ffffff; border-radius: 12px; overflow: hidden;">
+      ${titleContent}
+      ${content}
+      <div style="padding: 20px 30px; border-top: 1px solid #1a1a1a; text-align: center;">
+        <p style="margin: 0; font-size: 12px; color: #555;">© ${year} TodoDJs. ${copyright}</p>
+      </div>
+    </div>
+  `;
+
+  return {
+    subject: t(lang, 'paymentReceipt.subject'),
+    html,
+    text: `${t(lang, 'paymentReceipt.greeting')} ${user.name}, ${t(lang, 'paymentReceipt.message')} ${planName} - ${currencySymbol}${amount}`
+  };
+}
+
+export function getSubscriptionCancelledEmailTemplate(user, planName, accessUntilDate, lang = 'en') {
+  const locale = lang === 'es' ? 'es-ES' : 'en-US';
+  const dateOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+  const formattedCancelDate = new Date().toLocaleDateString(locale, dateOptions);
+  const formattedAccessDate = accessUntilDate ? new Date(accessUntilDate).toLocaleDateString(locale, dateOptions) : '';
+
+  const content = `
+    <div style="padding: 30px;">
+      <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">${t(lang, 'subscriptionCancelled.greeting')} <strong>${user.name}</strong>,</p>
+      <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'subscriptionCancelled.message')}</p>
+      <div style="margin: 20px 0; background: #111; border: 1px solid #1a1a1a; border-radius: 10px; padding: 20px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 10px 0; font-size: 13px; color: #888; border-bottom: 1px solid #1a1a1a;">${t(lang, 'subscriptionCancelled.plan')}</td>
+            <td style="padding: 10px 0; font-size: 14px; color: #ef4444; font-weight: 700; text-align: right; border-bottom: 1px solid #1a1a1a;">${planName || 'N/A'}</td>
+          </tr>
+          <tr>
+            <td style="padding: 10px 0; font-size: 13px; color: #888; border-bottom: 1px solid #1a1a1a;">${t(lang, 'subscriptionCancelled.cancelledOn')}</td>
+            <td style="padding: 10px 0; font-size: 14px; color: #e0e0e0; text-align: right; border-bottom: 1px solid #1a1a1a;">${formattedCancelDate}</td>
+          </tr>
+          ${formattedAccessDate ? `<tr>
+            <td style="padding: 10px 0; font-size: 13px; color: #888;">${t(lang, 'subscriptionCancelled.accessUntil')}</td>
+            <td style="padding: 10px 0; font-size: 14px; color: #f59e0b; text-align: right;">${formattedAccessDate}</td>
+          </tr>` : ''}
+        </table>
+      </div>
+      ${formattedAccessDate ? `<div style="margin: 15px 0; padding: 12px 16px; background: rgba(245,158,11,0.1); border: 1px solid rgba(245,158,11,0.2); border-radius: 8px;">
+        <p style="margin: 0; font-size: 14px; color: #f59e0b;">${t(lang, 'subscriptionCancelled.accessNote')}</p>
+      </div>` : ''}
+      <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'subscriptionCancelled.reactivate')}</p>
+      <div style="margin: 25px 0;">
+        <a href="${FRONTEND_URL}" style="display: inline-block; background: #6366f1; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">${t(lang, 'subscriptionCancelled.button')}</a>
+      </div>
+      <p style="font-size: 14px; color: #666; line-height: 1.6;">${t(lang, 'subscriptionCancelled.footer')}</p>
+    </div>
+  `;
+
+  const titleContent = `
+    <div style="background: linear-gradient(135deg, #ef4444, #dc2626); padding: 40px 30px; text-align: center;">
+      <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #ffffff;">${t(lang, 'subscriptionCancelled.title')}</h1>
+    </div>
+  `;
+
+  const year = new Date().getFullYear();
+  const copyright = t(lang, 'subscriptionCancelled.copyright');
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0a0a0a; color: #ffffff; border-radius: 12px; overflow: hidden;">
+      ${titleContent}
+      ${content}
+      <div style="padding: 20px 30px; border-top: 1px solid #1a1a1a; text-align: center;">
+        <p style="margin: 0; font-size: 12px; color: #555;">© ${year} TodoDJs. ${copyright}</p>
+      </div>
+    </div>
+  `;
+
+  return {
+    subject: t(lang, 'subscriptionCancelled.subject'),
+    html,
+    text: `${t(lang, 'subscriptionCancelled.greeting')} ${user.name}, ${t(lang, 'subscriptionCancelled.message')}`
+  };
+}
+
+export function getPaymentFailedEmailTemplate(user, lang = 'en') {
+  const content = `
+    <div style="padding: 30px;">
+      <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">${t(lang, 'paymentFailed.greeting')} <strong>${user.name}</strong>,</p>
+      <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'paymentFailed.message')}</p>
+      <div style="margin: 15px 0; padding: 12px 16px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px;">
+        <p style="margin: 0; font-size: 14px; color: #ef4444;">${t(lang, 'paymentFailed.reason')}</p>
+      </div>
+      <div style="margin: 25px 0;">
+        <a href="${FRONTEND_URL}" style="display: inline-block; background: #6366f1; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">${t(lang, 'paymentFailed.button')}</a>
+      </div>
+      <p style="font-size: 14px; color: #666; line-height: 1.6;">${t(lang, 'paymentFailed.footer')}</p>
+    </div>
+  `;
+
+  const titleContent = `
+    <div style="background: linear-gradient(135deg, #ef4444, #b91c1c); padding: 40px 30px; text-align: center;">
+      <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #ffffff;">${t(lang, 'paymentFailed.title')}</h1>
+    </div>
+  `;
+
+  const year = new Date().getFullYear();
+  const copyright = t(lang, 'paymentFailed.copyright');
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0a0a0a; color: #ffffff; border-radius: 12px; overflow: hidden;">
+      ${titleContent}
+      ${content}
+      <div style="padding: 20px 30px; border-top: 1px solid #1a1a1a; text-align: center;">
+        <p style="margin: 0; font-size: 12px; color: #555;">© ${year} TodoDJs. ${copyright}</p>
+      </div>
+    </div>
+  `;
+
+  return {
+    subject: t(lang, 'paymentFailed.subject'),
+    html,
+    text: `${t(lang, 'paymentFailed.greeting')} ${user.name}, ${t(lang, 'paymentFailed.message')}`
+  };
+}
+
+// ─── Admin Notification Templates ───
+
+function getAdminEmailTemplate(title, content) {
+  const year = new Date().getFullYear();
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0a0a0a; color: #ffffff; border-radius: 12px; overflow: hidden;">
+      <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 30px; text-align: center;">
+        <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #ffffff;">🔔 Admin Notification</h1>
+        <p style="margin: 8px 0 0; font-size: 14px; color: rgba(255,255,255,0.85);">${title}</p>
+      </div>
+      ${content}
+      <div style="padding: 16px 30px; border-top: 1px solid #1a1a1a; text-align: center;">
+        <p style="margin: 0; font-size: 11px; color: #555;">© ${year} TodoDJs Admin · This is an automated notification</p>
+      </div>
+    </div>
+  `;
+}
+
+function formatDate(date) {
+  return new Date(date).toLocaleString('en-US', {
+    year: 'numeric', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', timeZoneName: 'short'
+  });
+}
+
+function adminInfoRow(label, value) {
+  return `
+    <tr>
+      <td style="padding: 8px 0; font-size: 13px; color: #888; width: 140px; vertical-align: top;">${label}</td>
+      <td style="padding: 8px 0; font-size: 14px; color: #e0e0e0; font-weight: 500;">${value}</td>
+    </tr>
+  `;
+}
+
+export function getAdminNewSignupTemplate(user) {
+  const content = `
+    <div style="padding: 30px;">
+      <p style="font-size: 15px; color: #a0a0a0; margin: 0 0 20px;">A new user has registered on TodoDJs.</p>
+      <table style="width: 100%; border-collapse: collapse; background: #111; border-radius: 8px; padding: 16px;">
+        <tbody style="display: block; padding: 16px;">
+          ${adminInfoRow('Name', user.name)}
+          ${adminInfoRow('Email', `<a href="mailto:${user.email}" style="color: #6366f1; text-decoration: none;">${user.email}</a>`)}
+          ${adminInfoRow('Phone', user.phoneNumber || 'Not provided')}
+          ${adminInfoRow('Language', (user.preferredLanguage || 'en').toUpperCase())}
+          ${adminInfoRow('Registered', formatDate(new Date()))}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  return {
+    subject: `🆕 New Signup: ${user.name} (${user.email})`,
+    html: getAdminEmailTemplate('New User Registration', content),
+    text: `New user registered: ${user.name} (${user.email})`
+  };
+}
+
+export function getAdminNewPaymentTemplate(user, plan, amount, currency) {
+  const content = `
+    <div style="padding: 30px;">
+      <p style="font-size: 15px; color: #a0a0a0; margin: 0 0 20px;">A payment has been received!</p>
+      <table style="width: 100%; border-collapse: collapse; background: #111; border-radius: 8px; padding: 16px;">
+        <tbody style="display: block; padding: 16px;">
+          ${adminInfoRow('User', user.name)}
+          ${adminInfoRow('Email', `<a href="mailto:${user.email}" style="color: #6366f1; text-decoration: none;">${user.email}</a>`)}
+          ${adminInfoRow('Plan', `<span style="color: #10b981; font-weight: 700;">${plan}</span>`)}
+          ${adminInfoRow('Amount', `<span style="color: #10b981; font-weight: 700;">${currency || '€'}${amount}</span>`)}
+          ${adminInfoRow('Date', formatDate(new Date()))}
+        </tbody>
+      </table>
+      <div style="margin-top: 20px; padding: 12px 16px; background: #10b981/10; border: 1px solid #10b98133; border-radius: 8px;">
+        <p style="margin: 0; font-size: 14px; color: #10b981;">💰 Revenue received! Subscription activated.</p>
+      </div>
+    </div>
+  `;
+
+  return {
+    subject: `💰 New Payment: ${user.name} — ${currency || '€'}${amount} (${plan})`,
+    html: getAdminEmailTemplate('New Payment Received', content),
+    text: `Payment received from ${user.name} (${user.email}): ${currency || '€'}${amount} for ${plan}`
+  };
+}
+
+export function getAdminCancelledSubscriptionTemplate(user, planName) {
+  const content = `
+    <div style="padding: 30px;">
+      <p style="font-size: 15px; color: #a0a0a0; margin: 0 0 20px;">A user has cancelled their subscription.</p>
+      <table style="width: 100%; border-collapse: collapse; background: #111; border-radius: 8px; padding: 16px;">
+        <tbody style="display: block; padding: 16px;">
+          ${adminInfoRow('User', user.name)}
+          ${adminInfoRow('Email', `<a href="mailto:${user.email}" style="color: #6366f1; text-decoration: none;">${user.email}</a>`)}
+          ${adminInfoRow('Plan', `<span style="color: #ef4444;">${planName || 'N/A'}</span>`)}
+          ${adminInfoRow('Cancelled At', formatDate(new Date()))}
+        </tbody>
+      </table>
+      <div style="margin-top: 20px; padding: 12px 16px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px;">
+        <p style="margin: 0; font-size: 14px; color: #ef4444;">⚠️ Subscription cancelled. Consider reaching out to the user.</p>
+      </div>
+    </div>
+  `;
+
+  return {
+    subject: `❌ Subscription Cancelled: ${user.name} (${user.email})`,
+    html: getAdminEmailTemplate('Subscription Cancelled', content),
+    text: `Subscription cancelled by ${user.name} (${user.email}), plan: ${planName || 'N/A'}`
+  };
+}
+
+export function getAdminExpiredSubscriptionTemplate(user, planName) {
+  const content = `
+    <div style="padding: 30px;">
+      <p style="font-size: 15px; color: #a0a0a0; margin: 0 0 20px;">A user's subscription has expired.</p>
+      <table style="width: 100%; border-collapse: collapse; background: #111; border-radius: 8px; padding: 16px;">
+        <tbody style="display: block; padding: 16px;">
+          ${adminInfoRow('User', user.name)}
+          ${adminInfoRow('Email', `<a href="mailto:${user.email}" style="color: #6366f1; text-decoration: none;">${user.email}</a>`)}
+          ${adminInfoRow('Plan', planName || 'N/A')}
+          ${adminInfoRow('Expired At', formatDate(new Date()))}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  return {
+    subject: `⏰ Subscription Expired: ${user.name} (${user.email})`,
+    html: getAdminEmailTemplate('Subscription Expired', content),
+    text: `Subscription expired for ${user.name} (${user.email}), plan: ${planName || 'N/A'}`
+  };
+}
+
 export default {
   getWelcomeEmailTemplate,
   getPasswordResetEmailTemplate,
   getSubscriptionEmailTemplate,
-  getDownloadReceiptEmailTemplate
+  getDownloadReceiptEmailTemplate,
+  getPaymentReceiptEmailTemplate,
+  getSubscriptionCancelledEmailTemplate,
+  getPaymentFailedEmailTemplate,
+  getAdminNewSignupTemplate,
+  getAdminNewPaymentTemplate,
+  getAdminCancelledSubscriptionTemplate,
+  getAdminExpiredSubscriptionTemplate
 };
