@@ -157,12 +157,12 @@ export const login = async (req, res) => {
       });
     }
 
-    // Device registration enforcement
+    // Device registration enforcement (skip for admins)
     const deviceId = req.body.deviceId || req.headers['x-device-id'] || null;
     const hasActiveSubscription = user.subscription?.status === 'active' && user.subscription?.plan !== 'free';
     const maxDevices = user.maxDevices || 2;
 
-    if (hasActiveSubscription && deviceId) {
+    if (hasActiveSubscription && deviceId && user.role !== 'admin') {
       const isRegistered = user.registeredDevices.some(d => d.deviceId === deviceId);
 
       if (!isRegistered && user.registeredDevices.length >= maxDevices) {
