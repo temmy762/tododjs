@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Clock, Download, Play, Flame, Sparkles } from 'lucide-react';
 import GenericCoverArt from './GenericCoverArt';
+import API_URL from '../config/api';
 
 const PERIOD_OPTIONS = [
   { value: '24h', label: '24h', labelFull: '24 Hours' },
@@ -48,7 +49,7 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
 
   const fetchRecentTracks = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/downloads/recent?limit=10');
+      const response = await fetch(`${API_URL}/downloads/recent?limit=10`);
       
       if (!response.ok) {
         console.error('Recent API error:', response.status, response.statusText);

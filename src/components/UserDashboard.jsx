@@ -4,8 +4,9 @@ import {
   Download, Heart, Music, TrendingUp, CheckCircle, AlertCircle,
   LogOut, Pencil, Shield, Play, Trash2
 } from 'lucide-react';
+import API_URL from '../config/api';
 
-const API = 'http://localhost:5000/api';
+const API = API_URL;
 
 export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, onTrackInteraction }) {
   const [activeTab, setActiveTab] = useState('overview');

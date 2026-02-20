@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Disc, Loader, Star } from 'lucide-react';
+import API_URL from '../config/api';
 
-const API = 'http://localhost:5000/api';
+const API = API_URL;
 
 export default function PlaylistsSection({ onAlbumClick, activeGenre = 'all' }) {
   const [featuredAlbums, setFeaturedAlbums] = useState([]);

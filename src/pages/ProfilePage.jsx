@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { User, Download, Music, Settings, LogOut, Heart, TrendingUp, Phone, Mail, Save, X, CheckCircle, AlertCircle, Pencil } from 'lucide-react';
+import API_URL from '../config/api';
 
 export default function ProfilePage({ user, onLogout, onUserUpdate }) {
   const [editing, setEditing] = useState(false);
@@ -49,7 +50,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('http://localhost:5000/api/auth/updatedetails', {
+      const response = await fetch(`${API_URL}/auth/updatedetails`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
