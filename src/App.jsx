@@ -513,8 +513,7 @@ function App() {
         onNavigate={handleNavigate}
         onSubscribe={() => {
           if (user) {
-            setSelectedPlan('premium');
-            setShowCheckout(true);
+            handleNavigate('pricing');
           } else {
             setAuthModalOpen(true);
           }
@@ -636,8 +635,7 @@ function App() {
         user={user}
         onAuthRequired={handleOpenAuth}
         onSubscribe={() => {
-          setSelectedPlan('premium');
-          setShowCheckout(true);
+          handleNavigate('pricing');
         }}
       />
 
@@ -684,8 +682,7 @@ function App() {
           user={user}
           onAuthRequired={handleOpenAuth}
           onSubscribe={() => {
-            setSelectedPlan('premium');
-            setShowCheckout(true);
+            handleNavigate('pricing');
           }}
         />
       )}
