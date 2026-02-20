@@ -31,9 +31,7 @@ const trackSchema = new mongoose.Schema({
     default: 'N/A'
   },
   bpm: {
-    type: Number,
-    min: 60,
-    max: 200
+    type: Number
   },
   tonality: {
     key: String,
