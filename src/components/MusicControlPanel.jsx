@@ -1,6 +1,7 @@
 import { X, Pause, Play, Info, Volume2, VolumeX, SkipBack, SkipForward, Music } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import PremiumPrompt from './PremiumPrompt';
+import API_URL from '../config/api';
 
 const PREVIEW_LIMIT_SECONDS = 30;
 
@@ -93,7 +94,7 @@ export default function MusicControlPanel({
     const fetchPlaybackUrl = async () => {
       setAudioLoading(true);
       try {
-        const res = await fetch(`http://localhost:5000/api/tracks/${trackId}/playback`);
+        const res = await fetch(`${API_URL}/tracks/${trackId}/playback`);
         const data = await res.json();
         if (data.success && data.data?.url) {
           setAudioUrl(data.data.url);
