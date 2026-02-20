@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Download, TrendingUp, Calendar, Database } from 'lucide-react';
+import API_URL from '../../config/api';
 
 export default function AdminDownloadStats() {
   const [stats, setStats] = useState(null);
@@ -14,7 +15,7 @@ export default function AdminDownloadStats() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/downloads/stats?period=${period}`, {
+      const response = await fetch(`${API_URL}/downloads/stats?period=${period}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       const data = await response.json();

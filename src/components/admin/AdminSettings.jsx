@@ -4,8 +4,9 @@ import {
   Shield, Zap, Mail, CreditCard, Cloud, Settings, CheckCircle, XCircle,
   Camera, User, Upload
 } from 'lucide-react';
+import API_URL from '../../config/api';
 
-const API = 'http://localhost:5000/api';
+const API = API_URL;
 const getToken = () => localStorage.getItem('token');
 const authHeaders = () => {
   const h = {};

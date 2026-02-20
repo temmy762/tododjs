@@ -4,8 +4,9 @@ import {
   Loader, CheckCircle, AlertCircle, Youtube, FileAudio
 } from 'lucide-react';
 import GenericCoverArt from '../GenericCoverArt';
+import API_URL from '../../config/api';
 
-const API = 'http://localhost:5000/api';
+const API = API_URL;
 
 export default function AdminMashups() {
   const [mashups, setMashups] = useState([]);

@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Upload, Download, Edit, Trash2, Filter, Grid3x3, List, MoreVertical, X, File, Music, CheckCircle, AlertCircle, Loader, FolderArchive, ChevronLeft, ChevronRight } from 'lucide-react';
+import API_URL from '../../config/api';
 
-const API = 'http://localhost:5000/api';
+const API = API_URL;
 const getToken = () => localStorage.getItem('token');
 const authHeaders = (json = false) => {
   const h = {};
@@ -690,7 +691,7 @@ function UploadModal({ onClose, uploadFiles, setUploadFiles, isDragging, setIsDr
         }));
       });
 
-      xhr.open('POST', 'http://localhost:5000/api/tracks/upload');
+      xhr.open('POST', `${API_URL}/tracks/upload`);
       xhr.timeout = 0; // No timeout for large uploads
       const token = localStorage.getItem('token');
       if (token) {

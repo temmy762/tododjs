@@ -3,8 +3,9 @@ import {
   Loader, Shield, Users, UserCheck, UserX, AlertTriangle, LogIn,
   UserPlus, Download, Eye, Lock, Mail
 } from 'lucide-react';
+import API_URL from '../../config/api';
 
-const API = 'http://localhost:5000/api';
+const API = API_URL;
 const getToken = () => localStorage.getItem('token');
 const authHeaders = () => {
   const h = {};

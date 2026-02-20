@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Sliders, Loader } from 'lucide-react';
+import API_URL from '../../config/api';
 
 export default function AdvancedFilterPanel({ 
   isOpen, 
@@ -42,7 +43,7 @@ export default function AdvancedFilterPanel({
       if (datePackId) params.append('datePackId', datePackId);
       if (albumId) params.append('albumId', albumId);
 
-      const response = await fetch(`http://localhost:5000/api/search/filters?${params}`);
+      const response = await fetch(`${API_URL}/search/filters?${params}`);
       const data = await response.json();
       
       if (data.success) {

@@ -13,8 +13,9 @@ import {
   ChevronDown,
   ChevronUp
 } from 'lucide-react';
+import API_URL from '../../config/api';
 
-const API_BASE = 'http://localhost:5000/api';
+const API_BASE = API_URL;
 
 function formatTime(date) {
   return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });

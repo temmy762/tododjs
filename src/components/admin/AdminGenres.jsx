@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Loader, Music, Disc, AlertTriangle, CheckCircle, BarChart3, Zap } from 'lucide-react';
+import API_URL from '../../config/api';
 
-const API = 'http://localhost:5000/api';
+const API = API_URL;
 const getToken = () => localStorage.getItem('token');
 const authHeaders = () => {
   const h = {};

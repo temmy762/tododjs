@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star, Minimize2, Maximize2 } from 'lucide-react';
 import ManageAlbumModal from './ManageAlbumModal';
+import API_URL from '../../config/api';
 
-const API = 'http://localhost:5000/api';
+const API = API_URL;
 const getToken = () => localStorage.getItem('token');
 const authHeaders = () => ({ 'Authorization': `Bearer ${getToken()}` });
 

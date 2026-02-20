@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X, Music, Download, Edit2, Trash2, Save, Play, Pause, Volume2 } from 'lucide-react';
 import SearchBar from './SearchBar';
 import AdvancedFilterPanel from './AdvancedFilterPanel';
+import API_URL from '../../config/api';
 
 export default function ManageAlbumModal({ album, onClose, onUpdate }) {
   const [tracks, setTracks] = useState([]);
@@ -25,7 +26,7 @@ export default function ManageAlbumModal({ album, onClose, onUpdate }) {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/albums/${album._id}/tracks`, {
+      const response = await fetch(`${API_URL}/albums/${album._id}/tracks`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
@@ -111,7 +112,7 @@ export default function ManageAlbumModal({ album, onClose, onUpdate }) {
   const handleSaveTrack = async (trackId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/tracks/${trackId}`, {
+      const response = await fetch(`${API_URL}/tracks/${trackId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -138,7 +139,7 @@ export default function ManageAlbumModal({ album, onClose, onUpdate }) {
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/tracks/${trackId}`, {
+      const response = await fetch(`${API_URL}/tracks/${trackId}`, {
         method: 'DELETE',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -164,7 +165,7 @@ export default function ManageAlbumModal({ album, onClose, onUpdate }) {
       }
 
       const token = localStorage.getItem('token');
-      const response = await fetch(`http://localhost:5000/api/tracks/${track._id}/playback`, {
+      const response = await fetch(`${API_URL}/tracks/${track._id}/playback`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }

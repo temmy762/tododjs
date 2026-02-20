@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Search, UserPlus, Edit, Trash2, Shield, Crown, User, Loader, X, ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import API_URL from '../../config/api';
 
-const API = 'http://localhost:5000/api';
+const API = API_URL;
 const getToken = () => localStorage.getItem('token');
 const authHeaders = (json = false) => {
   const h = {};

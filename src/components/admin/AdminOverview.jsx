@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Music, Users, Download, CreditCard, TrendingUp, Upload, UserPlus, Activity, Loader, RefreshCw } from 'lucide-react';
+import API_URL from '../../config/api';
 
-const API = 'http://localhost:5000/api';
+const API = API_URL;
 
 const timeAgo = (date) => {
   const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
