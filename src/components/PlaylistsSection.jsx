@@ -66,7 +66,7 @@ export default function PlaylistsSection({ onAlbumClick, activeGenre = 'all' }) 
             {filteredItems.map((item) => (
               <div
                 key={item.id}
-                onClick={() => onAlbumClick?.({ id: item.id, title: item.title, coverArt: item.coverArt, trackCount: item.trackCount, year: item.year, genre: item.genre })}
+                onClick={() => onAlbumClick?.({ _id: item.id, id: item.id, title: item.title, coverArt: item.coverArt, trackCount: item.trackCount, year: item.year, genre: item.genre })}
                 className="flex-shrink-0 w-36 md:w-48 group cursor-pointer"
               >
                 <div className="relative mb-3 overflow-hidden rounded-lg bg-dark-elevated shadow-lg transition-all duration-300 group-hover:shadow-2xl group-hover:shadow-accent/20 group-hover:scale-105">
