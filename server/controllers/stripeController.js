@@ -238,11 +238,15 @@ async function handleCheckoutCompleted(session) {
   endDate.setDate(endDate.getDate() + durationDays);
 
   user.subscription.planId = planId;
+  user.subscription.plan = planId; // Add legacy plan field for compatibility
   user.subscription.status = 'active';
   user.subscription.startDate = startDate;
   user.subscription.endDate = endDate;
   user.subscription.stripePaymentIntentId = session.payment_intent;
   user.subscription.paymentMethod = 'card';
+  
+  // Set maxDevices based on plan type
+  user.maxDevices = plan.features.maxDevices || (plan.type === 'shared' ? 2 : 1);
 
   user.subscriptionHistory.push({
     planId: planId,

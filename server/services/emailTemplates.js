@@ -88,7 +88,7 @@ const translations = {
       title: '¡Bienvenido a TodoDJs!',
       subtitle: 'Tu viaje musical comienza aquí',
       greeting: 'Hola',
-      message: '¡Gracias por unirte a TodoDJs! Ahora tienes acceso a nuestra colección curada de pistas de alta calidad.',
+      message: '¡Ya estás dentro de TodoDJS! Accede a toda nuestra biblioteca creada para DJs que quieren ir al siguiente nivel. Si tienes alguna pregunta, no dudes en contactar a nuestro equipo de soporte.',
       button: 'Comenzar a Explorar',
       footer: 'Si tienes alguna pregunta, no dudes en contactar a nuestro equipo de soporte.',
       copyright: 'Todos los derechos reservados.'

@@ -42,6 +42,10 @@ const userSchema = new mongoose.Schema({
       type: String,
       default: null
     },
+    plan: {
+      type: String,
+      default: null
+    },
     status: {
       type: String,
       enum: ['active', 'inactive', 'expired', 'cancelled', 'past_due'],
@@ -173,13 +177,22 @@ userSchema.methods.resetDailyDownloads = function() {
 userSchema.methods.canDownload = function() {
   this.resetDailyDownloads();
   
+  // Check if user has active subscription
+  const hasActiveSubscription = this.subscription.status === 'active' && this.subscription.planId;
+  
   const limits = {
     free: 5,
     premium: 50,
     pro: Infinity
   };
   
-  return this.downloads.today < limits[this.subscription.plan];
+  // If user has active subscription, allow unlimited downloads
+  if (hasActiveSubscription) {
+    return true;
+  }
+  
+  // Otherwise apply free tier limits
+  return this.downloads.today < limits.free;
 };
 
 // Increment download count

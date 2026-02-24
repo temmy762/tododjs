@@ -39,16 +39,16 @@ export const downloadTrack = async (req, res) => {
         return res.status(403).json({
           success: false,
           message: `Daily download limit reached. Your plan allows ${
-            user.subscription.plan === 'free' ? '5' :
-            user.subscription.plan === 'premium' ? '50' : 'unlimited'
+            user.subscription.planId === 'free' ? '5' :
+            user.subscription.planId === 'premium' ? '50' : 'unlimited'
           } downloads per day.`,
-          upgradeRequired: user.subscription.plan !== 'pro'
+          upgradeRequired: user.subscription.planId !== 'pro'
         });
       }
 
       // Check subscription tier requirements
       const tierLevels = { free: 0, premium: 1, pro: 2 };
-      const userTier = tierLevels[user.subscription.plan];
+      const userTier = tierLevels[user.subscription.planId];
       const requiredTier = tierLevels[track.requiredPlan || 'free'];
 
       if (userTier < requiredTier) {
@@ -140,25 +140,11 @@ export const downloadTrackFile = async (req, res) => {
     // Admin bypasses all download restrictions
     if (user.role !== 'admin') {
       if (!user.canDownload()) {
+        const hasSubscription = user.subscription.status === 'active' && user.subscription.planId;
         return res.status(403).json({
           success: false,
-          message: `Daily download limit reached. Your plan allows ${
-            user.subscription.plan === 'free' ? '5' :
-            user.subscription.plan === 'premium' ? '50' : 'unlimited'
-          } downloads per day.`,
-          upgradeRequired: user.subscription.plan !== 'pro'
-        });
-      }
-
-      const tierLevels = { free: 0, premium: 1, pro: 2 };
-      const userTier = tierLevels[user.subscription.plan];
-      const requiredTier = tierLevels[track.requiredPlan || 'free'];
-
-      if (userTier < requiredTier) {
-        return res.status(403).json({
-          success: false,
-          message: `This track requires ${track.requiredPlan} subscription`,
-          upgradeRequired: true
+          message: hasSubscription ? 'Daily download limit reached' : 'Active subscription required for downloads',
+          upgradeRequired: !hasSubscription
         });
       }
     }
