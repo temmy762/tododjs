@@ -49,7 +49,7 @@ export const getSettings = async (req, res) => {
           wasabiRegion: process.env.WASABI_REGION || 'N/A',
           wasabiBucket: process.env.WASABI_BUCKET_NAME || 'N/A',
           stripeConfigured: !!process.env.STRIPE_SECRET_KEY && process.env.STRIPE_SECRET_KEY !== 'sk_test_your_stripe_secret_key',
-          emailConfigured: !!process.env.EMAIL_USER && process.env.EMAIL_USER !== 'your_email@gmail.com'
+          emailConfigured: !!process.env.RESEND_API_KEY && process.env.RESEND_API_KEY.length > 0
         },
         database: {
           totalTracks,
