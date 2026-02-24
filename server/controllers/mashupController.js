@@ -1,6 +1,7 @@
 import Mashup from '../models/Mashup.js';
 import MashupSettings from '../models/MashupSettings.js';
 import { getSignedDownloadUrl, uploadToWasabi, deleteFromWasabi } from '../config/wasabi.js';
+import { detectGenreWithAI } from '../services/openai.js';
 
 // @desc    Get all mashups (public)
 // @route   GET /api/mashups
