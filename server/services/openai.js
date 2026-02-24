@@ -74,6 +74,56 @@ If you don't know the key, return: {"key": null, "scale": null, "camelot": null,
   }
 }
 
+export async function detectGenreWithAI(trackTitle, artist, album = null) {
+  if (!process.env.OPENAI_API_KEY) {
+    return null;
+  }
+
+  const prompt = `Identify the music genre for this track:
+
+Title: ${trackTitle}
+Artist: ${artist}
+${album ? `Album: ${album}` : ''}
+
+Provide the most specific genre classification suitable for a DJ record pool.
+Format your response as JSON:
+{
+  "genre": "Tech House",
+  "confidence": "high"
+}
+
+Common DJ genres: House, Tech House, Deep House, Afro House, Techno, Melodic Techno, Progressive House, Trance, Hip-Hop, R&B, Reggaeton, Afrobeat, Amapiano, Drum & Bass, Dubstep, EDM, Pop, Latin, Funk, Soul
+
+Confidence levels: "high", "medium", "low"
+If you don't know the genre, return: {"genre": "Electronic", "confidence": "low"}`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a music genre classification expert for DJ record pools. Provide accurate genre information. Always respond with valid JSON.'
+        },
+        {
+          role: 'user',
+          content: prompt
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 50,
+      response_format: { type: "json_object" }
+    });
+
+    const result = JSON.parse(response.choices[0].message.content);
+    
+    return result.genre || 'Electronic';
+  } catch (error) {
+    console.error('OpenAI genre detection error:', error.message);
+    return null;
+  }
+}
+
 export async function batchDetectTonality(tracks) {
   const results = [];
   

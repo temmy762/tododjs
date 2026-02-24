@@ -114,10 +114,21 @@ export const createMashup = async (req, res) => {
 
     const formatMap = { mp3: 'MP3', wav: 'WAV', flac: 'FLAC' };
 
+    // Detect genre using AI if not provided
+    let detectedGenre = genre || 'Mashup';
+    if (!genre) {
+      const trackTitle = title || audioFile.originalname.replace(/\.[^/.]+$/, '');
+      const trackArtist = artist || 'Unknown Artist';
+      const aiGenre = await detectGenreWithAI(trackTitle, trackArtist);
+      if (aiGenre) {
+        detectedGenre = aiGenre;
+      }
+    }
+
     const mashupData = {
       title: title || audioFile.originalname.replace(/\.[^/.]+$/, ''),
       artist: artist || 'Unknown Artist',
-      genre: genre || 'Mashup',
+      genre: detectedGenre,
       bpm: bpm ? parseInt(bpm) : undefined,
       tonality: tonality || '',
       audioFile: {
@@ -232,4 +243,5 @@ export const getMashupPlayback = async (req, res) => {
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
+};
 };

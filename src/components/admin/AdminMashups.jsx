@@ -354,6 +354,7 @@ export default function AdminMashups() {
                   ref={audioRef}
                   type="file"
                   accept=".mp3,.wav,.flac"
+                  multiple
                   onChange={(e) => setAudioFile(e.target.files[0])}
                   className="w-full text-sm text-brand-text-tertiary file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-accent/20 file:text-accent hover:file:bg-accent/30 cursor-pointer"
                 />
