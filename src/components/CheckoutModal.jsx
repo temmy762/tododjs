@@ -124,7 +124,7 @@ export default function CheckoutModal({ isOpen, onClose, plan, user }) {
           {/* Info */}
           <div className="mb-6 p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
             <p className="text-sm text-blue-400">
-              You will be redirected to Stripe's secure checkout page to complete your payment.
+              Serás redirigido a la página segura de pago de Stripe para completar tu suscripción.
             </p>
           </div>
 
@@ -158,7 +158,7 @@ export default function CheckoutModal({ isOpen, onClose, plan, user }) {
 
           {/* Security Note */}
           <p className="text-xs text-center text-brand-text-tertiary mt-4">
-            🔒 Secure payment powered by Stripe
+            🔒 Pago 100% seguro a través de Stripe
           </p>
         </div>
       </div>

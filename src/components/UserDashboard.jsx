@@ -81,9 +81,9 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
   const planColor = user?.subscription?.plan === 'premium' ? 'text-yellow-400' : user?.subscription?.plan === 'pro' ? 'text-purple-400' : 'text-brand-text-tertiary';
 
   const stats = [
-    { label: 'Downloads', value: user?.downloads?.total?.toString() || '0', icon: Download },
-    { label: 'Playlists', value: user?.playlists?.length?.toString() || '0', icon: Music },
-    { label: 'Favorites', value: favorites.length > 0 ? favorites.length.toString() : (user?.favorites?.length?.toString() || '0'), icon: Heart },
+    { label: 'DESCARGAS', value: user?.downloads?.total?.toString() || '0', icon: Download },
+    { label: 'PLAYLIST', value: user?.playlists?.length?.toString() || '0', icon: Music },
+    { label: 'FAVORITOS', value: favorites.length > 0 ? favorites.length.toString() : (user?.favorites?.length?.toString() || '0'), icon: Heart },
   ];
 
   const clearMessage = () => setMessage({ type: '', text: '' });
@@ -233,10 +233,10 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
   };
 
   const tabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'favorites', label: 'Favorites' },
-    { id: 'edit', label: 'Edit Profile' },
-    { id: 'password', label: 'Password' },
+    { id: 'overview', label: 'Descripción General' },
+    { id: 'favorites', label: 'Favoritos' },
+    { id: 'edit', label: 'Editar Perfil' },
+    { id: 'password', label: 'Contraseña' },
   ];
 
   return (
@@ -245,7 +245,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
       <div className="h-14 bg-dark-elevated border-b border-white/10 flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-3">
           <User className="w-5 h-5 text-accent" />
-          <h1 className="text-base md:text-lg font-bold text-white">My Account</h1>
+          <h1 className="text-base md:text-lg font-bold text-white">Mi Cuenta</h1>
         </div>
         <button
           onClick={onClose}
@@ -346,10 +346,10 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
 
               {/* Account Details */}
               <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
-                <h3 className="text-sm font-semibold text-white mb-3 md:mb-4">Account Details</h3>
+                <h3 className="text-sm font-semibold text-white mb-3 md:mb-4">Detalles De Cuenta</h3>
                 <div className="grid grid-cols-2 gap-3 md:gap-4">
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Name</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Nombre</p>
                     <p className="text-sm text-white font-medium">{user?.name}</p>
                   </div>
                   <div>
@@ -357,15 +357,15 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                     <p className="text-sm text-white font-medium">{user?.email}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Phone</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Telefono</p>
                     <p className="text-sm text-white font-medium">{user?.phoneNumber || <span className="text-brand-text-tertiary italic">Not set</span>}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Subscription</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Subscripción</p>
                     <p className={`text-sm font-medium capitalize ${planColor}`}>{user?.subscription?.plan || 'Free'}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Status</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Estado</p>
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
                       user?.subscription?.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                     }`}>
@@ -373,7 +373,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                     </span>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Role</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Rol</p>
                     <p className="text-sm text-white font-medium capitalize">{user?.role || 'User'}</p>
                   </div>
                 </div>
@@ -393,7 +393,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                   className="flex-1 py-2.5 md:py-3 px-3 md:px-4 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition-colors text-xs md:text-sm font-medium text-white flex items-center justify-center gap-2"
                 >
                   <Lock className="w-4 h-4 text-accent shrink-0" />
-                  Change Password
+                  Cambiar Contraseña
                 </button>
               </div>
 
@@ -403,7 +403,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                 className="w-full py-2.5 md:py-3 px-4 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors text-sm font-medium text-red-400 flex items-center justify-center gap-2"
               >
                 <LogOut className="w-4 h-4" />
-                Sign Out
+                Cerrar Sesion
               </button>
             </div>
           )}
@@ -414,12 +414,12 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
               <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
                 <h3 className="text-sm font-semibold text-white mb-4 md:mb-5 flex items-center gap-2">
                   <Pencil className="w-4 h-4 text-accent" />
-                  Edit Profile
+                  Editar Perfil
                 </h3>
 
                 <div className="space-y-3 md:space-y-4">
                   <div>
-                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Full Name</label>
+                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Nombre Completo</label>
                     <div className="relative">
                       <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                       <input
@@ -427,7 +427,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm"
-                        placeholder="Your name"
+                        placeholder=""
                       />
                     </div>
                   </div>
@@ -441,13 +441,13 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm"
-                        placeholder="you@example.com"
+                        placeholder=""
                       />
                     </div>
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Phone Number</label>
+                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Número Telefónico</label>
                     <div className="relative">
                       <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                       <input
@@ -455,10 +455,10 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                         value={formData.phoneNumber}
                         onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
                         className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm"
-                        placeholder="+1234567890"
+                        placeholder=""
                       />
                     </div>
-                    <p className="text-[10px] text-brand-text-tertiary mt-1">Format: +1234567890 (7-15 digits)</p>
+                    <p className="text-[10px] text-brand-text-tertiary mt-1">Formato internacional (ejemplo: +34600123456)</p>
                   </div>
                 </div>
 
@@ -469,7 +469,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                     className="px-6 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     <Save size={14} />
-                    {saving ? 'Saving...' : 'Save Changes'}
+                    {saving ? 'Guardando...' : 'Guardar cambios'}
                   </button>
                   <button
                     onClick={() => {
@@ -487,7 +487,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
               <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
                 <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                   <Camera className="w-4 h-4 text-accent" />
-                  Profile Photo
+                  Foto De Perfil
                 </h3>
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-accent to-accent-hover overflow-hidden border-2 border-white/10 flex items-center justify-center">
@@ -504,7 +504,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                       className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50 flex items-center gap-2"
                     >
                       <Camera size={14} />
-                      {uploadingAvatar ? 'Uploading...' : 'Change Photo'}
+                      {uploadingAvatar ? 'Subiendo...' : 'Cambiar Foto'}
                     </button>
                     <p className="text-[10px] text-brand-text-tertiary mt-1.5">JPEG, PNG, WebP, or GIF. Max 5MB.</p>
                   </div>
@@ -519,7 +519,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                   <Heart className="w-4 h-4 text-accent" />
-                  My Favorites
+                  Mis Favoritos
                   <span className="text-xs text-brand-text-tertiary font-normal">({favorites.length})</span>
                 </h3>
               </div>
@@ -541,8 +541,8 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                   <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
                     <Heart className="w-6 h-6 text-brand-text-tertiary" />
                   </div>
-                  <p className="text-sm text-brand-text-tertiary font-medium">No favorites yet</p>
-                  <p className="text-xs text-brand-text-tertiary/50 mt-1">Tap the heart icon on any track to save it here</p>
+                  <p className="text-sm text-brand-text-tertiary font-medium">No hay favoritos aún</p>
+                  <p className="text-xs text-brand-text-tertiary/50 mt-1">Toca el icono de corazón en cualquier pista para guardarla aquí</p>
                 </div>
               ) : (
                 <div className="space-y-1.5">
@@ -598,12 +598,12 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
             <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
               <h3 className="text-sm font-semibold text-white mb-4 md:mb-5 flex items-center gap-2">
                 <Lock className="w-4 h-4 text-accent" />
-                Change Password
+                Cambiar Contraseña
               </h3>
 
               <div className="space-y-3 md:space-y-4">
                 <div>
-                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Current Password</label>
+                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Contraseña Actual</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                     <input
@@ -611,7 +611,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                       value={passwordData.currentPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, currentPassword: e.target.value })}
                       className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm"
-                      placeholder="Enter current password"
+                      placeholder=""
                     />
                     <button
                       type="button"
@@ -624,7 +624,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">New Password</label>
+                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Nueva Contraseña</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                     <input
@@ -632,7 +632,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                       value={passwordData.newPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, newPassword: e.target.value })}
                       className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm"
-                      placeholder="Enter new password"
+                      placeholder=""
                     />
                     <button
                       type="button"
@@ -645,7 +645,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Confirm New Password</label>
+                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Confirmar Nueva Contraseña</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                     <input
@@ -653,7 +653,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                       value={passwordData.confirmPassword}
                       onChange={(e) => setPasswordData({ ...passwordData, confirmPassword: e.target.value })}
                       className="w-full pl-9 pr-10 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm"
-                      placeholder="Confirm new password"
+                      placeholder=""
                     />
                     <button
                       type="button"
@@ -672,7 +672,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                 className="mt-6 px-6 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <Shield size={14} />
-                {saving ? 'Updating...' : 'Update Password'}
+                {saving ? 'Actualizando...' : 'Reestablecer Contraseña'}
               </button>
             </div>
           )}
