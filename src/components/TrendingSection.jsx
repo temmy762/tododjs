@@ -4,9 +4,9 @@ import GenericCoverArt from './GenericCoverArt';
 import API_URL from '../config/api';
 
 const PERIOD_OPTIONS = [
-  { value: '24h', label: '24h', labelFull: '24 Hours' },
-  { value: '7d', label: '7d', labelFull: '7 Days' },
-  { value: '30d', label: '30d', labelFull: '30 Days' },
+  { value: '24h', label: '24h', labelFull: '24 Horas' },
+  { value: '7d', label: '7d', labelFull: '7 Días' },
+  { value: '30d', label: '30d', labelFull: '30 Días' },
 ];
 
 export default function TrendingSection({ onTrackInteraction, activeGenre = 'all' }) {
@@ -27,7 +27,7 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
   const fetchTrendingTracks = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:5000/api/downloads/trending?period=${period}&limit=10`);
+      const response = await fetch(`${API_URL}/downloads/trending?period=${period}&limit=10`);
       
       if (!response.ok) {
         console.error('Trending API error:', response.status, response.statusText);
@@ -92,7 +92,7 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
             }`}
           >
             <Flame size={15} className={activeTab === 'trending' ? 'text-white' : 'text-brand-text-tertiary'} />
-            <span>Trending</span>
+            <span>Más Descargado</span>
           </button>
           <button
             onClick={() => setActiveTab('recent')}
@@ -103,7 +103,7 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
             }`}
           >
             <Sparkles size={15} className={activeTab === 'recent' ? 'text-white' : 'text-brand-text-tertiary'} />
-            <span>New Drops</span>
+            <span>Últimas Subidas</span>
           </button>
         </div>
 
@@ -162,9 +162,9 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
             )}
           </div>
           <p className="text-sm text-brand-text-tertiary font-medium">
-            {activeTab === 'trending' ? 'No trending tracks yet' : 'No recent uploads yet'}
+            {activeTab === 'trending' ? 'No hay pistas en tendencia aún' : 'No hay subidas recientes aún'}
           </p>
-          <p className="text-xs text-brand-text-tertiary/50 mt-1">Check back soon for updates</p>
+          <p className="text-xs text-brand-text-tertiary/50 mt-1">Vuelve pronto para actualizaciones</p>
         </div>
       )}
     </div>

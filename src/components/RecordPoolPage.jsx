@@ -81,8 +81,8 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
 
         {view === 'sources' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">Record Pool</h1>
-            <p className="text-brand-text-tertiary">Browse curated music sources</p>
+            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">Records Pools</h1>
+            <p className="text-brand-text-tertiary">Accede a todas tus record pools y packs Premium en un único lugar.</p>
           </div>
         )}
 

@@ -22,10 +22,10 @@ export default function PremiumPrompt({ type = 'subscribe', onClose, onSignUp, o
           {!isAuth ? (
             <>
               <h2 className="text-xl font-bold text-white text-center mb-2">
-                Create a Free Account
+                Crea tu cuenta gratuita
               </h2>
               <p className="text-sm text-brand-text-tertiary text-center mb-6">
-                Sign up to like tracks, create playlists, and preview songs. Upgrade to Premium for full access and unlimited downloads.
+                Suscríbete para guardar música y probar la plataforma. Hazte Premium para desbloquear todo el contenido y descargar sin límites.
               </p>
             </>
           ) : (
@@ -45,19 +45,19 @@ export default function PremiumPrompt({ type = 'subscribe', onClose, onSignUp, o
               <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
                 <Music className="w-4 h-4 text-accent" />
               </div>
-              <span className="text-brand-text-secondary">Full-length song streaming</span>
+              <span className="text-brand-text-secondary">Reproducción completa en streaming</span>
             </div>
             <div className="flex items-center gap-3 text-sm">
               <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
                 <Download className="w-4 h-4 text-accent" />
               </div>
-              <span className="text-brand-text-secondary">Unlimited high-quality downloads</span>
+              <span className="text-brand-text-secondary">Descargas ilimitadas en alta calidad</span>
             </div>
             <div className="flex items-center gap-3 text-sm">
               <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
                 <Zap className="w-4 h-4 text-accent" />
               </div>
-              <span className="text-brand-text-secondary">Early access to new releases</span>
+              <span className="text-brand-text-secondary">Acceso a Records Pools y Packs Premium</span>
             </div>
           </div>
 
@@ -69,13 +69,13 @@ export default function PremiumPrompt({ type = 'subscribe', onClose, onSignUp, o
                   onClick={onSignUp}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-accent to-purple-500 hover:from-accent-hover hover:to-purple-600 text-white font-bold text-sm transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-accent/30"
                 >
-                  Sign Up Free
+                  Crea Tu Cuenta Gratis
                 </button>
                 <button
                   onClick={onClose}
                   className="w-full py-2.5 rounded-xl text-brand-text-tertiary hover:text-white text-sm transition-colors"
                 >
-                  Maybe later
+                  Quizás Más Tarde
                 </button>
               </>
             ) : (
@@ -84,7 +84,7 @@ export default function PremiumPrompt({ type = 'subscribe', onClose, onSignUp, o
                   onClick={onSubscribe}
                   className="w-full py-3 rounded-xl bg-gradient-to-r from-accent to-purple-500 hover:from-accent-hover hover:to-purple-600 text-white font-bold text-sm transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-accent/30"
                 >
-                  Go Premium
+                  Suscribete.
                 </button>
                 <button
                   onClick={onClose}

@@ -234,10 +234,10 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
               onChange={(e) => handleSortChange(e.target.value)}
               className="bg-dark-elevated text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80"
             >
-              <option value="dateAdded">Date Added (Newest)</option>
-              <option value="title">Title (A-Z)</option>
-              <option value="artist">Artist (A-Z)</option>
-              <option value="bpm">BPM (High to Low)</option>
+              <option value="dateAdded">Fecha De Subida</option>
+              <option value="title">Título (A-Z)</option>
+              <option value="artist">Artista (A-Z)</option>
+              <option value="bpm">BPM (Mayor a Menor)</option>
             </select>
           </div>
         </div>
@@ -300,7 +300,7 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6 max-w-6xl mx-auto">
             {/* Songs per page selector */}
             <div className="flex items-center gap-3 bg-white/[0.02] backdrop-blur-sm border border-white/10 rounded-xl px-4 py-2.5 shadow-lg">
-              <span className="text-sm font-medium text-brand-text-secondary whitespace-nowrap">Songs per page:</span>
+              <span className="text-sm font-medium text-brand-text-secondary whitespace-nowrap">Pistas por página:</span>
               <select
                 value={tracksPerPage}
                 onChange={(e) => handleTracksPerPageChange(e.target.value)}

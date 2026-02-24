@@ -522,12 +522,12 @@ export default function MusicControlPanel({
       {/* Preview limit indicator for non-premium */}
       {!isPremium && previewLimitHit && !showPrompt && (
         <div className="fixed bottom-0 left-0 right-0 z-[45] flex items-center justify-center py-1.5 bg-gradient-to-r from-accent/90 to-purple-500/90 backdrop-blur-sm">
-          <span className="text-[11px] font-semibold text-white mr-3">Preview ended</span>
+          <span className="text-[11px] font-semibold text-white mr-3">Vista Previa Finalizada.</span>
           <button
             onClick={() => setShowPrompt(true)}
             className="px-3 py-1 rounded-full bg-white text-black text-[11px] font-bold hover:bg-white/90 transition-all"
           >
-            Go Premium
+            Suscribete.
           </button>
         </div>
       )}
