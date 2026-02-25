@@ -485,16 +485,29 @@ export const getTrendingDownloads = async (req, res) => {
     const trackIds = trendingTracks.map(t => t._id);
     const tracks = await Track.find({ _id: { $in: trackIds } })
       .populate('sourceId', 'name platform')
-      .populate('albumId', 'name');
+      .populate('albumId', 'name coverArtKey coverArt');
 
-    // Merge download counts with track data
-    const result = tracks.map(track => {
+    // Merge download counts with track data and sign cover art URLs
+    const result = await Promise.all(tracks.map(async (track) => {
       const trending = trendingTracks.find(t => t._id.toString() === track._id.toString());
+      const trackObj = track.toObject();
+      
+      // Sign cover art URL
+      if (trackObj.coverArtKey) {
+        try {
+          trackObj.coverArt = await getSignedDownloadUrl(trackObj.coverArtKey, 7200);
+        } catch (e) { /* fallback to existing coverArt */ }
+      } else if (!trackObj.coverArt && trackObj.albumId?.coverArtKey) {
+        try {
+          trackObj.coverArt = await getSignedDownloadUrl(trackObj.albumId.coverArtKey, 7200);
+        } catch (e) { /* fallback */ }
+      }
+      
       return {
-        ...track.toObject(),
+        ...trackObj,
         trendingDownloads: trending?.downloadCount || 0
       };
-    });
+    }));
 
     // Sort by download count
     result.sort((a, b) => b.trendingDownloads - a.trendingDownloads);
@@ -524,12 +537,27 @@ export const getRecentUploads = async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(parseInt(limit))
       .populate('sourceId', 'name platform')
-      .populate('albumId', 'name');
+      .populate('albumId', 'name coverArtKey coverArt');
+
+    // Sign cover art URLs
+    const tracksWithUrls = await Promise.all(recentTracks.map(async (track) => {
+      const trackObj = track.toObject();
+      if (trackObj.coverArtKey) {
+        try {
+          trackObj.coverArt = await getSignedDownloadUrl(trackObj.coverArtKey, 7200);
+        } catch (e) { /* fallback */ }
+      } else if (!trackObj.coverArt && trackObj.albumId?.coverArtKey) {
+        try {
+          trackObj.coverArt = await getSignedDownloadUrl(trackObj.albumId.coverArtKey, 7200);
+        } catch (e) { /* fallback */ }
+      }
+      return trackObj;
+    }));
 
     res.status(200).json({
       success: true,
-      count: recentTracks.length,
-      data: recentTracks
+      count: tracksWithUrls.length,
+      data: tracksWithUrls
     });
   } catch (error) {
     res.status(500).json({
