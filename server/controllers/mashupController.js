@@ -2,6 +2,7 @@ import Mashup from '../models/Mashup.js';
 import MashupSettings from '../models/MashupSettings.js';
 import { getSignedDownloadUrl, uploadToWasabi, deleteFromWasabi } from '../config/wasabi.js';
 import { detectGenreWithAI } from '../services/openai.js';
+import { detectTonality } from '../services/tonalityDetection.js';
 
 // @desc    Get all mashups (public)
 // @route   GET /api/mashups
@@ -126,12 +127,36 @@ export const createMashup = async (req, res) => {
       }
     }
 
+    // Detect tonality and BPM if not provided
+    let detectedTonality = tonality || '';
+    let detectedBpm = bpm ? parseInt(bpm) : undefined;
+    
+    if (!tonality || !bpm) {
+      try {
+        const trackTitle = title || audioFile.originalname.replace(/\.[^/.]+$/, '');
+        const trackArtist = artist || 'Unknown Artist';
+        const { tonality: tonalityResult, detectedBpm: bpmResult } = await detectTonality(audioFile.buffer, {
+          title: trackTitle,
+          artist: trackArtist
+        });
+        
+        if (!tonality && tonalityResult?.camelot) {
+          detectedTonality = tonalityResult.camelot;
+        }
+        if (!bpm && bpmResult) {
+          detectedBpm = Math.round(bpmResult);
+        }
+      } catch (error) {
+        console.error('Tonality/BPM detection error for mashup:', error.message);
+      }
+    }
+
     const mashupData = {
       title: title || audioFile.originalname.replace(/\.[^/.]+$/, ''),
       artist: artist || 'Unknown Artist',
       genre: detectedGenre,
-      bpm: bpm ? parseInt(bpm) : undefined,
-      tonality: tonality || '',
+      bpm: detectedBpm,
+      tonality: detectedTonality,
       audioFile: {
         url: audioUpload.location || audioUpload.Location,
         key: audioKey,
