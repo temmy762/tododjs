@@ -70,12 +70,15 @@ export default function TrackGridView({ tracks, onTrackInteraction, userFavorite
                     src={track.coverArt} 
                     alt={track.title}
                     className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                    onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+                    onError={(e) => { 
+                      e.target.style.display = 'none'; 
+                      const fallback = e.target.nextElementSibling;
+                      if (fallback) fallback.style.display = 'flex';
+                    }}
                   />
                 ) : null}
                 <div
-                  className="w-full h-full items-center justify-center bg-gradient-to-br from-accent/30 to-accent/10"
-                  style={{ display: track.coverArt ? 'none' : 'flex' }}
+                  className={`w-full h-full items-center justify-center bg-gradient-to-br from-accent/30 to-accent/10 ${track.coverArt ? 'hidden' : 'flex'}`}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-accent/70"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg>
                 </div>

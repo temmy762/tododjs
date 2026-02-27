@@ -87,9 +87,18 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
                   onClick={() => handlePlayPause(track)}
                 >
                   {track.coverArt ? (
-                    <img src={track.coverArt} alt={track.title} className="w-full h-full object-cover" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling && (e.target.nextSibling.style.display = 'flex'); }} />
+                    <img 
+                      src={track.coverArt} 
+                      alt={track.title} 
+                      className="w-full h-full object-cover" 
+                      onError={(e) => { 
+                        e.target.style.display = 'none'; 
+                        const fallback = e.target.nextElementSibling;
+                        if (fallback) fallback.style.display = 'flex';
+                      }} 
+                    />
                   ) : null}
-                  <div style={{ display: track.coverArt ? 'none' : 'block' }}>
+                  <div className={track.coverArt ? 'hidden' : 'flex'}>
                     <GenericCoverArt title={track.title} artist={track.artist} size="md" />
                   </div>
                   <div className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${isCurrentlyPlaying ? 'opacity-100' : 'opacity-0'}`}>
@@ -227,10 +236,14 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
                       src={track.coverArt} 
                       alt={track.title}
                       className="w-full h-full object-cover"
-                      onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling && (e.target.nextSibling.style.display = 'block'); }}
+                      onError={(e) => { 
+                        e.target.style.display = 'none'; 
+                        const fallback = e.target.nextElementSibling;
+                        if (fallback) fallback.style.display = 'flex';
+                      }}
                     />
                   ) : null}
-                  <div style={{ display: track.coverArt ? 'none' : 'block' }}>
+                  <div className={track.coverArt ? 'hidden' : 'flex'}>
                     <GenericCoverArt title={track.title} artist={track.artist} size="sm" />
                   </div>
                 </div>
