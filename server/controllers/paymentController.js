@@ -1,6 +1,7 @@
 import Stripe from 'stripe';
 import User from '../models/User.js';
 import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentReceiptEmail, sendSubscriptionCancelledEmail, sendPaymentFailedEmail } from '../services/emailService.js';
+import SubscriptionPlan from '../models/SubscriptionPlan.js';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -113,6 +114,7 @@ export const handleWebhook = async (req, res) => {
 
   // Handle the event
   try {
+    console.log(`[stripe/payment webhook] event=${event.type} id=${event.id}`);
     switch (event.type) {
       case 'checkout.session.completed':
         await handleCheckoutSessionCompleted(event.data.object);
@@ -150,14 +152,51 @@ async function handleCheckoutSessionCompleted(session) {
 
   const user = await User.findById(userId);
   if (user) {
-    user.subscription.plan = plan;
+    let planId = null;
+    try {
+      const mappedPlan = await SubscriptionPlan.findOne({
+        $or: [
+          { planId: plan },
+          { name: plan },
+          { nameEs: plan }
+        ]
+      }).lean();
+      planId = mappedPlan?.planId || null;
+    } catch (e) {
+      console.error('[stripe/payment webhook] plan lookup failed:', e.message);
+    }
+
+    const startDate = new Date();
+    const endDate = subscription.current_period_end
+      ? new Date(subscription.current_period_end * 1000)
+      : null;
+
+    // Standard fields used across the app
+    user.subscription.planId = planId;
+    user.subscription.plan = planId || plan; // legacy compatibility
     user.subscription.status = 'active';
+    user.subscription.startDate = startDate;
+    user.subscription.endDate = endDate;
+    user.subscription.stripeCustomerId = subscription.customer || user.subscription.stripeCustomerId;
     user.subscription.stripeSubscriptionId = subscription.id;
-    user.subscription.currentPeriodEnd = new Date(subscription.current_period_end * 1000);
+    user.subscription.stripePaymentIntentId = subscription.latest_invoice?.payment_intent || user.subscription.stripePaymentIntentId;
+    user.subscription.paymentMethod = 'card';
+    user.subscription.autoRenew = true;
     user.subscription.cancelAtPeriodEnd = false;
+    // Keep legacy field for older UI code
+    user.subscription.currentPeriodEnd = endDate;
+
+    // Set maxDevices based on plan type/features when possible
+    if (planId) {
+      const planDoc = await SubscriptionPlan.findOne({ planId }).lean();
+      if (planDoc) {
+        user.maxDevices = planDoc.features?.maxDevices || (planDoc.type === 'shared' ? 2 : 1);
+      }
+    }
+
     await user.save();
 
-    console.log(`Subscription activated for user ${userId}`);
+    console.log(`[stripe/payment webhook] Subscription activated user=${userId} plan=${plan} planId=${planId} sub=${subscription.id}`);
 
     // Notify user of payment receipt (non-blocking)
     const amount = subscription.items?.data?.[0]?.price?.unit_amount
@@ -197,15 +236,19 @@ async function handleSubscriptionDeleted(subscription) {
 
   const user = await User.findById(userId);
   if (user) {
-    const oldPlan = user.subscription.plan;
+    const oldPlan = user.subscription.planId || user.subscription.plan;
+    user.subscription.planId = null;
     user.subscription.plan = 'free';
     user.subscription.status = 'cancelled';
     user.subscription.stripeSubscriptionId = null;
+    user.subscription.stripePaymentIntentId = null;
+    user.subscription.startDate = null;
+    user.subscription.endDate = null;
     user.subscription.currentPeriodEnd = null;
     user.subscription.cancelAtPeriodEnd = false;
     await user.save();
 
-    console.log(`Subscription cancelled for user ${userId}`);
+    console.log(`[stripe/payment webhook] Subscription cancelled user=${userId}`);
 
     // Notify user of cancellation (non-blocking)
     sendSubscriptionCancelledEmail(user, oldPlan, null)
