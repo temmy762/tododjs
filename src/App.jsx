@@ -160,20 +160,35 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (searchQuery.trim()) {
-      const timer = setTimeout(() => {
-        const filtered = tracks.filter(track => 
-          track.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          track.artist.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (track.collection || '').toLowerCase().includes(searchQuery.toLowerCase())
-        );
-        setSearchResults(filtered);
-      }, 300);
-      return () => clearTimeout(timer);
-    } else {
-      setSearchResults(tracks);
+    if (!searchQuery.trim()) {
+      setSearchResults([]);
+      return;
     }
-  }, [searchQuery, tracks]);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => {
+      fetch(`${API}/search/global?query=${encodeURIComponent(searchQuery.trim())}&limit=50&page=1`, {
+        signal: controller.signal
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data?.success) {
+            setSearchResults(data.data || []);
+          } else {
+            setSearchResults([]);
+          }
+        })
+        .catch((err) => {
+          if (err?.name === 'AbortError') return;
+          setSearchResults([]);
+        });
+    }, 300);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [searchQuery]);
 
   const handleSearchChange = (query) => {
     setSearchQuery(query);

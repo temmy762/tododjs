@@ -2,6 +2,8 @@ import Track from '../models/Track.js';
 import Album from '../models/Album.js';
 import Collection from '../models/Collection.js';
 import DatePack from '../models/DatePack.js';
+import Mashup from '../models/Mashup.js';
+import { getSignedDownloadUrl } from '../config/wasabi.js';
 
 // @desc    Advanced track search with filters
 // @route   GET /api/search/tracks
@@ -248,5 +250,130 @@ export const searchAlbums = async (req, res) => {
       success: false,
       message: error.message
     });
+  }
+};
+
+// @desc    Global search across Tracks + Mashups
+// @route   GET /api/search/global
+// @access  Public
+export const searchGlobal = async (req, res) => {
+  try {
+    const { query, limit = 50, page = 1 } = req.query;
+    const q = (query || '').trim();
+
+    if (!q) {
+      return res.status(200).json({
+        success: true,
+        data: [],
+        pagination: {
+          total: 0,
+          page: parseInt(page),
+          pages: 0,
+          limit: parseInt(limit)
+        }
+      });
+    }
+
+    const safeLimit = Math.min(parseInt(limit) || 50, 100);
+    const safePage = Math.max(parseInt(page) || 1, 1);
+    const skip = (safePage - 1) * safeLimit;
+
+    const trackFilter = {
+      status: 'published',
+      $or: [
+        { title: { $regex: q, $options: 'i' } },
+        { artist: { $regex: q, $options: 'i' } },
+        { featuredArtist: { $regex: q, $options: 'i' } }
+      ]
+    };
+
+    const mashupFilter = {
+      isPublished: true,
+      $or: [
+        { title: { $regex: q, $options: 'i' } },
+        { artist: { $regex: q, $options: 'i' } }
+      ]
+    };
+
+    const perTypeLimit = Math.max(Math.ceil(safeLimit / 2), 10);
+
+    const [tracks, mashups, trackTotal, mashupTotal] = await Promise.all([
+      Track.find(trackFilter)
+        .populate('sourceId', 'name platform')
+        .populate('albumId', 'name coverArt coverArtKey')
+        .sort({ createdAt: -1 })
+        .limit(perTypeLimit)
+        .skip(skip)
+        .lean(),
+      Mashup.find(mashupFilter)
+        .sort({ createdAt: -1 })
+        .limit(perTypeLimit)
+        .skip(skip)
+        .lean(),
+      Track.countDocuments(trackFilter),
+      Mashup.countDocuments(mashupFilter)
+    ]);
+
+    const normalizedTracks = await Promise.all(tracks.map(async (t) => {
+      let coverArt = t.coverArt;
+      if (t.coverArtKey) {
+        try { coverArt = await getSignedDownloadUrl(t.coverArtKey, 7200); } catch {}
+      } else if (!coverArt && t.albumId?.coverArtKey) {
+        try { coverArt = await getSignedDownloadUrl(t.albumId.coverArtKey, 7200); } catch {}
+      }
+
+      return {
+        type: 'track',
+        _id: t._id,
+        title: t.title,
+        artist: t.artist,
+        genre: t.genre,
+        bpm: t.bpm || 0,
+        tonality: t.tonality?.camelot || '',
+        coverArt: coverArt || '',
+        createdAt: t.createdAt,
+        sourceId: t.sourceId,
+        albumId: t.albumId
+      };
+    }));
+
+    const normalizedMashups = await Promise.all(mashups.map(async (m) => {
+      let coverArt = m.coverArt;
+      if (m.coverArtKey) {
+        try { coverArt = await getSignedDownloadUrl(m.coverArtKey, 7200); } catch {}
+      }
+
+      return {
+        type: 'mashup',
+        _id: m._id,
+        title: m.title,
+        artist: m.artist,
+        genre: m.genre || 'Mashup',
+        bpm: m.bpm || 0,
+        tonality: m.tonality || '',
+        coverArt: coverArt || '',
+        createdAt: m.createdAt
+      };
+    }));
+
+    const merged = [...normalizedTracks, ...normalizedMashups]
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+      .slice(0, safeLimit);
+
+    const total = trackTotal + mashupTotal;
+
+    res.status(200).json({
+      success: true,
+      data: merged,
+      pagination: {
+        total,
+        page: safePage,
+        pages: Math.ceil(total / safeLimit),
+        limit: safeLimit
+      }
+    });
+  } catch (error) {
+    console.error('Search global error:', error);
+    res.status(500).json({ success: false, message: error.message });
   }
 };

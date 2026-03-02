@@ -55,12 +55,17 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
   const [playingTrackId, setPlayingTrackId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
+  const getTrackId = (track) => track?.id || track?._id;
+
   const handlePlayPause = (track) => {
-    if (playingTrackId === track.id) {
+    const trackId = getTrackId(track);
+    if (!trackId) return;
+
+    if (playingTrackId === trackId) {
       setIsPlaying(!isPlaying);
       onTrackInteraction?.('play', track);
     } else {
-      setPlayingTrackId(track.id);
+      setPlayingTrackId(trackId);
       setIsPlaying(true);
       onTrackInteraction?.('play', track);
     }
@@ -71,12 +76,13 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
       {/* ── Mobile Card Layout ── */}
       <div className="md:hidden space-y-2 py-2">
         {tracks.map((track, index) => {
-          const isCurrentlyPlaying = playingTrackId === track.id && isPlaying;
-          const isLiked = userFavorites.has(track.id || track._id);
+          const trackId = getTrackId(track);
+          const isCurrentlyPlaying = playingTrackId === trackId && isPlaying;
+          const isLiked = userFavorites.has(trackId);
           
           return (
             <div
-              key={track.id}
+              key={trackId}
               className="bg-dark-elevated/40 rounded-xl border border-white/[0.04] overflow-hidden animate-in fade-in"
               style={{ animationDelay: `${index * 15}ms`, animationDuration: '250ms' }}
             >
@@ -200,12 +206,13 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
         </div>
 
         {tracks.map((track, index) => {
-          const isCurrentlyPlaying = playingTrackId === track.id && isPlaying;
-          const isLiked = userFavorites.has(track.id || track._id);
+          const trackId = getTrackId(track);
+          const isCurrentlyPlaying = playingTrackId === trackId && isPlaying;
+          const isLiked = userFavorites.has(trackId);
           
           return (
             <div
-              key={track.id}
+              key={trackId}
               className="min-w-[900px] grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto] gap-2 px-3 py-1.5 hover:bg-white/5 group transition-all duration-150 border-b border-white/[0.01] last:border-b-0 animate-in fade-in slide-in-from-bottom-2"
               style={{ animationDelay: `${index * 20}ms`, animationDuration: '300ms' }}
               onClick={() => handlePlayPause(track)}

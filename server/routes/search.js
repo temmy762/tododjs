@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   searchTracks,
+  searchGlobal,
   getFilterOptions,
   searchCollections,
   searchAlbums
@@ -9,6 +10,7 @@ import {
 const router = express.Router();
 
 router.get('/tracks', searchTracks);
+router.get('/global', searchGlobal);
 router.get('/filters', getFilterOptions);
 router.get('/collections', searchCollections);
 router.get('/albums', searchAlbums);
