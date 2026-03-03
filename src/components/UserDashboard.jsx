@@ -1,14 +1,16 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   X, User, Mail, Phone, Save, Camera, Lock, Eye, EyeOff,
   Download, Heart, Music, TrendingUp, CheckCircle, AlertCircle,
   LogOut, Pencil, Shield, Play, Trash2
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import API_URL from '../config/api';
 
 const API = API_URL;
 
 export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, onTrackInteraction }) {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('overview');
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -19,7 +21,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
 
   useEffect(() => {
     fetchFavorites();
-  }, []);
+  }, [user?._id]);
 
   useEffect(() => {
     if (activeTab === 'favorites') {
@@ -77,13 +79,20 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
     confirm: false
   });
 
-  const planLabel = user?.subscription?.plan === 'pro' ? 'Pro' : user?.subscription?.plan === 'premium' ? 'Premium' : 'Free';
-  const planColor = user?.subscription?.plan === 'premium' ? 'text-yellow-400' : user?.subscription?.plan === 'pro' ? 'text-purple-400' : 'text-brand-text-tertiary';
+  const subscriptionStatus = user?.subscription?.status;
+  const subscriptionPlanId = user?.subscription?.planId;
+  const isActivePaid = subscriptionStatus === 'active' && !!subscriptionPlanId;
+  const planLabel = useMemo(() => {
+    if (!isActivePaid) return t('subscription.free');
+    return subscriptionPlanId || user?.subscription?.plan || t('subscription.premium');
+  }, [isActivePaid, subscriptionPlanId, t, user?.subscription?.plan]);
+
+  const planColor = isActivePaid ? 'text-yellow-400' : 'text-brand-text-tertiary';
 
   const stats = [
-    { label: 'DESCARGAS', value: user?.downloads?.total?.toString() || '0', icon: Download },
-    { label: 'PLAYLIST', value: user?.playlists?.length?.toString() || '0', icon: Music },
-    { label: 'FAVORITOS', value: favorites.length > 0 ? favorites.length.toString() : (user?.favorites?.length?.toString() || '0'), icon: Heart },
+    { label: t('library.downloads').toUpperCase(), value: user?.downloads?.total?.toString() || '0', icon: Download },
+    { label: t('library.playlists').toUpperCase(), value: user?.playlists?.length?.toString() || '0', icon: Music },
+    { label: t('library.favorites').toUpperCase(), value: favorites.length > 0 ? favorites.length.toString() : (user?.favorites?.length?.toString() || '0'), icon: Heart },
   ];
 
   const clearMessage = () => setMessage({ type: '', text: '' });
@@ -233,10 +242,10 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
   };
 
   const tabs = [
-    { id: 'overview', label: 'Descripción General' },
-    { id: 'favorites', label: 'Favoritos' },
-    { id: 'edit', label: 'Editar Perfil' },
-    { id: 'password', label: 'Contraseña' },
+    { id: 'overview', label: t('profile.preferences') },
+    { id: 'favorites', label: t('library.favorites') },
+    { id: 'edit', label: t('profile.editProfile') },
+    { id: 'password', label: t('profile.changePassword') },
   ];
 
   return (
@@ -245,7 +254,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
       <div className="h-14 bg-dark-elevated border-b border-white/10 flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-3">
           <User className="w-5 h-5 text-accent" />
-          <h1 className="text-base md:text-lg font-bold text-white">Mi Cuenta</h1>
+          <h1 className="text-base md:text-lg font-bold text-white">{t('profile.myProfile')}</h1>
         </div>
         <button
           onClick={onClose}
@@ -293,7 +302,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
               <p className="text-xs md:text-sm text-brand-text-tertiary break-all">{user?.email}</p>
               <div className="flex items-center gap-2 mt-1.5">
                 <TrendingUp className={`w-3 h-3 ${planColor}`} />
-                <span className={`text-xs font-bold uppercase tracking-wider ${planColor}`}>{planLabel} Plan</span>
+                <span className={`text-xs font-bold uppercase tracking-wider ${planColor}`}>{planLabel}</span>
               </div>
             </div>
           </div>
@@ -346,35 +355,35 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
 
               {/* Account Details */}
               <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
-                <h3 className="text-sm font-semibold text-white mb-3 md:mb-4">Detalles De Cuenta</h3>
+                <h3 className="text-sm font-semibold text-white mb-3 md:mb-4">{t('profile.accountDetails')}</h3>
                 <div className="grid grid-cols-2 gap-3 md:gap-4">
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Nombre</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">{t('auth.name')}</p>
                     <p className="text-sm text-white font-medium">{user?.name}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Email</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">{t('auth.email')}</p>
                     <p className="text-sm text-white font-medium">{user?.email}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Telefono</p>
-                    <p className="text-sm text-white font-medium">{user?.phoneNumber || <span className="text-brand-text-tertiary italic">Not set</span>}</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">{t('auth.phoneNumber')}</p>
+                    <p className="text-sm text-white font-medium">{user?.phoneNumber || <span className="text-brand-text-tertiary italic">-</span>}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Subscripción</p>
-                    <p className={`text-sm font-medium capitalize ${planColor}`}>{user?.subscription?.plan || 'Free'}</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">{t('subscription.currentPlan')}</p>
+                    <p className={`text-sm font-medium ${planColor}`}>{planLabel}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Estado</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">{t('subscription.status')}</p>
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
-                      user?.subscription?.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                      subscriptionStatus === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                     }`}>
-                      {user?.subscription?.status || 'Active'}
+                      {subscriptionStatus ? t(`subscription.${subscriptionStatus}`) : t('subscription.inactive')}
                     </span>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Rol</p>
-                    <p className="text-sm text-white font-medium capitalize">{user?.role || 'User'}</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Role</p>
+                    <p className="text-sm text-white font-medium capitalize">{user?.role || 'user'}</p>
                   </div>
                 </div>
               </div>
@@ -386,14 +395,14 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                   className="flex-1 py-2.5 md:py-3 px-3 md:px-4 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition-colors text-xs md:text-sm font-medium text-white flex items-center justify-center gap-2"
                 >
                   <Pencil className="w-4 h-4 text-accent shrink-0" />
-                  Edit Profile
+                  {t('profile.editProfile')}
                 </button>
                 <button
                   onClick={() => { setActiveTab('password'); clearMessage(); }}
                   className="flex-1 py-2.5 md:py-3 px-3 md:px-4 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition-colors text-xs md:text-sm font-medium text-white flex items-center justify-center gap-2"
                 >
                   <Lock className="w-4 h-4 text-accent shrink-0" />
-                  Cambiar Contraseña
+                  {t('profile.changePassword')}
                 </button>
               </div>
 
@@ -403,7 +412,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                 className="w-full py-2.5 md:py-3 px-4 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors text-sm font-medium text-red-400 flex items-center justify-center gap-2"
               >
                 <LogOut className="w-4 h-4" />
-                Cerrar Sesion
+                {t('nav.logout')}
               </button>
             </div>
           )}
@@ -414,12 +423,12 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
               <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
                 <h3 className="text-sm font-semibold text-white mb-4 md:mb-5 flex items-center gap-2">
                   <Pencil className="w-4 h-4 text-accent" />
-                  Editar Perfil
+                  {t('profile.editProfile')}
                 </h3>
 
                 <div className="space-y-3 md:space-y-4">
                   <div>
-                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Nombre Completo</label>
+                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">{t('auth.fullName')}</label>
                     <div className="relative">
                       <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                       <input
@@ -433,7 +442,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Email</label>
+                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">{t('auth.email')}</label>
                     <div className="relative">
                       <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                       <input
@@ -447,7 +456,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Número Telefónico</label>
+                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">{t('auth.phoneNumber')}</label>
                     <div className="relative">
                       <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                       <input
@@ -458,7 +467,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                         placeholder=""
                       />
                     </div>
-                    <p className="text-[10px] text-brand-text-tertiary mt-1">Formato internacional (ejemplo: +34600123456)</p>
+                    <p className="text-[10px] text-brand-text-tertiary mt-1">{t('auth.phoneNumber')}</p>
                   </div>
                 </div>
 
@@ -469,7 +478,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                     className="px-6 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     <Save size={14} />
-                    {saving ? 'Guardando...' : 'Guardar cambios'}
+                    {saving ? t('common.loading') : t('common.save')}
                   </button>
                   <button
                     onClick={() => {
@@ -478,7 +487,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                     }}
                     className="px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg font-medium text-brand-text-secondary text-sm transition-colors"
                   >
-                    Reset
+                    {t('common.reset')}
                   </button>
                 </div>
               </div>
@@ -487,7 +496,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
               <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
                 <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                   <Camera className="w-4 h-4 text-accent" />
-                  Foto De Perfil
+                  Photo
                 </h3>
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-accent to-accent-hover overflow-hidden border-2 border-white/10 flex items-center justify-center">
@@ -504,7 +513,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                       className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50 flex items-center gap-2"
                     >
                       <Camera size={14} />
-                      {uploadingAvatar ? 'Subiendo...' : 'Cambiar Foto'}
+                      {uploadingAvatar ? t('common.loading') : t('common.edit')}
                     </button>
                     <p className="text-[10px] text-brand-text-tertiary mt-1.5">JPEG, PNG, WebP, or GIF. Max 5MB.</p>
                   </div>
@@ -519,7 +528,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                   <Heart className="w-4 h-4 text-accent" />
-                  Mis Favoritos
+                  {t('library.favorites')}
                   <span className="text-xs text-brand-text-tertiary font-normal">({favorites.length})</span>
                 </h3>
               </div>
@@ -541,8 +550,8 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                   <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
                     <Heart className="w-6 h-6 text-brand-text-tertiary" />
                   </div>
-                  <p className="text-sm text-brand-text-tertiary font-medium">No hay favoritos aún</p>
-                  <p className="text-xs text-brand-text-tertiary/50 mt-1">Toca el icono de corazón en cualquier pista para guardarla aquí</p>
+                  <p className="text-sm text-brand-text-tertiary font-medium">{t('search.noResults')}</p>
+                  <p className="text-xs text-brand-text-tertiary/50 mt-1">{t('search.placeholder')}</p>
                 </div>
               ) : (
                 <div className="space-y-1.5">
@@ -581,7 +590,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                         <button
                           onClick={() => removeFavorite(track._id)}
                           className="w-8 h-8 rounded-lg flex items-center justify-center text-brand-text-tertiary hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="Remove from favorites"
+                          title={t('common.delete')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -598,12 +607,12 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
             <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
               <h3 className="text-sm font-semibold text-white mb-4 md:mb-5 flex items-center gap-2">
                 <Lock className="w-4 h-4 text-accent" />
-                Cambiar Contraseña
+                {t('profile.changePassword')}
               </h3>
 
               <div className="space-y-3 md:space-y-4">
                 <div>
-                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Contraseña Actual</label>
+                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">{t('auth.password')}</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                     <input
@@ -624,7 +633,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Nueva Contraseña</label>
+                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">{t('auth.newPassword')}</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                     <input
@@ -645,7 +654,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Confirmar Nueva Contraseña</label>
+                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">{t('auth.confirmPassword')}</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                     <input
@@ -672,7 +681,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                 className="mt-6 px-6 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <Shield size={14} />
-                {saving ? 'Actualizando...' : 'Reestablecer Contraseña'}
+                {saving ? t('common.loading') : t('auth.resetPassword')}
               </button>
             </div>
           )}
