@@ -1,4 +1,4 @@
-import { X, Pause, Play, Info, Volume2, VolumeX, SkipBack, SkipForward, Music } from 'lucide-react';
+import { X, Pause, Play, Info, Volume2, VolumeX, SkipBack, SkipForward, Music, User } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import PremiumPrompt from './PremiumPrompt';
 import API_URL from '../config/api';
@@ -74,7 +74,7 @@ export default function MusicControlPanel({
   const lastTrackIdRef = useRef(null);
   const volumeTimeoutRef = useRef(null);
 
-  const isPremium = user && user.subscription?.plan && user.subscription.plan !== 'free';
+  const isPremium = !!(user?.subscription?.status === 'active' && user?.subscription?.planId);
 
   const totalSeconds = audioDuration || track?.duration || 0;
 
@@ -251,6 +251,25 @@ export default function MusicControlPanel({
     </div>
   );
 
+  const userAvatarJsx = (
+    <div className="flex-shrink-0">
+      {user?.avatar ? (
+        <img
+          src={user.avatar}
+          alt={user.name || 'User'}
+          className="w-10 h-10 rounded-full object-cover ring-1 ring-white/10"
+          onError={(e) => {
+            e.currentTarget.style.display = 'none';
+          }}
+        />
+      ) : (
+        <div className="w-10 h-10 rounded-full bg-white/[0.06] border border-white/[0.08] flex items-center justify-center">
+          <User className="w-5 h-5 text-white/60" />
+        </div>
+      )}
+    </div>
+  );
+
   const renderWaveform = (waveData, barCount, progressPct) => {
     const active = Math.round((progressPct / 100) * barCount);
     return (
@@ -327,7 +346,8 @@ export default function MusicControlPanel({
             <div className="hidden sm:flex items-center gap-4">
 
               {/* Left: Cover + Track Info */}
-              <div className="flex items-center gap-3 w-[280px] min-w-0 flex-shrink-0">
+              <div className="flex items-center gap-3 w-[320px] min-w-0 flex-shrink-0">
+                {userAvatarJsx}
                 {coverArtJsx}
                 <div className="min-w-0 flex-1">
                   <div className="text-xs font-semibold text-white truncate leading-tight">{track.title}</div>
