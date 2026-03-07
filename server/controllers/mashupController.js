@@ -1,6 +1,7 @@
 import Mashup from '../models/Mashup.js';
 import MashupSettings from '../models/MashupSettings.js';
 import { getSignedDownloadUrl, uploadToWasabi, deleteFromWasabi } from '../config/wasabi.js';
+import { resolveSignedUrls } from '../utils/signedUrls.js';
 import { detectGenreWithAI } from '../services/openai.js';
 import { detectTonality } from '../services/tonalityDetection.js';
 
@@ -16,15 +17,7 @@ export const getMashups = async (req, res) => {
       .limit(parseInt(limit))
       .lean();
 
-    // Sign cover art URLs
-    const signed = await Promise.all(mashups.map(async (m) => {
-      let coverArt = m.coverArt;
-      if (m.coverArtKey) {
-        try { coverArt = await getSignedDownloadUrl(m.coverArtKey, 7200); } catch {}
-      }
-      return { ...m, coverArt };
-    }));
-
+    const signed = await resolveSignedUrls(mashups, ['coverArt']);
     res.status(200).json({ success: true, count: signed.length, data: signed });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -78,14 +71,7 @@ export const getAdminMashups = async (req, res) => {
       .populate('uploadedBy', 'name email')
       .lean();
 
-    const signed = await Promise.all(mashups.map(async (m) => {
-      let coverArt = m.coverArt;
-      if (m.coverArtKey) {
-        try { coverArt = await getSignedDownloadUrl(m.coverArtKey, 7200); } catch {}
-      }
-      return { ...m, coverArt };
-    }));
-
+    const signed = await resolveSignedUrls(mashups, ['coverArt']);
     res.status(200).json({ success: true, count: signed.length, data: signed });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
