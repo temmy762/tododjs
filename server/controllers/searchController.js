@@ -278,14 +278,21 @@ export const searchGlobal = async (req, res) => {
     const safePage = Math.max(parseInt(page) || 1, 1);
     const skip = (safePage - 1) * safeLimit;
 
-    const trackFilter = {
-      status: 'published',
-      $or: [
-        { title: { $regex: q, $options: 'i' } },
-        { artist: { $regex: q, $options: 'i' } },
-        { featuredArtist: { $regex: q, $options: 'i' } }
-      ]
-    };
+    const useTextSearch = q.length >= 2;
+
+    const trackFilter = useTextSearch
+      ? {
+          status: { $in: ['published', 'ready'] },
+          $text: { $search: q }
+        }
+      : {
+          status: { $in: ['published', 'ready'] },
+          $or: [
+            { title: { $regex: q, $options: 'i' } },
+            { artist: { $regex: q, $options: 'i' } },
+            { featuredArtist: { $regex: q, $options: 'i' } }
+          ]
+        };
 
     const mashupFilter = {
       isPublished: true,
@@ -301,7 +308,8 @@ export const searchGlobal = async (req, res) => {
       Track.find(trackFilter)
         .populate('sourceId', 'name platform')
         .populate('albumId', 'name coverArt coverArtKey')
-        .sort({ createdAt: -1 })
+        .sort(useTextSearch ? { score: { $meta: 'textScore' }, createdAt: -1 } : { createdAt: -1 })
+        .select(useTextSearch ? { score: { $meta: 'textScore' } } : undefined)
         .limit(perTypeLimit)
         .skip(skip)
         .lean(),
