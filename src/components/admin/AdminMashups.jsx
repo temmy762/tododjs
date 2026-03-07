@@ -421,7 +421,21 @@ export default function AdminMashups() {
               >
                 <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-dark-elevated">
                   {mashup.coverArt ? (
-                    <img src={mashup.coverArt} alt={mashup.title} className="w-full h-full object-cover" />
+                    <>
+                      <img
+                        src={mashup.coverArt}
+                        alt={mashup.title}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fallback = e.currentTarget.nextSibling;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                      <div className="w-full h-full" style={{ display: 'none' }}>
+                        <GenericCoverArt title={mashup.title} artist={mashup.artist} size="md" />
+                      </div>
+                    </>
                   ) : (
                     <GenericCoverArt title={mashup.title} artist={mashup.artist} size="md" />
                   )}
