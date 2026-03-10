@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Upload, Download, Edit, Trash2, Filter, Grid3x3, List, MoreVertical, X, File, Music, CheckCircle, AlertCircle, Loader, FolderArchive, ChevronLeft, ChevronRight, Check, AlertTriangle, Sparkles, Image as ImageIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Upload, Edit, Trash2, Filter, Grid3x3, List, MoreVertical, X, File, Music, CheckCircle, AlertCircle, Loader, FolderArchive, ChevronLeft, ChevronRight, Check, AlertTriangle, Sparkles, Image as ImageIcon, ChevronDown, ChevronUp } from 'lucide-react';
 import API_URL from '../../config/api';
 
 const API = API_URL;
