@@ -552,7 +552,19 @@ export default function AdminTracks() {
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-dark-surface">
                             {getTrackCover(track) ? (
-                              <img src={getTrackCover(track)} alt="" className="w-full h-full object-cover" />
+                              <>
+                                <img 
+                                  src={getTrackCover(track)} 
+                                  alt="" 
+                                  className="w-full h-full object-cover" 
+                                  onError={(e) => { 
+                                    e.target.style.display = 'none'; 
+                                    const fallback = e.target.nextElementSibling;
+                                    if (fallback) fallback.style.display = 'flex';
+                                  }} 
+                                />
+                                <div className="w-full h-full hidden items-center justify-center"><Music className="w-4 h-4 text-white/20" /></div>
+                              </>
                             ) : (
                               <div className="w-full h-full flex items-center justify-center"><Music className="w-4 h-4 text-white/20" /></div>
                             )}
@@ -615,7 +627,21 @@ export default function AdminTracks() {
               <div key={track._id} className="bg-dark-elevated rounded-xl border border-white/10 overflow-hidden group hover:border-white/20 transition-all duration-200">
                 <div className="aspect-square bg-dark-surface relative">
                   {getTrackCover(track) ? (
-                    <img src={getTrackCover(track)} alt="" className="w-full h-full object-cover" />
+                    <>
+                      <img 
+                        src={getTrackCover(track)} 
+                        alt="" 
+                        className="w-full h-full object-cover" 
+                        onError={(e) => { 
+                          e.target.style.display = 'none'; 
+                          const fallback = e.target.nextElementSibling;
+                          if (fallback) fallback.style.display = 'flex';
+                        }} 
+                      />
+                      <div className="w-full h-full hidden items-center justify-center bg-gradient-to-br from-accent/20 to-accent/5">
+                        <Music className="w-8 h-8 text-white/20" />
+                      </div>
+                    </>
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-accent/20 to-accent/5">
                       <Music className="w-8 h-8 text-white/20" />
@@ -666,7 +692,19 @@ export default function AdminTracks() {
                 <div className="flex items-start gap-3">
                   <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-dark-surface">
                     {getTrackCover(track) ? (
-                      <img src={getTrackCover(track)} alt="" className="w-full h-full object-cover" />
+                      <>
+                        <img 
+                          src={getTrackCover(track)} 
+                          alt="" 
+                          className="w-full h-full object-cover" 
+                          onError={(e) => { 
+                            e.target.style.display = 'none'; 
+                            const fallback = e.target.nextElementSibling;
+                            if (fallback) fallback.style.display = 'flex';
+                          }} 
+                        />
+                        <div className="w-full h-full hidden items-center justify-center"><Music className="w-5 h-5 text-white/20" /></div>
+                      </>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center"><Music className="w-5 h-5 text-white/20" /></div>
                     )}
