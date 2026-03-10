@@ -78,10 +78,16 @@ const userSchema = new mongoose.Schema({
     },
     devices: [{
       deviceId: { type: String, required: true },
+      deviceName: { type: String, default: null },
+      deviceType: { type: String, enum: ['mobile', 'desktop', 'tablet', 'unknown'], default: 'unknown' },
+      browser: { type: String, default: 'Unknown' },
+      os: { type: String, default: 'Unknown' },
       deviceInfo: { type: String, default: 'Unknown Device' },
       ipAddress: { type: String },
+      location: { type: String, default: null },
       lastActive: { type: Date, default: Date.now },
-      addedAt: { type: Date, default: Date.now }
+      addedAt: { type: Date, default: Date.now },
+      isCurrentDevice: { type: Boolean, default: false }
     }]
   },
   subscriptionHistory: [{
@@ -131,18 +137,17 @@ const userSchema = new mongoose.Schema({
     enum: ['en', 'es'],
     default: 'en'
   },
-  registeredDevices: [{
-    deviceId: { type: String, required: true },
-    deviceInfo: { type: String, default: 'Unknown Device' },
-    ipAddress: { type: String },
-    activeToken: { type: String, default: null },
-    registeredAt: { type: Date, default: Date.now },
-    lastLoginAt: { type: Date, default: Date.now }
-  }],
   maxDevices: {
     type: Number,
     default: 2
-  }
+  },
+  passkeyCredentials: [{
+    credentialId: { type: String, required: true },
+    publicKey: { type: String, required: true },
+    counter: { type: Number, default: 0 },
+    deviceType: { type: String },
+    createdAt: { type: Date, default: Date.now }
+  }]
 }, {
   timestamps: true
 });

@@ -1,0 +1,378 @@
+import { useState, useEffect } from 'react';
+import { Smartphone, Monitor, Tablet, Trash2, Edit2, LogOut, Loader, AlertTriangle, CheckCircle, X } from 'lucide-react';
+import API_URL from '../config/api';
+
+const API = API_URL;
+const getToken = () => localStorage.getItem('token');
+const authHeaders = (json = false) => {
+  const h = {};
+  const token = getToken();
+  if (token) h['Authorization'] = `Bearer ${token}`;
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
+};
+
+export default function DeviceManagement() {
+  const [devices, setDevices] = useState([]);
+  const [maxDevices, setMaxDevices] = useState(2);
+  const [loading, setLoading] = useState(true);
+  const [actionLoading, setActionLoading] = useState(null);
+  const [editingDevice, setEditingDevice] = useState(null);
+  const [newDeviceName, setNewDeviceName] = useState('');
+  const [showSignOutAll, setShowSignOutAll] = useState(false);
+  const [notification, setNotification] = useState(null);
+
+  useEffect(() => {
+    fetchDevices();
+  }, []);
+
+  const fetchDevices = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/devices`, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.success) {
+        setDevices(data.data.devices);
+        setMaxDevices(data.data.maxDevices);
+      }
+    } catch (err) {
+      console.error('Failed to fetch devices:', err);
+      showNotification('Failed to load devices', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveDevice = async (deviceId) => {
+    setActionLoading(deviceId);
+    try {
+      const res = await fetch(`${API}/devices/${deviceId}`, {
+        method: 'DELETE',
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      if (data.success) {
+        showNotification('Device removed successfully', 'success');
+        fetchDevices();
+      } else {
+        showNotification(data.message || 'Failed to remove device', 'error');
+      }
+    } catch (err) {
+      showNotification('Failed to remove device', 'error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRenameDevice = async (deviceId) => {
+    if (!newDeviceName.trim()) {
+      showNotification('Device name cannot be empty', 'error');
+      return;
+    }
+
+    setActionLoading(deviceId);
+    try {
+      const res = await fetch(`${API}/devices/${deviceId}`, {
+        method: 'PUT',
+        headers: authHeaders(true),
+        body: JSON.stringify({ deviceName: newDeviceName })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showNotification('Device renamed successfully', 'success');
+        setEditingDevice(null);
+        setNewDeviceName('');
+        fetchDevices();
+      } else {
+        showNotification(data.message || 'Failed to rename device', 'error');
+      }
+    } catch (err) {
+      showNotification('Failed to rename device', 'error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleSignOutAll = async () => {
+    setActionLoading('signout-all');
+    try {
+      const res = await fetch(`${API}/devices/signout-all`, {
+        method: 'POST',
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      if (data.success) {
+        showNotification('Signed out from all devices', 'success');
+        setShowSignOutAll(false);
+        fetchDevices();
+      } else {
+        showNotification(data.message || 'Failed to sign out', 'error');
+      }
+    } catch (err) {
+      showNotification('Failed to sign out from all devices', 'error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleCleanup = async () => {
+    setActionLoading('cleanup');
+    try {
+      const res = await fetch(`${API}/devices/cleanup`, {
+        method: 'POST',
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      if (data.success) {
+        showNotification(data.message, 'success');
+        fetchDevices();
+      } else {
+        showNotification(data.message || 'Failed to cleanup devices', 'error');
+      }
+    } catch (err) {
+      showNotification('Failed to cleanup devices', 'error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const showNotification = (message, type) => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 5000);
+  };
+
+  const getDeviceIcon = (type) => {
+    switch (type) {
+      case 'mobile': return Smartphone;
+      case 'tablet': return Tablet;
+      case 'desktop': return Monitor;
+      default: return Monitor;
+    }
+  };
+
+  const formatDate = (date) => {
+    const d = new Date(date);
+    const now = new Date();
+    const diff = now - d;
+    const minutes = Math.floor(diff / 60000);
+    const hours = Math.floor(diff / 3600000);
+    const days = Math.floor(diff / 86400000);
+
+    if (minutes < 1) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 30) return `${days}d ago`;
+    return d.toLocaleDateString();
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-16">
+        <Loader className="w-8 h-8 text-accent animate-spin" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto p-4 md:p-8">
+      {/* Header */}
+      <div className="mb-8">
+        <h2 className="text-3xl font-bold text-white mb-2">Manage Devices</h2>
+        <p className="text-brand-text-tertiary">
+          You're using {devices.length} of {maxDevices} available device{maxDevices !== 1 ? 's' : ''}
+        </p>
+      </div>
+
+      {/* Notification */}
+      {notification && (
+        <div className={`mb-6 p-4 rounded-lg border flex items-center gap-3 ${
+          notification.type === 'success' 
+            ? 'bg-green-500/10 border-green-500/30 text-green-400' 
+            : 'bg-red-500/10 border-red-500/30 text-red-400'
+        }`}>
+          {notification.type === 'success' ? <CheckCircle className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+          <span className="flex-1">{notification.message}</span>
+          <button onClick={() => setNotification(null)}>
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex flex-wrap gap-3 mb-6">
+        <button
+          onClick={handleCleanup}
+          disabled={actionLoading === 'cleanup'}
+          className="px-4 py-2 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
+        >
+          {actionLoading === 'cleanup' ? <Loader className="w-4 h-4 animate-spin" /> : null}
+          Clean Up Inactive
+        </button>
+        <button
+          onClick={() => setShowSignOutAll(true)}
+          disabled={devices.length === 0}
+          className="px-4 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
+        >
+          <LogOut className="w-4 h-4" />
+          Sign Out All Devices
+        </button>
+      </div>
+
+      {/* Devices List */}
+      {devices.length === 0 ? (
+        <div className="bg-dark-elevated rounded-xl border border-white/10 p-12 text-center">
+          <Monitor className="w-16 h-16 text-brand-text-tertiary mx-auto mb-4" />
+          <h3 className="text-xl font-semibold text-white mb-2">No Devices Registered</h3>
+          <p className="text-brand-text-tertiary">Your devices will appear here once you start using the app</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {devices.map((device) => {
+            const DeviceIcon = getDeviceIcon(device.deviceType);
+            const isEditing = editingDevice === device.deviceId;
+
+            return (
+              <div
+                key={device.deviceId}
+                className={`bg-dark-elevated rounded-xl border transition-all duration-200 ${
+                  device.isCurrentDevice 
+                    ? 'border-accent shadow-lg shadow-accent/20' 
+                    : 'border-white/10 hover:border-white/20'
+                }`}
+              >
+                <div className="p-6">
+                  <div className="flex items-start gap-4">
+                    {/* Device Icon */}
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
+                      device.isCurrentDevice ? 'bg-accent/20' : 'bg-dark-surface'
+                    }`}>
+                      <DeviceIcon className={`w-6 h-6 ${device.isCurrentDevice ? 'text-accent' : 'text-white'}`} />
+                    </div>
+
+                    {/* Device Info */}
+                    <div className="flex-1 min-w-0">
+                      {isEditing ? (
+                        <div className="flex items-center gap-2 mb-2">
+                          <input
+                            type="text"
+                            value={newDeviceName}
+                            onChange={(e) => setNewDeviceName(e.target.value)}
+                            placeholder={device.deviceName || `${device.browser} on ${device.os}`}
+                            className="flex-1 px-3 py-2 bg-dark-surface border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleRenameDevice(device.deviceId)}
+                            disabled={actionLoading === device.deviceId}
+                            className="px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white transition-all duration-200 disabled:opacity-50"
+                          >
+                            {actionLoading === device.deviceId ? <Loader className="w-4 h-4 animate-spin" /> : 'Save'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setEditingDevice(null);
+                              setNewDeviceName('');
+                            }}
+                            className="px-3 py-2 rounded-lg bg-dark-surface hover:bg-dark-elevated border border-white/10 text-white transition-all duration-200"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="text-lg font-semibold text-white">
+                            {device.deviceName || `${device.browser} on ${device.os}`}
+                          </h3>
+                          {device.isCurrentDevice && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-accent/20 text-accent border border-accent/30">
+                              This Device
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="space-y-1 text-sm text-brand-text-tertiary">
+                        <p className="capitalize">{device.deviceType} • {device.browser}</p>
+                        <p>IP: {device.ipAddress || 'Unknown'}</p>
+                        <p>Last active: {formatDate(device.lastActive)}</p>
+                        <p className="text-xs">Added: {new Date(device.addedAt).toLocaleDateString()}</p>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    {!isEditing && (
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setEditingDevice(device.deviceId);
+                            setNewDeviceName(device.deviceName || '');
+                          }}
+                          className="p-2 hover:bg-dark-surface rounded-lg transition-colors text-brand-text-tertiary hover:text-white"
+                          title="Rename device"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleRemoveDevice(device.deviceId)}
+                          disabled={actionLoading === device.deviceId}
+                          className="p-2 hover:bg-red-500/10 rounded-lg transition-colors text-brand-text-tertiary hover:text-red-400 disabled:opacity-50"
+                          title="Remove device"
+                        >
+                          {actionLoading === device.deviceId ? (
+                            <Loader className="w-4 h-4 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Sign Out All Confirmation Modal */}
+      {showSignOutAll && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-dark-elevated rounded-2xl border border-white/10 max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-400" />
+              </div>
+              <h3 className="text-xl font-bold text-white">Sign Out All Devices?</h3>
+            </div>
+            <p className="text-brand-text-tertiary mb-6">
+              This will sign you out from all {devices.length} device{devices.length !== 1 ? 's' : ''}, including this one. 
+              You'll need to sign in again on each device.
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowSignOutAll(false)}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-dark-surface hover:bg-dark-elevated border border-white/10 text-white font-medium transition-all duration-200"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSignOutAll}
+                disabled={actionLoading === 'signout-all'}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {actionLoading === 'signout-all' ? (
+                  <>
+                    <Loader className="w-4 h-4 animate-spin" />
+                    Signing Out...
+                  </>
+                ) : (
+                  'Sign Out All'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

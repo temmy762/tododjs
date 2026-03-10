@@ -1,5 +1,7 @@
 import User from '../models/User.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
+import { parseDeviceInfo, cleanupInactiveDevices } from '../utils/deviceParser.js';
+import { sendEmail } from '../services/emailService.js';
 
 // Check if user has active subscription
 export const requireSubscription = async (req, res, next) => {
@@ -82,6 +84,14 @@ export const checkDeviceLimit = async (req, res, next) => {
       });
     }
 
+    // Auto-cleanup inactive devices (90+ days)
+    const originalDeviceCount = user.subscription.devices.length;
+    user.subscription.devices = cleanupInactiveDevices(user.subscription.devices);
+    const cleanedUp = originalDeviceCount - user.subscription.devices.length;
+    if (cleanedUp > 0) {
+      console.log(`   🧹 Cleaned up ${cleanedUp} inactive device(s)`);
+    }
+
     // Check if device is already registered
     const existingDevice = user.subscription.devices.find(d => d.deviceId === deviceId);
 
@@ -92,30 +102,67 @@ export const checkDeviceLimit = async (req, res, next) => {
       return next();
     }
 
-    // Check if device limit reached
+    // Check if device limit reached (after cleanup)
     if (user.subscription.devices.length >= plan.features.maxDevices) {
       return res.status(403).json({
         success: false,
         message: `Device limit reached (${plan.features.maxDevices} devices max). Remove a device to continue.`,
         deviceLimitReached: true,
         maxDevices: plan.features.maxDevices,
-        currentDevices: user.subscription.devices
+        currentDevices: user.subscription.devices.map(d => ({
+          deviceName: d.deviceName || `${d.browser} on ${d.os}`,
+          lastActive: d.lastActive
+        }))
       });
     }
 
-    // Auto-register device if under limit
+    // Parse device information
+    const userAgent = req.headers['user-agent'] || 'Unknown Device';
     const ipAddress = req.ip || req.connection.remoteAddress;
-    const deviceInfo = req.headers['user-agent'] || 'Unknown Device';
+    const deviceInfo = parseDeviceInfo(userAgent);
 
-    user.subscription.devices.push({
+    // Auto-register device if under limit
+    const newDevice = {
       deviceId,
-      deviceInfo,
+      deviceName: deviceInfo.deviceName,
+      deviceType: deviceInfo.deviceType,
+      browser: deviceInfo.browser,
+      os: deviceInfo.os,
+      deviceInfo: deviceInfo.deviceInfo,
       ipAddress,
       lastActive: new Date(),
       addedAt: new Date()
-    });
+    };
 
+    user.subscription.devices.push(newDevice);
     await user.save();
+
+    console.log(`   ✅ New device registered: ${deviceInfo.deviceName}`);
+
+    // Send email notification for new device
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: 'New Device Added to Your Account',
+        html: `
+          <h2>New Device Registered</h2>
+          <p>Hi ${user.name},</p>
+          <p>A new device was added to your TodoDJS account:</p>
+          <ul>
+            <li><strong>Device:</strong> ${deviceInfo.deviceName}</li>
+            <li><strong>Type:</strong> ${deviceInfo.deviceType}</li>
+            <li><strong>IP Address:</strong> ${ipAddress}</li>
+            <li><strong>Time:</strong> ${new Date().toLocaleString()}</li>
+          </ul>
+          <p>If this wasn't you, please sign out all devices immediately from your account settings.</p>
+          <p>You can manage your devices at any time from your dashboard.</p>
+        `
+      });
+    } catch (emailError) {
+      console.error('Failed to send new device email:', emailError);
+      // Don't block the request if email fails
+    }
+
     next();
   } catch (error) {
     res.status(500).json({

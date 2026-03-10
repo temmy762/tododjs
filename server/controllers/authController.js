@@ -157,27 +157,6 @@ export const login = async (req, res) => {
       });
     }
 
-    // Device registration enforcement (skip for admins)
-    const deviceId = req.body.deviceId || req.headers['x-device-id'] || null;
-    const hasActiveSubscription = user.subscription?.status === 'active' && user.subscription?.plan !== 'free';
-    const maxDevices = user.maxDevices || 2;
-
-    if (hasActiveSubscription && deviceId && user.role !== 'admin') {
-      const isRegistered = user.registeredDevices.some(d => d.deviceId === deviceId);
-
-      if (!isRegistered && user.registeredDevices.length >= maxDevices) {
-        return res.status(403).json({
-          success: false,
-          message: `This account is already registered on ${maxDevices} devices. New devices cannot be added. Contact support if you need to reset your devices.`,
-          code: 'DEVICE_LIMIT_REACHED',
-          registeredDevices: user.registeredDevices.map(d => ({
-            deviceInfo: d.deviceInfo,
-            registeredAt: d.registeredAt
-          }))
-        });
-      }
-    }
-
     // Update last login
     user.lastLogin = new Date();
 
