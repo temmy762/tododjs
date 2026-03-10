@@ -575,7 +575,7 @@ export default function AdminMashups() {
                         type="text"
                         value={uploadForm.title}
                         onChange={(e) => setUploadForm({ ...uploadForm, title: e.target.value })}
-                        placeholder={audioFile.name.replace(/\.[^/.]+$/, '')}
+                        placeholder={audioFiles[0]?.name?.replace(/\.[^/.]+$/, '') || ''}
                         className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs"
                       />
                     </div>
