@@ -25,6 +25,7 @@ export default function AdminMashups() {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [showUploadPanel, setShowUploadPanel] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(false);
   const audioRef = useRef(null);
   const coverRef = useRef(null);
 
@@ -370,13 +371,13 @@ export default function AdminMashups() {
             </div>
           </div>
           <button
-            onClick={() => setShowUploadPanel(true)}
+            onClick={() => { setShowUploadPanel(true); setIsMinimized(false); }}
             className="px-4 py-2 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white text-sm transition-colors"
           >
             Start Upload
           </button>
         </div>
-      ) : (
+      ) : isMinimized ? null : (
         <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
           {/* Header */}
           <div className="flex items-center justify-between mb-5">
@@ -389,14 +390,25 @@ export default function AdminMashups() {
                 <p className="text-xs text-brand-text-tertiary">We'll detect metadata automatically</p>
               </div>
             </div>
-            {uploadState.status === 'idle' && (
-              <button
-                onClick={() => { setShowUploadPanel(false); resetUpload(); }}
-                className="text-brand-text-tertiary hover:text-white transition-colors"
-              >
-                <X size={20} />
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {uploadState.status === 'uploading' && (
+                <button
+                  onClick={() => setIsMinimized(true)}
+                  className="p-2 rounded-lg text-brand-text-tertiary hover:text-white hover:bg-white/10 transition-colors"
+                  title="Minimize (upload continues in background)"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 14h6v6H4z"/><path d="M4 4h6v6H4z"/><path d="M14 4h6v6h-6z"/><path d="M14 14h6v6h-6z"/></svg>
+                </button>
+              )}
+              {uploadState.status === 'idle' && (
+                <button
+                  onClick={() => { setShowUploadPanel(false); resetUpload(); }}
+                  className="text-brand-text-tertiary hover:text-white transition-colors"
+                >
+                  <X size={20} />
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Error State */}
@@ -470,19 +482,24 @@ export default function AdminMashups() {
                   style={{ width: `${uploadState.progress}%` }}
                 />
               </div>
-              <div className="flex items-center gap-4 mt-3">
-                <div className="flex items-center gap-1.5 text-xs text-brand-text-tertiary">
-                  <Loader size={12} className="animate-spin" />
-                  Uploading...
+              <div className="flex items-center justify-between mt-3">
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5 text-xs text-brand-text-tertiary">
+                    <Loader size={12} className="animate-spin" />
+                    Uploading...
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-brand-text-tertiary/50">
+                    <Sparkles size={12} />
+                    AI Detection
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-brand-text-tertiary/50">
+                    <Image size={12} />
+                    Cover Art
+                  </div>
                 </div>
-                <div className="flex items-center gap-1.5 text-xs text-brand-text-tertiary/50">
-                  <Sparkles size={12} />
-                  AI Detection
-                </div>
-                <div className="flex items-center gap-1.5 text-xs text-brand-text-tertiary/50">
-                  <Image size={12} />
-                  Cover Art
-                </div>
+                <p className="text-xs text-brand-text-tertiary">
+                  {batchProgress.current} of {batchProgress.total}
+                </p>
               </div>
             </div>
           )}
@@ -828,6 +845,34 @@ export default function AdminMashups() {
           </div>
         )}
       </div>
+      {/* Minimized Upload Widget */}
+      {isMinimized && uploadState.status === 'uploading' && (
+        <div 
+          className="fixed bottom-4 right-4 z-50 p-4 rounded-xl bg-dark-elevated border border-accent/30 shadow-lg shadow-black/50 cursor-pointer hover:border-accent/50 transition-colors"
+          onClick={() => setIsMinimized(false)}
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
+              <Loader size={20} className="text-accent animate-spin" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-white">Uploading...</p>
+              <p className="text-xs text-brand-text-tertiary">
+                {batchProgress.current} of {batchProgress.total} • {uploadState.progress}%
+              </p>
+            </div>
+            <div className="ml-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-brand-text-tertiary"><path d="m18 15-6-6-6 6"/></svg>
+            </div>
+          </div>
+          <div className="mt-3 h-1.5 bg-white/10 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-accent rounded-full transition-all duration-200"
+              style={{ width: `${uploadState.progress}%` }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
