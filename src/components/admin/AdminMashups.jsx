@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   Music, Upload, Trash2, Edit3, Save, X, Link, Eye, EyeOff,
-  Loader, CheckCircle, AlertCircle, Youtube, FileAudio
+  Loader, CheckCircle, AlertCircle, Youtube, FileAudio,
+  Image, Sparkles, FileUp, RotateCcw, Check, AlertTriangle
 } from 'lucide-react';
 import GenericCoverArt from '../GenericCoverArt';
 import API_URL from '../../config/api';
@@ -12,11 +13,18 @@ export default function AdminMashups() {
   const [mashups, setMashups] = useState([]);
   const [settings, setSettings] = useState({ videoUrl: '', pageTitle: 'Mash Ups', pageDescription: '' });
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
+  const [uploadState, setUploadState] = useState({
+    status: 'idle', // idle, uploading, processing, success, error
+    progress: 0,
+    step: '',
+    extractedData: null,
+    error: null
+  });
   const [savingSettings, setSavingSettings] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [showUploadPanel, setShowUploadPanel] = useState(false);
   const audioRef = useRef(null);
   const coverRef = useRef(null);
 
@@ -85,15 +93,25 @@ export default function AdminMashups() {
     }
   };
 
+  const resetUpload = () => {
+    setUploadState({ status: 'idle', progress: 0, step: '', extractedData: null, error: null });
+    setUploadForm({ title: '', artist: '', genre: 'Mashup', bpm: '', tonality: '' });
+    setAudioFile(null);
+    setCoverFile(null);
+    if (audioRef.current) audioRef.current.value = '';
+    if (coverRef.current) coverRef.current.value = '';
+  };
+
   const handleUpload = async (e) => {
     e.preventDefault();
     if (!audioFile) {
-      setMessage({ type: 'error', text: 'Please select an audio file' });
+      setUploadState({ ...uploadState, status: 'error', error: 'Please select an audio file' });
       return;
     }
 
+    setUploadState({ status: 'uploading', progress: 0, step: 'Uploading audio file...', error: null });
+
     try {
-      setUploading(true);
       const token = localStorage.getItem('token');
       const formData = new FormData();
       formData.append('audio', audioFile);
@@ -104,29 +122,52 @@ export default function AdminMashups() {
       if (uploadForm.bpm) formData.append('bpm', uploadForm.bpm);
       if (uploadForm.tonality) formData.append('tonality', uploadForm.tonality);
 
+      // Simulate progress for better UX (actual fetch doesn't support progress easily)
+      const progressInterval = setInterval(() => {
+        setUploadState(prev => ({
+          ...prev,
+          progress: Math.min(prev.progress + 5, 90)
+        }));
+      }, 200);
+
       const res = await fetch(`${API}/mashups`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${token}` },
         body: formData
       });
+
+      clearInterval(progressInterval);
+
       const data = await res.json();
 
       if (data.success) {
-        setMessage({ type: 'success', text: 'Mashup uploaded successfully!' });
-        setUploadForm({ title: '', artist: '', genre: 'Mashup', bpm: '', tonality: '' });
-        setAudioFile(null);
-        setCoverFile(null);
-        if (audioRef.current) audioRef.current.value = '';
-        if (coverRef.current) coverRef.current.value = '';
+        setUploadState({
+          status: 'success',
+          progress: 100,
+          step: 'Upload complete!',
+          extractedData: data.data,
+          error: null
+        });
         fetchMashups();
+        setTimeout(() => {
+          setShowUploadPanel(false);
+          resetUpload();
+        }, 2000);
       } else {
-        setMessage({ type: 'error', text: data.message });
+        setUploadState({
+          status: 'error',
+          progress: 0,
+          step: '',
+          error: data.message || 'Upload failed'
+        });
       }
     } catch (err) {
-      setMessage({ type: 'error', text: 'Upload failed: ' + err.message });
-    } finally {
-      setUploading(false);
-      setTimeout(() => setMessage({ type: '', text: '' }), 4000);
+      setUploadState({
+        status: 'error',
+        progress: 0,
+        step: '',
+        error: err.message || 'Network error. Please try again.'
+      });
     }
   };
 
@@ -287,106 +328,305 @@ export default function AdminMashups() {
       </div>
 
       {/* ── Upload New Mashup ── */}
-      <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
-        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <Upload className="w-4 h-4 text-accent" />
-          Upload New Mashup
-        </h3>
-        <form onSubmit={handleUpload} className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-brand-text-secondary mb-1.5">Title</label>
-              <input
-                type="text"
-                value={uploadForm.title}
-                onChange={(e) => setUploadForm({ ...uploadForm, title: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm"
-                placeholder="Track title (auto-fills from filename)"
-              />
+      {!showUploadPanel ? (
+        <div className="flex items-center justify-between p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+              <Upload className="w-5 h-5 text-accent" />
             </div>
             <div>
-              <label className="block text-xs font-medium text-brand-text-secondary mb-1.5">Artist</label>
-              <input
-                type="text"
-                value={uploadForm.artist}
-                onChange={(e) => setUploadForm({ ...uploadForm, artist: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm"
-                placeholder="Artist name"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-brand-text-secondary mb-1.5">Genre</label>
-              <input
-                type="text"
-                value={uploadForm.genre}
-                onChange={(e) => setUploadForm({ ...uploadForm, genre: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-brand-text-secondary mb-1.5">BPM</label>
-              <input
-                type="number"
-                value={uploadForm.bpm}
-                onChange={(e) => setUploadForm({ ...uploadForm, bpm: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm"
-                placeholder="120"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-brand-text-secondary mb-1.5">Tonality</label>
-              <input
-                type="text"
-                value={uploadForm.tonality}
-                onChange={(e) => setUploadForm({ ...uploadForm, tonality: e.target.value })}
-                className="w-full px-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm"
-                placeholder="e.g. 8A"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-medium text-brand-text-secondary mb-1.5">Audio File *</label>
-              <div className="relative">
-                <input
-                  ref={audioRef}
-                  type="file"
-                  accept=".mp3,.wav,.flac"
-                  multiple
-                  onChange={(e) => setAudioFile(e.target.files[0])}
-                  className="w-full text-sm text-brand-text-tertiary file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-accent/20 file:text-accent hover:file:bg-accent/30 cursor-pointer"
-                />
-              </div>
-              {audioFile && (
-                <p className="text-[10px] text-brand-text-tertiary mt-1 flex items-center gap-1">
-                  <FileAudio size={10} />
-                  {audioFile.name} ({(audioFile.size / 1024 / 1024).toFixed(1)}MB)
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-brand-text-secondary mb-1.5">Cover Art (optional)</label>
-              <input
-                ref={coverRef}
-                type="file"
-                accept="image/*"
-                onChange={(e) => setCoverFile(e.target.files[0])}
-                className="w-full text-sm text-brand-text-tertiary file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-white/10 file:text-white hover:file:bg-white/20 cursor-pointer"
-              />
+              <h3 className="text-sm font-semibold text-white">Upload New Mashup</h3>
+              <p className="text-xs text-brand-text-tertiary">Audio file with auto-extraction</p>
             </div>
           </div>
           <button
-            type="submit"
-            disabled={uploading || !audioFile}
-            className="px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white text-sm transition-colors disabled:opacity-50 flex items-center gap-2"
+            onClick={() => setShowUploadPanel(true)}
+            className="px-4 py-2 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white text-sm transition-colors"
           >
-            {uploading ? <Loader size={14} className="animate-spin" /> : <Upload size={14} />}
-            {uploading ? 'Uploading...' : 'Upload Mashup'}
+            Start Upload
           </button>
-        </form>
-      </div>
+        </div>
+      ) : (
+        <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                <Sparkles className="w-5 h-5 text-accent" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-white">Auto-Extract Upload</h3>
+                <p className="text-xs text-brand-text-tertiary">We'll detect metadata automatically</p>
+              </div>
+            </div>
+            {uploadState.status === 'idle' && (
+              <button
+                onClick={() => { setShowUploadPanel(false); resetUpload(); }}
+                className="text-brand-text-tertiary hover:text-white transition-colors"
+              >
+                <X size={20} />
+              </button>
+            )}
+          </div>
+
+          {/* Error State */}
+          {uploadState.status === 'error' && (
+            <div className="mb-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-red-400">Upload Failed</p>
+                  <p className="text-xs text-red-300/80 mt-1">{uploadState.error}</p>
+                  <button
+                    onClick={() => setUploadState({ ...uploadState, status: 'idle', error: null })}
+                    className="mt-3 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 rounded text-xs font-medium text-red-400 transition-colors"
+                  >
+                    Try Again
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Success State */}
+          {uploadState.status === 'success' && (
+            <div className="mb-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
+                  <Check className="w-5 h-5 text-green-400" />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-green-400">Upload Complete!</p>
+                  <p className="text-xs text-green-300/80 mt-0.5">
+                    {uploadState.extractedData?.title} by {uploadState.extractedData?.artist}
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    {uploadState.extractedData?.genre && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-green-500/20 text-green-400">
+                        {uploadState.extractedData.genre}
+                      </span>
+                    )}
+                    {uploadState.extractedData?.bpm > 0 && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-green-500/20 text-green-400">
+                        {uploadState.extractedData.bpm} BPM
+                      </span>
+                    )}
+                    {uploadState.extractedData?.tonality && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-green-500/20 text-green-400">
+                        {uploadState.extractedData.tonality}
+                      </span>
+                    )}
+                    {uploadState.extractedData?.coverArt && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-green-500/20 text-green-400 flex items-center gap-1">
+                        <Image size={10} /> Cover
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Uploading / Processing State */}
+          {(uploadState.status === 'uploading') && (
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm text-white font-medium">{uploadState.step}</span>
+                <span className="text-xs text-brand-text-tertiary">{uploadState.progress}%</span>
+              </div>
+              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-accent rounded-full transition-all duration-200"
+                  style={{ width: `${uploadState.progress}%` }}
+                />
+              </div>
+              <div className="flex items-center gap-4 mt-3">
+                <div className="flex items-center gap-1.5 text-xs text-brand-text-tertiary">
+                  <Loader size={12} className="animate-spin" />
+                  Uploading...
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-brand-text-tertiary/50">
+                  <Sparkles size={12} />
+                  AI Detection
+                </div>
+                <div className="flex items-center gap-1.5 text-xs text-brand-text-tertiary/50">
+                  <Image size={12} />
+                  Cover Art
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Upload Form */}
+          {uploadState.status === 'idle' && (
+            <form onSubmit={handleUpload} className="space-y-4">
+              {/* File Drop Zone */}
+              <div className="space-y-3">
+                <label className="block text-xs font-medium text-brand-text-secondary">
+                  Audio File <span className="text-red-400">*</span>
+                </label>
+                <div
+                  className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
+                    audioFile ? 'border-accent bg-accent/5' : 'border-white/20 hover:border-white/40 bg-white/[0.02]'
+                  }`}
+                >
+                  <input
+                    ref={audioRef}
+                    type="file"
+                    accept=".mp3,.wav,.flac,.m4a,.aac"
+                    onChange={(e) => setAudioFile(e.target.files[0])}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  />
+                  {audioFile ? (
+                    <div className="flex items-center justify-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
+                        <FileAudio className="w-5 h-5 text-accent" />
+                      </div>
+                      <div className="text-left">
+                        <p className="text-sm font-medium text-white">{audioFile.name}</p>
+                        <p className="text-xs text-brand-text-tertiary">
+                          {(audioFile.size / 1024 / 1024).toFixed(2)} MB
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); setAudioFile(null); if (audioRef.current) audioRef.current.value = ''; }}
+                        className="ml-2 p-1.5 rounded-full hover:bg-white/10 text-brand-text-tertiary hover:text-white transition-colors"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="py-2">
+                      <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-3">
+                        <FileUp className="w-6 h-6 text-brand-text-tertiary" />
+                      </div>
+                      <p className="text-sm font-medium text-white mb-1">Drop audio file or click to browse</p>
+                      <p className="text-xs text-brand-text-tertiary">MP3, WAV, FLAC up to 50MB</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Auto-detected Info */}
+              {audioFile && (
+                <div className="p-4 rounded-lg bg-white/[0.03] border border-white/10">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles size={14} className="text-accent" />
+                    <span className="text-xs font-medium text-white">Auto-Detected Metadata</span>
+                    <span className="text-[10px] text-brand-text-tertiary px-1.5 py-0.5 rounded-full bg-white/10">
+                      AI Powered
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] text-brand-text-tertiary mb-1">Title</label>
+                      <input
+                        type="text"
+                        value={uploadForm.title}
+                        onChange={(e) => setUploadForm({ ...uploadForm, title: e.target.value })}
+                        placeholder={audioFile.name.replace(/\.[^/.]+$/, '')}
+                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-brand-text-tertiary mb-1">Artist</label>
+                      <input
+                        type="text"
+                        value={uploadForm.artist}
+                        onChange={(e) => setUploadForm({ ...uploadForm, artist: e.target.value })}
+                        placeholder="Will auto-detect"
+                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Optional Cover Art Override */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-brand-text-secondary">Cover Art (Optional)</label>
+                  <span className="text-[10px] text-brand-text-tertiary">Auto-extracted from audio</span>
+                </div>
+                <input
+                  ref={coverRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setCoverFile(e.target.files[0])}
+                  className="w-full text-sm text-brand-text-tertiary file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-white/10 file:text-white hover:file:bg-white/20 cursor-pointer"
+                />
+                {coverFile && (
+                  <p className="text-[10px] text-accent flex items-center gap-1">
+                    <Check size={10} /> Override selected: {coverFile.name}
+                  </p>
+                )}
+              </div>
+
+              {/* Advanced Options Toggle */}
+              <details className="group">
+                <summary className="flex items-center gap-2 text-xs text-brand-text-tertiary cursor-pointer hover:text-white transition-colors">
+                  <span>Advanced Options</span>
+                  <span className="group-open:rotate-180 transition-transform">▼</span>
+                </summary>
+                <div className="mt-3 grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-brand-text-tertiary mb-1">Genre</label>
+                    <input
+                      type="text"
+                      value={uploadForm.genre}
+                      onChange={(e) => setUploadForm({ ...uploadForm, genre: e.target.value })}
+                      placeholder="Auto"
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-brand-text-tertiary mb-1">BPM</label>
+                    <input
+                      type="number"
+                      value={uploadForm.bpm}
+                      onChange={(e) => setUploadForm({ ...uploadForm, bpm: e.target.value })}
+                      placeholder="Auto"
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-brand-text-tertiary mb-1">Tonality</label>
+                    <input
+                      type="text"
+                      value={uploadForm.tonality}
+                      onChange={(e) => setUploadForm({ ...uploadForm, tonality: e.target.value })}
+                      placeholder="Auto"
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs"
+                    />
+                  </div>
+                </div>
+              </details>
+
+              {/* Submit Button */}
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={!audioFile}
+                  className="flex-1 px-5 py-3 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-medium text-white text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  <Sparkles size={16} />
+                  Upload with Auto-Extraction
+                </button>
+                <button
+                  type="button"
+                  onClick={resetUpload}
+                  disabled={!audioFile}
+                  className="px-4 py-3 bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-lg text-brand-text-tertiary hover:text-white transition-colors"
+                  title="Reset"
+                >
+                  <RotateCcw size={16} />
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
 
       {/* ── Mashup List ── */}
       <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
