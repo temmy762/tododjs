@@ -4,6 +4,7 @@ import { getSignedDownloadUrl, uploadToWasabi, deleteFromWasabi } from '../confi
 import { resolveSignedUrls } from '../utils/signedUrls.js';
 import { detectGenreWithAI } from '../services/openai.js';
 import { detectTonality } from '../services/tonalityDetection.js';
+import { parseBuffer } from 'music-metadata';
 
 // @desc    Get all mashups (public)
 // @route   GET /api/mashups
@@ -159,6 +160,24 @@ export const createMashup = async (req, res) => {
       const coverUpload = await uploadToWasabi(coverFile.buffer, coverKey, coverFile.mimetype);
       mashupData.coverArt = coverUpload.location || coverUpload.Location;
       mashupData.coverArtKey = coverKey;
+    }
+
+    // Extract embedded cover art from audio if no cover art uploaded
+    if (!req.files.coverArt || !req.files.coverArt[0]) {
+      try {
+        const musicMetadata = await parseBuffer(audioFile.buffer, { mimeType: audioFile.mimetype });
+        const pictures = musicMetadata.common.picture;
+        if (pictures && pictures.length > 0) {
+          const pic = pictures[0];
+          const ext = pic.format === 'image/png' ? '.png' : '.jpg';
+          const coverKey = `mashups/covers/${Date.now()}-extracted${ext}`;
+          const coverUpload = await uploadToWasabi(pic.data, coverKey, pic.format);
+          mashupData.coverArt = coverUpload.location || coverUpload.Location;
+          mashupData.coverArtKey = coverKey;
+        }
+      } catch (err) {
+        console.log('   ⚠ No embedded cover art found or extraction failed');
+      }
     }
 
     const mashup = await Mashup.create(mashupData);
