@@ -1,10 +1,11 @@
 import express from 'express';
 import Collection from '../models/Collection.js';
+import Mashup from '../models/Mashup.js';
 import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
 
-// @desc    Get all processing collections with detailed status
+// @desc    Get all processing collections and recent mashup uploads
 // @route   GET /api/upload-status
 // @access  Private/Admin
 router.get('/', protect, authorize('admin'), async (req, res) => {
@@ -18,12 +19,23 @@ router.get('/', protect, authorize('admin'), async (req, res) => {
       updatedAt: { $gte: new Date(Date.now() - 3600000) } // Last hour
     }).select('name status totalDatePacks totalAlbums totalTracks updatedAt');
 
+    // Get recent mashup uploads (last hour)
+    const recentMashups = await Mashup.find({
+      createdAt: { $gte: new Date(Date.now() - 3600000) }
+    })
+      .select('title artist genre bpm tonality coverArt createdAt uploadedBy')
+      .populate('uploadedBy', 'name email')
+      .sort('-createdAt')
+      .limit(20);
+
     res.json({
       success: true,
       data: {
         processing: processingCollections,
         recentlyCompleted: completedRecent,
-        hasActiveUploads: processingCollections.length > 0
+        recentMashups: recentMashups,
+        hasActiveUploads: processingCollections.length > 0,
+        hasRecentMashups: recentMashups.length > 0
       }
     });
   } catch (error) {

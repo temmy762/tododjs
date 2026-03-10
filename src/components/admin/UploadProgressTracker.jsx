@@ -139,9 +139,11 @@ function CollectionCard({ collection, isExpanded, onToggle }) {
 export default function UploadProgressTracker() {
   const [processing, setProcessing] = useState([]);
   const [recentlyCompleted, setRecentlyCompleted] = useState([]);
+  const [recentMashups, setRecentMashups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expandedId, setExpandedId] = useState(null);
+  const [mashupExpandedId, setMashupExpandedId] = useState(null);
   const [pollInterval, setPollInterval] = useState(5000);
   const [lastFetched, setLastFetched] = useState(null);
 
@@ -162,6 +164,7 @@ export default function UploadProgressTracker() {
       if (data.success) {
         setProcessing(data.data.processing || []);
         setRecentlyCompleted(data.data.recentlyCompleted || []);
+        setRecentMashups(data.data.recentMashups || []);
         setError('');
         setLastFetched(new Date());
 
@@ -190,7 +193,12 @@ export default function UploadProgressTracker() {
     setExpandedId(prev => prev === id ? null : id);
   };
 
+  const toggleMashupExpand = (id) => {
+    setMashupExpandedId(prev => prev === id ? null : id);
+  };
+
   const hasActiveUploads = processing.length > 0;
+  const hasRecentMashups = recentMashups.length > 0;
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -298,6 +306,100 @@ export default function UploadProgressTracker() {
                 isExpanded={expandedId === collection._id}
                 onToggle={() => toggleExpand(collection._id)}
               />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recent Mashup Uploads */}
+      <div className="mt-8">
+        <div className="flex items-center gap-2 mb-4">
+          <Music className="w-4 h-4 text-accent" />
+          <h3 className="text-lg font-semibold text-white">
+            Recent Mashup Uploads
+          </h3>
+          <span className="text-xs text-brand-text-tertiary">(last hour)</span>
+          {hasRecentMashups && (
+            <span className="text-xs bg-accent/20 text-accent px-2 py-0.5 rounded-full font-medium">
+              {recentMashups.length}
+            </span>
+          )}
+        </div>
+
+        {recentMashups.length === 0 ? (
+          <div className="bg-dark-elevated border border-white/10 rounded-xl p-6 text-center">
+            <p className="text-brand-text-tertiary text-sm">No recent mashup uploads</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {recentMashups.map((mashup, idx) => (
+              <div 
+                key={mashup._id || idx} 
+                className="bg-dark-elevated border border-white/10 rounded-xl overflow-hidden transition-all duration-200 hover:border-white/20"
+              >
+                <button
+                  onClick={() => toggleMashupExpand(mashup._id || idx)}
+                  className="w-full p-4 flex items-center justify-between text-left"
+                >
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                      {mashup.coverArt ? (
+                        <img src={mashup.coverArt} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <Music className="w-5 h-5 text-accent" />
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-white font-semibold truncate">{mashup.title}</h3>
+                      <p className="text-brand-text-tertiary text-xs mt-0.5">
+                        {mashup.artist} • {formatDate(mashup.createdAt)} at {formatTime(mashup.createdAt)}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border bg-green-500/20 text-green-400 border-green-500/30">
+                        <CheckCircle className="w-3 h-3" />
+                        Uploaded
+                      </span>
+                      {mashupExpandedId === (mashup._id || idx) ? (
+                        <ChevronUp className="w-4 h-4 text-brand-text-tertiary" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4 text-brand-text-tertiary" />
+                      )}
+                    </div>
+                  </div>
+                </button>
+
+                {mashupExpandedId === (mashup._id || idx) && (
+                  <div className="px-4 pb-4 pt-3 border-t border-white/5">
+                    <div className="grid grid-cols-4 gap-3">
+                      <div className="bg-dark-bg rounded-lg p-3 text-center">
+                        <p className="text-brand-text-tertiary text-xs mb-1">Genre</p>
+                        <p className="text-white font-bold text-sm">{mashup.genre || '-'}</p>
+                      </div>
+                      <div className="bg-dark-bg rounded-lg p-3 text-center">
+                        <p className="text-brand-text-tertiary text-xs mb-1">BPM</p>
+                        <p className="text-white font-bold text-sm">{mashup.bpm || '-'}</p>
+                      </div>
+                      <div className="bg-dark-bg rounded-lg p-3 text-center">
+                        <p className="text-brand-text-tertiary text-xs mb-1">Tonality</p>
+                        <p className="text-white font-bold text-sm">{mashup.tonality || '-'}</p>
+                      </div>
+                      <div className="bg-dark-bg rounded-lg p-3 text-center">
+                        <p className="text-brand-text-tertiary text-xs mb-1">Cover Art</p>
+                        <p className="text-white font-bold text-sm">{mashup.coverArt ? 'Yes' : 'No'}</p>
+                      </div>
+                    </div>
+                    {mashup.uploadedBy && (
+                      <div className="mt-3 flex items-center gap-2 text-xs text-brand-text-tertiary">
+                        <Clock className="w-3 h-3" />
+                        <span>Uploaded by: {mashup.uploadedBy.name || mashup.uploadedBy.email}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             ))}
           </div>
         )}
