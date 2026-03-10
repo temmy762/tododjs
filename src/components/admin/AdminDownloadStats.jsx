@@ -18,9 +18,12 @@ export default function AdminDownloadStats() {
       const response = await fetch(`${API_URL}/downloads/stats?period=${period}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const data = await response.json();
-      if (data.success) {
-        setStats(data.data);
+      if (!response.ok) throw new Error('Failed to fetch statistics');
+      const json = await response.json();
+      if (json.success) {
+        setStats(json.data);
+      } else {
+        throw new Error(json.message || 'Failed to load statistics');
       }
     } catch (error) {
       console.error('Error fetching stats:', error);

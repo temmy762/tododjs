@@ -44,9 +44,9 @@ export const getOverview = async (req, res) => {
       User.countDocuments({ createdAt: { $gte: sixtyDaysAgo, $lt: thirtyDaysAgo } }),
       Download.countDocuments({ createdAt: { $gte: todayStart } }),
       Download.countDocuments({ createdAt: { $gte: yesterdayStart, $lt: todayStart } }),
-      User.countDocuments({ 'subscription.plan': { $in: ['premium', 'pro'] }, 'subscription.status': 'active' }),
-      User.countDocuments({ 'subscription.plan': { $in: ['premium', 'pro'] }, 'subscription.status': 'active', createdAt: { $gte: thirtyDaysAgo } }),
-      User.countDocuments({ 'subscription.plan': { $in: ['premium', 'pro'] }, 'subscription.status': 'active', createdAt: { $gte: sixtyDaysAgo, $lt: thirtyDaysAgo } })
+      User.countDocuments({ 'subscription.planId': { $exists: true }, 'subscription.status': 'active' }),
+      User.countDocuments({ 'subscription.planId': { $exists: true }, 'subscription.status': 'active', createdAt: { $gte: thirtyDaysAgo } }),
+      User.countDocuments({ 'subscription.planId': { $exists: true }, 'subscription.status': 'active', createdAt: { $gte: sixtyDaysAgo, $lt: thirtyDaysAgo } })
     ]);
 
     const pctChange = (current, previous) => {
