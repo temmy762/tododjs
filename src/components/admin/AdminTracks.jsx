@@ -107,46 +107,6 @@ export default function AdminTracks() {
     }
   };
 
-  const handleExport = async () => {
-    try {
-      const res = await fetch(`${API}/tracks?limit=10000`, { headers: authHeaders() });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (!data.success || !data.data) return;
-
-      const allTracks = data.data;
-      const csvHeaders = ['Title', 'Artist', 'Album', 'Genre', 'BPM', 'Tonality', 'Pool', 'Status', 'Created'];
-      const csvRows = allTracks.map(track => [
-        track.title || '',
-        track.artist || '',
-        track.albumId?.name || '',
-        track.genre || '',
-        track.bpm || '',
-        getTonality(track),
-        track.pool || '',
-        track.status || 'published',
-        new Date(track.createdAt).toLocaleDateString()
-      ]);
-
-      const csvContent = [
-        csvHeaders.join(','),
-        ...csvRows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-      ].join('\n');
-
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', `tracks-export-${new Date().toISOString().split('T')[0]}.csv`);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (err) {
-      console.error('Export failed:', err);
-    }
-  };
-
   const resetUpload = () => {
     setUploadState({ status: 'idle', progress: 0, step: '', error: null });
     setAudioFiles([]);
@@ -287,22 +247,13 @@ export default function AdminTracks() {
           <h2 className="text-2xl md:text-3xl font-bold text-white mb-1 md:mb-2">Track Management</h2>
           <p className="text-sm md:text-base text-brand-text-tertiary">Manage all tracks — <span className="text-white font-semibold">{pagination.total}</span> total</p>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3">
-          <button 
-            onClick={handleExport}
-            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white transition-all duration-200 text-sm"
-          >
-            <Download className="w-4 h-4" />
-            <span className="font-medium hidden xs:inline">Export</span>
-          </button>
-          <button 
-            onClick={() => { setShowUploadPanel(true); setIsMinimized(false); }}
-            className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-all duration-200 shadow-lg shadow-accent/30 text-sm"
-          >
-            <Upload className="w-4 h-4" />
-            <span>Upload</span>
-          </button>
-        </div>
+        <button 
+          onClick={() => { setShowUploadPanel(true); setIsMinimized(false); }}
+          className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-all duration-200 shadow-lg shadow-accent/30 text-sm"
+        >
+          <Upload className="w-4 h-4" />
+          <span>Upload</span>
+        </button>
       </div>
 
       {/* Filters & Search */}
