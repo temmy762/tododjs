@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Smartphone, Monitor, Tablet, Trash2, Edit2, LogOut, Loader, AlertTriangle, CheckCircle, X } from 'lucide-react';
+import { Smartphone, Monitor, Tablet, Trash2, Edit2, LogOut, Loader, AlertTriangle, CheckCircle, X, Fingerprint } from 'lucide-react';
 import API_URL from '../config/api';
+import { verifyUserForAction, isPlatformAuthenticatorAvailable } from '../services/passkeyService';
 
 const API = API_URL;
 const getToken = () => localStorage.getItem('token');
@@ -21,10 +22,17 @@ export default function DeviceManagement() {
   const [newDeviceName, setNewDeviceName] = useState('');
   const [showSignOutAll, setShowSignOutAll] = useState(false);
   const [notification, setNotification] = useState(null);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
 
   useEffect(() => {
     fetchDevices();
+    checkBiometricSupport();
   }, []);
+
+  const checkBiometricSupport = async () => {
+    const available = await isPlatformAuthenticatorAvailable();
+    setBiometricAvailable(available);
+  };
 
   const fetchDevices = async () => {
     setLoading(true);
@@ -44,6 +52,13 @@ export default function DeviceManagement() {
   };
 
   const handleRemoveDevice = async (deviceId) => {
+    // Verify user with biometric authentication
+    const verified = await verifyUserForAction('remove this device');
+    if (!verified) {
+      showNotification('Authentication required to remove device', 'error');
+      return;
+    }
+
     setActionLoading(deviceId);
     try {
       const res = await fetch(`${API}/devices/${deviceId}`, {
@@ -94,6 +109,14 @@ export default function DeviceManagement() {
   };
 
   const handleSignOutAll = async () => {
+    // Verify user with biometric authentication
+    const verified = await verifyUserForAction('sign out from all devices');
+    if (!verified) {
+      showNotification('Authentication required to sign out all devices', 'error');
+      setShowSignOutAll(false);
+      return;
+    }
+
     setActionLoading('signout-all');
     try {
       const res = await fetch(`${API}/devices/signout-all`, {
@@ -174,13 +197,20 @@ export default function DeviceManagement() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-white mb-2">Manage Devices</h2>
-        <p className="text-brand-text-tertiary">
-          You're using {devices.length} of {maxDevices} available device{maxDevices !== 1 ? 's' : ''}
-        </p>
+    <div className="p-6">
+      {/* Device Usage Info */}
+      <div className="mb-6 p-4 rounded-lg bg-dark-surface border border-white/10">
+        <div className="flex items-center justify-between">
+          <p className="text-sm text-brand-text-tertiary">
+            You're using <span className="font-semibold text-white">{devices.length}</span> of <span className="font-semibold text-white">{maxDevices}</span> available device{maxDevices !== 1 ? 's' : ''}
+          </p>
+          {biometricAvailable && (
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/30">
+              <Fingerprint className="w-4 h-4 text-green-400" />
+              <span className="text-xs font-semibold text-green-400">Biometric Enabled</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Notification */}

@@ -1,5 +1,6 @@
-import { User, Bell, Download, CreditCard, Shield, Volume2, ChevronRight } from 'lucide-react';
+import { User, Bell, Download, CreditCard, Shield, Volume2, ChevronRight, Smartphone } from 'lucide-react';
 import { useState } from 'react';
+import DeviceManagement from '../components/DeviceManagement';
 
 export default function SettingsPage({ onBack }) {
   const [notifications, setNotifications] = useState({
@@ -153,6 +154,25 @@ export default function SettingsPage({ onBack }) {
                   <div className="w-11 h-6 bg-white/10 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-accent"></div>
                 </label>
               </div>
+            </div>
+          </div>
+
+          {/* Device Management Section */}
+          <div className="rounded-2xl bg-white/[0.02] backdrop-blur-sm border border-white/10 shadow-lg shadow-black/10 overflow-hidden">
+            <div className="p-6 border-b border-white/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
+                  <Smartphone className="w-5 h-5 text-accent" strokeWidth={1.5} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-white">Devices & Security</h2>
+                  <p className="text-xs text-brand-text-tertiary">Manage your registered devices</p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="p-0">
+              <DeviceManagement />
             </div>
           </div>
 
