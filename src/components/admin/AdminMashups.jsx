@@ -36,8 +36,14 @@ export default function AdminMashups() {
     bpm: '',
     tonality: '',
   });
-  const [audioFile, setAudioFile] = useState(null);
+  const [audioFiles, setAudioFiles] = useState([]);
   const [coverFile, setCoverFile] = useState(null);
+  const [batchProgress, setBatchProgress] = useState({
+    current: 0,
+    total: 0,
+    completed: [],
+    failed: []
+  });
 
   useEffect(() => {
     fetchMashups();
@@ -96,78 +102,102 @@ export default function AdminMashups() {
   const resetUpload = () => {
     setUploadState({ status: 'idle', progress: 0, step: '', extractedData: null, error: null });
     setUploadForm({ title: '', artist: '', genre: 'Mashup', bpm: '', tonality: '' });
-    setAudioFile(null);
+    setAudioFiles([]);
     setCoverFile(null);
+    setBatchProgress({ current: 0, total: 0, completed: [], failed: [] });
     if (audioRef.current) audioRef.current.value = '';
     if (coverRef.current) coverRef.current.value = '';
   };
 
   const handleUpload = async (e) => {
     e.preventDefault();
-    if (!audioFile) {
-      setUploadState({ ...uploadState, status: 'error', error: 'Please select an audio file' });
+    if (audioFiles.length === 0) {
+      setUploadState({ ...uploadState, status: 'error', error: 'Please select at least one audio file' });
       return;
     }
 
-    setUploadState({ status: 'uploading', progress: 0, step: 'Uploading audio file...', error: null });
+    const totalFiles = audioFiles.length;
+    setBatchProgress({ current: 0, total: totalFiles, completed: [], failed: [] });
+    setUploadState({ status: 'uploading', progress: 0, step: `Uploading 1 of ${totalFiles}...`, error: null });
 
-    try {
-      const token = localStorage.getItem('token');
-      const formData = new FormData();
-      formData.append('audio', audioFile);
-      if (coverFile) formData.append('coverArt', coverFile);
-      formData.append('title', uploadForm.title || audioFile.name.replace(/\.[^/.]+$/, ''));
-      formData.append('artist', uploadForm.artist || 'Unknown Artist');
-      formData.append('genre', uploadForm.genre);
-      if (uploadForm.bpm) formData.append('bpm', uploadForm.bpm);
-      if (uploadForm.tonality) formData.append('tonality', uploadForm.tonality);
+    const token = localStorage.getItem('token');
+    const completed = [];
+    const failed = [];
 
-      // Simulate progress for better UX (actual fetch doesn't support progress easily)
-      const progressInterval = setInterval(() => {
-        setUploadState(prev => ({
-          ...prev,
-          progress: Math.min(prev.progress + 5, 90)
-        }));
-      }, 200);
+    for (let i = 0; i < audioFiles.length; i++) {
+      const file = audioFiles[i];
+      const currentNum = i + 1;
+      
+      setUploadState(prev => ({
+        ...prev,
+        step: `Uploading ${currentNum} of ${totalFiles}: ${file.name}`,
+        progress: Math.round((i / totalFiles) * 100)
+      }));
 
-      const res = await fetch(`${API}/mashups`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData
-      });
+      try {
+        const formData = new FormData();
+        formData.append('audio', file);
+        if (coverFile) formData.append('coverArt', coverFile);
+        formData.append('title', uploadForm.title || file.name.replace(/\.[^/.]+$/, ''));
+        formData.append('artist', uploadForm.artist || 'Unknown Artist');
+        formData.append('genre', uploadForm.genre);
+        if (uploadForm.bpm) formData.append('bpm', uploadForm.bpm);
+        if (uploadForm.tonality) formData.append('tonality', uploadForm.tonality);
 
-      clearInterval(progressInterval);
-
-      const data = await res.json();
-
-      if (data.success) {
-        setUploadState({
-          status: 'success',
-          progress: 100,
-          step: 'Upload complete!',
-          extractedData: data.data,
-          error: null
+        const res = await fetch(`${API}/mashups`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData
         });
-        fetchMashups();
-        setTimeout(() => {
-          setShowUploadPanel(false);
-          resetUpload();
-        }, 2000);
-      } else {
-        setUploadState({
-          status: 'error',
-          progress: 0,
-          step: '',
-          error: data.message || 'Upload failed'
-        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          completed.push({ name: file.name, data: data.data });
+        } else {
+          failed.push({ name: file.name, error: data.message });
+        }
+      } catch (err) {
+        failed.push({ name: file.name, error: err.message });
       }
-    } catch (err) {
+
+      setBatchProgress({ current: currentNum, total: totalFiles, completed, failed });
+    }
+
+    // All done
+    if (failed.length === 0) {
+      setUploadState({
+        status: 'success',
+        progress: 100,
+        step: `All ${totalFiles} tracks uploaded!`,
+        extractedData: { count: completed.length },
+        error: null
+      });
+    } else if (completed.length === 0) {
       setUploadState({
         status: 'error',
         progress: 0,
         step: '',
-        error: err.message || 'Network error. Please try again.'
+        error: `All ${failed.length} uploads failed`
       });
+    } else {
+      setUploadState({
+        status: 'success',
+        progress: 100,
+        step: `${completed.length} of ${totalFiles} uploaded`,
+        extractedData: { count: completed.length, failed: failed.length },
+        error: null
+      });
+    }
+
+    setBatchProgress({ current: totalFiles, total: totalFiles, completed, failed });
+    fetchMashups();
+
+    if (failed.length === 0) {
+      setTimeout(() => {
+        setShowUploadPanel(false);
+        resetUpload();
+      }, 2000);
     }
   };
 
@@ -460,56 +490,76 @@ export default function AdminMashups() {
           {/* Upload Form */}
           {uploadState.status === 'idle' && (
             <form onSubmit={handleUpload} className="space-y-4">
-              {/* File Drop Zone */}
+              {/* File Drop Zone - Multiple Files */}
               <div className="space-y-3">
                 <label className="block text-xs font-medium text-brand-text-secondary">
-                  Audio File <span className="text-red-400">*</span>
+                  Audio Files <span className="text-red-400">*</span>
+                  <span className="ml-2 text-brand-text-tertiary font-normal">
+                    ({audioFiles.length} selected)
+                  </span>
                 </label>
+                
+                {/* File List */}
+                {audioFiles.length > 0 && (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {audioFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.03] border border-white/10">
+                        <div className="w-8 h-8 rounded-lg bg-accent/20 flex items-center justify-center flex-shrink-0">
+                          <FileAudio className="w-4 h-4 text-accent" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white truncate">{file.name}</p>
+                          <p className="text-xs text-brand-text-tertiary">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newFiles = audioFiles.filter((_, i) => i !== idx);
+                            setAudioFiles(newFiles);
+                          }}
+                          className="p-1.5 rounded-full hover:bg-white/10 text-brand-text-tertiary hover:text-red-400 transition-colors"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Drop Zone */}
                 <div
-                  className={`relative border-2 border-dashed rounded-xl p-6 text-center transition-colors ${
-                    audioFile ? 'border-accent bg-accent/5' : 'border-white/20 hover:border-white/40 bg-white/[0.02]'
+                  className={`relative border-2 border-dashed rounded-xl p-5 text-center transition-colors ${
+                    audioFiles.length > 0 ? 'border-white/20 hover:border-accent/50 bg-white/[0.02]' : 'border-accent/50 bg-accent/5'
                   }`}
                 >
                   <input
                     ref={audioRef}
                     type="file"
                     accept=".mp3,.wav,.flac,.m4a,.aac"
-                    onChange={(e) => setAudioFile(e.target.files[0])}
+                    multiple
+                    onChange={(e) => {
+                      const newFiles = Array.from(e.target.files);
+                      setAudioFiles(prev => [...prev, ...newFiles]);
+                      if (audioRef.current) audioRef.current.value = '';
+                    }}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                   />
-                  {audioFile ? (
-                    <div className="flex items-center justify-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
-                        <FileAudio className="w-5 h-5 text-accent" />
-                      </div>
-                      <div className="text-left">
-                        <p className="text-sm font-medium text-white">{audioFile.name}</p>
-                        <p className="text-xs text-brand-text-tertiary">
-                          {(audioFile.size / 1024 / 1024).toFixed(2)} MB
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={(e) => { e.stopPropagation(); setAudioFile(null); if (audioRef.current) audioRef.current.value = ''; }}
-                        className="ml-2 p-1.5 rounded-full hover:bg-white/10 text-brand-text-tertiary hover:text-white transition-colors"
-                      >
-                        <X size={14} />
-                      </button>
+                  <div className="flex items-center justify-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
+                      <Upload className="w-5 h-5 text-accent" />
                     </div>
-                  ) : (
-                    <div className="py-2">
-                      <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-3">
-                        <FileUp className="w-6 h-6 text-brand-text-tertiary" />
-                      </div>
-                      <p className="text-sm font-medium text-white mb-1">Drop audio file or click to browse</p>
-                      <p className="text-xs text-brand-text-tertiary">MP3, WAV, FLAC up to 50MB</p>
+                    <div className="text-left">
+                      <p className="text-sm font-medium text-white">
+                        {audioFiles.length > 0 ? 'Add more files' : 'Drop audio files or click to browse'}
+                      </p>
+                      <p className="text-xs text-brand-text-tertiary">MP3, WAV, FLAC up to 50MB each</p>
                     </div>
-                  )}
+                  </div>
                 </div>
               </div>
 
               {/* Auto-detected Info */}
-              {audioFile && (
+              {audioFiles.length > 0 && (
                 <div className="p-4 rounded-lg bg-white/[0.03] border border-white/10">
                   <div className="flex items-center gap-2 mb-3">
                     <Sparkles size={14} className="text-accent" />
@@ -607,16 +657,18 @@ export default function AdminMashups() {
               <div className="flex items-center gap-3 pt-2">
                 <button
                   type="submit"
-                  disabled={!audioFile}
+                  disabled={audioFiles.length === 0}
                   className="flex-1 px-5 py-3 bg-accent hover:bg-accent-hover disabled:opacity-50 disabled:cursor-not-allowed rounded-lg font-medium text-white text-sm transition-colors flex items-center justify-center gap-2"
                 >
                   <Sparkles size={16} />
-                  Upload with Auto-Extraction
+                  {audioFiles.length > 1 
+                    ? `Upload ${audioFiles.length} Tracks with Auto-Extraction`
+                    : 'Upload with Auto-Extraction'}
                 </button>
                 <button
                   type="button"
                   onClick={resetUpload}
-                  disabled={!audioFile}
+                  disabled={audioFiles.length === 0}
                   className="px-4 py-3 bg-white/5 hover:bg-white/10 disabled:opacity-30 rounded-lg text-brand-text-tertiary hover:text-white transition-colors"
                   title="Reset"
                 >
