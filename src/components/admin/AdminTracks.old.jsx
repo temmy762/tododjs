@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Upload, Download, Edit, Trash2, Filter, Grid3x3, List, MoreVertical, X, File, Music, CheckCircle, AlertCircle, Loader, FolderArchive, ChevronLeft, ChevronRight, Check, AlertTriangle, Sparkles, Image as ImageIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Upload, Download, Edit, Trash2, Filter, Grid3x3, List, MoreVertical, X, File, Music, CheckCircle, AlertCircle, Loader, FolderArchive, ChevronLeft, ChevronRight } from 'lucide-react';
 import API_URL from '../../config/api';
 
 const API = API_URL;
@@ -16,11 +16,11 @@ export default function AdminTracks() {
   const [viewMode, setViewMode] = useState('list');
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [showUploadPanel, setShowUploadPanel] = useState(false);
-  const [isMinimized, setIsMinimized] = useState(false);
-  const [audioFiles, setAudioFiles] = useState([]);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadFiles, setUploadFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
-  const audioRef = useRef(null);
+  const [uploadProgress, setUploadProgress] = useState({});
+  const fileInputRef = useRef(null);
 
   const [tracks, setTracks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -28,20 +28,6 @@ export default function AdminTracks() {
   const [editingTrack, setEditingTrack] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [saveError, setSaveError] = useState(null);
-
-  const [uploadState, setUploadState] = useState({
-    status: 'idle', // idle, uploading, success, error
-    progress: 0,
-    step: '',
-    error: null
-  });
-
-  const [batchProgress, setBatchProgress] = useState({
-    current: 0,
-    total: 0,
-    completed: [],
-    failed: []
-  });
 
   // Debounce search
   useEffect(() => {
@@ -90,141 +76,26 @@ export default function AdminTracks() {
   const handleEditSave = async (trackId, updates) => {
     try {
       setSaveError(null);
+      console.log('Saving track:', trackId, updates);
       const res = await fetch(`${API}/tracks/${trackId}`, {
         method: 'PUT',
         headers: authHeaders(true),
         body: JSON.stringify(updates)
       });
       const data = await res.json();
+      console.log('Save response:', data);
       if (data.success) {
         setEditingTrack(null);
         fetchTracks(pagination.page);
       } else {
         setSaveError(data.message || 'Failed to save track');
+        console.error('Save failed:', data.message);
       }
     } catch (err) {
       setSaveError(err.message || 'Network error');
+      console.error('Update failed:', err);
     }
   };
-
-  const resetUpload = () => {
-    setUploadState({ status: 'idle', progress: 0, step: '', error: null });
-    setAudioFiles([]);
-    setBatchProgress({ current: 0, total: 0, completed: [], failed: [] });
-    if (audioRef.current) audioRef.current.value = '';
-  };
-
-  const handleAudioSelect = (e) => {
-    const files = Array.from(e.target.files);
-    setAudioFiles(prev => [...prev, ...files]);
-  };
-
-  const removeAudioFile = (index) => {
-    setAudioFiles(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const handleUpload = async (e) => {
-    e.preventDefault();
-    if (audioFiles.length === 0) {
-      setUploadState({ ...uploadState, status: 'error', error: 'Please select at least one audio file' });
-      return;
-    }
-
-    const totalFiles = audioFiles.length;
-    setBatchProgress({ current: 0, total: totalFiles, completed: [], failed: [] });
-    setUploadState({ status: 'uploading', progress: 0, step: `Uploading 1 of ${totalFiles}...`, error: null });
-
-    const token = getToken();
-    const completed = [];
-    const failed = [];
-
-    for (let i = 0; i < audioFiles.length; i++) {
-      const file = audioFiles[i];
-      const currentNum = i + 1;
-      
-      setUploadState(prev => ({
-        ...prev,
-        step: `Uploading ${currentNum} of ${totalFiles}: ${file.name}`,
-        progress: Math.round((i / totalFiles) * 100)
-      }));
-
-      try {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const res = await fetch(`${API}/tracks/upload`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: formData
-        });
-
-        const data = await res.json();
-
-        if (data.success) {
-          completed.push({ name: file.name, data: data.data });
-        } else {
-          failed.push({ name: file.name, error: data.message });
-        }
-      } catch (err) {
-        failed.push({ name: file.name, error: err.message });
-      }
-
-      setBatchProgress({ current: currentNum, total: totalFiles, completed, failed });
-    }
-
-    // All done
-    if (failed.length === 0) {
-      setUploadState({
-        status: 'success',
-        progress: 100,
-        step: `All ${totalFiles} tracks uploaded!`,
-        error: null
-      });
-    } else if (completed.length === 0) {
-      setUploadState({
-        status: 'error',
-        progress: 0,
-        step: '',
-        error: `All ${failed.length} uploads failed`
-      });
-    } else {
-      setUploadState({
-        status: 'success',
-        progress: 100,
-        step: `${completed.length} of ${totalFiles} uploaded`,
-        error: null
-      });
-    }
-
-    setBatchProgress({ current: totalFiles, total: totalFiles, completed, failed });
-    fetchTracks(pagination.page);
-
-    if (failed.length === 0) {
-      setTimeout(() => {
-        setShowUploadPanel(false);
-        resetUpload();
-      }, 2000);
-    }
-  };
-
-  const handleDragOver = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback((e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    const files = Array.from(e.dataTransfer.files).filter(f => 
-      f.type.startsWith('audio/') || f.name.match(/\.(mp3|wav|flac|m4a)$/i)
-    );
-    setAudioFiles(prev => [...prev, ...files]);
-  }, []);
 
   const getTonality = (t) => {
     if (!t?.tonality) return '—';
@@ -234,6 +105,7 @@ export default function AdminTracks() {
   };
 
   const getTonalitySource = (t) => t?.tonality?.source || '';
+
   const getTrackCover = (t) => t.coverArt || t.albumId?.coverArt || '';
 
   const startIdx = (pagination.page - 1) * pagination.limit + 1;
@@ -253,7 +125,7 @@ export default function AdminTracks() {
             <span className="font-medium hidden xs:inline">Export</span>
           </button>
           <button 
-            onClick={() => { setShowUploadPanel(true); setIsMinimized(false); }}
+            onClick={() => setShowUploadModal(true)}
             className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-all duration-200 shadow-lg shadow-accent/30 text-sm"
           >
             <Upload className="w-4 h-4" />
@@ -292,233 +164,6 @@ export default function AdminTracks() {
         </div>
       </div>
 
-      {/* Upload Panel */}
-      {showUploadPanel && !isMinimized && (
-        <div className="mb-6 p-4 md:p-5 rounded-xl bg-dark-elevated border border-white/10">
-          {/* Header */}
-          <div className="flex items-center justify-between mb-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-accent" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-white">Smart Track Upload</h3>
-                <p className="text-xs text-brand-text-tertiary">Auto-extract metadata from audio files</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {uploadState.status === 'uploading' && (
-                <button
-                  onClick={() => setIsMinimized(true)}
-                  className="p-2 rounded-lg text-brand-text-tertiary hover:text-white hover:bg-white/10 transition-colors"
-                  title="Minimize (upload continues in background)"
-                >
-                  <ChevronDown size={20} />
-                </button>
-              )}
-              {uploadState.status === 'idle' && (
-                <button
-                  onClick={() => { setShowUploadPanel(false); resetUpload(); }}
-                  className="text-brand-text-tertiary hover:text-white transition-colors"
-                >
-                  <X size={20} />
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Error State */}
-          {uploadState.status === 'error' && (
-            <div className="mb-4 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-red-400">Upload Failed</p>
-                  <p className="text-xs text-red-300/80 mt-1">{uploadState.error}</p>
-                  <button
-                    onClick={() => setUploadState({ ...uploadState, status: 'idle', error: null })}
-                    className="mt-3 px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 rounded text-xs font-medium text-red-400 transition-colors"
-                  >
-                    Try Again
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Success State */}
-          {uploadState.status === 'success' && (
-            <div className="mb-4 p-4 rounded-lg bg-green-500/10 border border-green-500/20">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-green-500/20 flex items-center justify-center">
-                  <Check className="w-5 h-5 text-green-400" />
-                </div>
-                <div className="flex-1">
-                  <p className="text-sm font-semibold text-green-400">{uploadState.step}</p>
-                  {batchProgress.failed.length > 0 && (
-                    <p className="text-xs text-yellow-400 mt-1">
-                      {batchProgress.failed.length} track(s) failed to upload
-                    </p>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Uploading State */}
-          {uploadState.status === 'uploading' && (
-            <div className="mb-5">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm text-white font-medium">{uploadState.step}</span>
-                <span className="text-xs text-brand-text-tertiary">{uploadState.progress}%</span>
-              </div>
-              <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-accent rounded-full transition-all duration-300"
-                  style={{ width: `${uploadState.progress}%` }}
-                />
-              </div>
-              <div className="mt-3 text-xs text-brand-text-tertiary">
-                {batchProgress.current} of {batchProgress.total} tracks processed
-              </div>
-            </div>
-          )}
-
-          {/* Upload Form */}
-          {uploadState.status === 'idle' && (
-            <form onSubmit={handleUpload}>
-              {/* Drag & Drop Zone */}
-              <div
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => audioRef.current?.click()}
-                className={`mb-4 border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-                  isDragging ? 'border-accent bg-accent/10' : 'border-white/20 hover:border-accent/50 hover:bg-white/5'
-                }`}
-              >
-                <Upload className={`w-10 h-10 mx-auto mb-3 ${isDragging ? 'text-accent' : 'text-brand-text-tertiary'}`} />
-                <p className="text-sm font-medium text-white mb-1">
-                  {isDragging ? 'Drop files here' : 'Click to browse or drag & drop'}
-                </p>
-                <p className="text-xs text-brand-text-tertiary">
-                  MP3, WAV, FLAC, M4A supported
-                </p>
-                <input
-                  ref={audioRef}
-                  type="file"
-                  multiple
-                  accept="audio/*"
-                  onChange={handleAudioSelect}
-                  className="hidden"
-                />
-              </div>
-
-              {/* Selected Files */}
-              {audioFiles.length > 0 && (
-                <div className="mb-4 space-y-2">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-sm font-medium text-white">{audioFiles.length} file(s) selected</p>
-                    <button
-                      type="button"
-                      onClick={() => setAudioFiles([])}
-                      className="text-xs text-brand-text-tertiary hover:text-red-400 transition-colors"
-                    >
-                      Clear all
-                    </button>
-                  </div>
-                  <div className="max-h-40 overflow-y-auto space-y-2">
-                    {audioFiles.map((file, idx) => (
-                      <div key={idx} className="flex items-center gap-3 p-2 rounded-lg bg-white/5 border border-white/10">
-                        <Music className="w-4 h-4 text-accent flex-shrink-0" />
-                        <span className="text-xs text-white flex-1 truncate">{file.name}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeAudioFile(idx)}
-                          className="text-brand-text-tertiary hover:text-red-400 transition-colors"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Upload Button */}
-              <button
-                type="submit"
-                disabled={audioFiles.length === 0}
-                className="w-full px-4 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Upload {audioFiles.length > 0 && `${audioFiles.length} Track${audioFiles.length > 1 ? 's' : ''}`}
-              </button>
-            </form>
-          )}
-
-          {/* Batch Results */}
-          {(uploadState.status === 'success' || uploadState.status === 'error') && batchProgress.total > 0 && (
-            <div className="mt-4 space-y-2">
-              {batchProgress.completed.length > 0 && (
-                <details className="bg-green-500/10 border border-green-500/20 rounded-lg">
-                  <summary className="px-3 py-2 cursor-pointer text-sm font-medium text-green-400 flex items-center justify-between">
-                    <span>✓ {batchProgress.completed.length} Successful</span>
-                    <ChevronDown size={16} />
-                  </summary>
-                  <div className="px-3 pb-2 space-y-1">
-                    {batchProgress.completed.map((item, idx) => (
-                      <div key={idx} className="text-xs text-green-300/80">{item.name}</div>
-                    ))}
-                  </div>
-                </details>
-              )}
-              {batchProgress.failed.length > 0 && (
-                <details className="bg-red-500/10 border border-red-500/20 rounded-lg">
-                  <summary className="px-3 py-2 cursor-pointer text-sm font-medium text-red-400 flex items-center justify-between">
-                    <span>✗ {batchProgress.failed.length} Failed</span>
-                    <ChevronDown size={16} />
-                  </summary>
-                  <div className="px-3 pb-2 space-y-1">
-                    {batchProgress.failed.map((item, idx) => (
-                      <div key={idx} className="text-xs text-red-300/80">
-                        {item.name}: {item.error}
-                      </div>
-                    ))}
-                  </div>
-                </details>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Minimized Upload Widget */}
-      {isMinimized && uploadState.status === 'uploading' && (
-        <div 
-          className="fixed bottom-4 right-4 z-50 p-4 rounded-xl bg-dark-elevated border border-accent/30 shadow-lg shadow-black/50 cursor-pointer hover:border-accent/50 transition-colors"
-          onClick={() => setIsMinimized(false)}
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
-              <Loader size={20} className="text-accent animate-spin" />
-            </div>
-            <div>
-              <p className="text-sm font-medium text-white">Uploading Tracks...</p>
-              <p className="text-xs text-brand-text-tertiary">
-                {batchProgress.current} of {batchProgress.total} • {uploadState.progress}%
-              </p>
-            </div>
-            <ChevronUp className="w-5 h-5 text-brand-text-tertiary ml-2" />
-          </div>
-          <div className="mt-3 h-1.5 bg-white/10 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-accent rounded-full transition-all duration-200"
-              style={{ width: `${uploadState.progress}%` }}
-            />
-          </div>
-        </div>
-      )}
-
       {/* Loading */}
       {loading && (
         <div className="flex items-center justify-center py-16">
@@ -526,9 +171,10 @@ export default function AdminTracks() {
         </div>
       )}
 
-      {/* Tracks List/Grid - keeping existing implementation */}
+      {/* Tracks */}
       {!loading && tracks.length > 0 && (
         <>
+          {/* Desktop Table (list mode) */}
           {viewMode === 'list' && (
           <div className="hidden md:block bg-dark-elevated rounded-xl border border-white/10 overflow-hidden">
             <div className="overflow-x-auto">
@@ -567,7 +213,7 @@ export default function AdminTracks() {
                         {track.albumId?.name || '—'}
                       </td>
                       <td className="px-6 py-4">
-                        <span className="px-2 py-1 rounded-md text-xs font-bold text-white bg-accent/80 border border-accent/40 whitespace-nowrap">
+                        <span className="px-2 py-1 rounded-md text-xs font-bold text-white bg-accent/80 border border-accent/40">
                           {track.genre || '—'}
                         </span>
                       </td>
@@ -609,6 +255,7 @@ export default function AdminTracks() {
           </div>
           )}
 
+          {/* Grid View */}
           {viewMode === 'grid' && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
             {tracks.map((track) => (
@@ -643,7 +290,7 @@ export default function AdminTracks() {
                   <p className="text-xs sm:text-sm font-semibold text-white truncate">{track.title}</p>
                   <p className="text-[10px] sm:text-xs text-brand-text-tertiary truncate mb-2">{track.artist}</p>
                   <div className="flex flex-wrap items-center gap-1">
-                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold text-white bg-accent/80 whitespace-nowrap">{track.genre || '—'}</span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-bold text-white bg-accent/80">{track.genre || '—'}</span>
                     {track.bpm && <span className="text-[9px] text-brand-text-tertiary">{track.bpm}</span>}
                     <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold text-white ${
                       getTonalitySource(track) === 'audio-analysis' ? 'bg-green-600' :
@@ -659,6 +306,7 @@ export default function AdminTracks() {
           </div>
           )}
 
+          {/* Mobile Cards (list mode only on small screens) */}
           {viewMode === 'list' && (
           <div className="md:hidden space-y-3">
             {tracks.map((track) => (
@@ -687,7 +335,7 @@ export default function AdminTracks() {
                       </div>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white bg-accent/80 border border-accent/40 whitespace-nowrap truncate">
+                      <span className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white bg-accent/80 border border-accent/40">
                         {track.genre || '—'}
                       </span>
                       {track.bpm && (
@@ -770,6 +418,25 @@ export default function AdminTracks() {
       {editingTrack && (
         <EditTrackModal track={editingTrack} onClose={() => { setEditingTrack(null); setSaveError(null); }} onSave={handleEditSave} saveError={saveError} />
       )}
+
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <UploadModal
+          onClose={() => {
+            setShowUploadModal(false);
+            setUploadFiles([]);
+            setUploadProgress({});
+            fetchTracks(pagination.page);
+          }}
+          uploadFiles={uploadFiles}
+          setUploadFiles={setUploadFiles}
+          isDragging={isDragging}
+          setIsDragging={setIsDragging}
+          uploadProgress={uploadProgress}
+          setUploadProgress={setUploadProgress}
+          fileInputRef={fileInputRef}
+        />
+      )}
     </div>
   );
 }
@@ -818,6 +485,7 @@ function EditTrackModal({ track, onClose, onSave, saveError }) {
           <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><X className="w-5 h-5 text-white" /></button>
         </div>
 
+        {/* Thumbnail Section */}
         <div className="mb-6">
           <label className="block text-sm font-medium text-brand-text-tertiary mb-2">Cover Art</label>
           <div className="flex items-start gap-4">
@@ -893,6 +561,317 @@ function EditTrackModal({ track, onClose, onSave, saveError }) {
         <div className="flex gap-3 mt-6">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white font-medium transition-colors">Cancel</button>
           <button onClick={() => onSave(track._id, { title, artist, bpm: parseInt(bpm) || undefined, genre })} className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-colors">Save</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function UploadModal({ onClose, uploadFiles, setUploadFiles, isDragging, setIsDragging, uploadProgress, setUploadProgress, fileInputRef }) {
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  }, [setIsDragging]);
+
+  const handleDragLeave = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  }, [setIsDragging]);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const droppedFiles = Array.from(e.dataTransfer.files);
+    handleFiles(droppedFiles);
+  }, [setIsDragging]);
+
+  const handleFileSelect = (e) => {
+    const selectedFiles = Array.from(e.target.files);
+    handleFiles(selectedFiles);
+  };
+
+  const handleFiles = (newFiles) => {
+    const validFiles = newFiles.filter(file => {
+      const isAudio = file.type.startsWith('audio/') || file.name.match(/\.(mp3|wav|flac|m4a)$/i);
+      const isZip = file.type === 'application/zip' || file.name.endsWith('.zip');
+      return isAudio || isZip;
+    });
+
+    const filesWithMetadata = validFiles.map(file => ({
+      file,
+      id: Math.random().toString(36).substr(2, 9),
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      status: 'pending',
+      progress: 0,
+      metadata: null
+    }));
+
+    setUploadFiles(prev => [...prev, ...filesWithMetadata]);
+  };
+
+  const removeFile = (fileId) => {
+    setUploadFiles(prev => prev.filter(f => f.id !== fileId));
+    setUploadProgress(prev => {
+      const newProgress = { ...prev };
+      delete newProgress[fileId];
+      return newProgress;
+    });
+  };
+
+  const uploadFile = async (fileData) => {
+    const formData = new FormData();
+    formData.append('file', fileData.file);
+
+    try {
+      setUploadProgress(prev => ({ ...prev, [fileData.id]: { status: 'uploading', progress: 0 } }));
+
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', (e) => {
+        if (e.lengthComputable) {
+          const percentComplete = (e.loaded / e.total) * 100;
+          setUploadProgress(prev => ({
+            ...prev,
+            [fileData.id]: { status: 'uploading', progress: percentComplete }
+          }));
+        }
+      });
+
+      // When file transfer is done, show 'processing' state for ZIPs
+      xhr.upload.addEventListener('load', () => {
+        const isZip = fileData.name.toLowerCase().endsWith('.zip');
+        if (isZip) {
+          setUploadProgress(prev => ({
+            ...prev,
+            [fileData.id]: { status: 'processing', progress: 100 }
+          }));
+        }
+      });
+
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 200) {
+          try {
+            const response = JSON.parse(xhr.responseText);
+            setUploadProgress(prev => ({
+              ...prev,
+              [fileData.id]: { status: 'complete', progress: 100, data: response }
+            }));
+          } catch {
+            setUploadProgress(prev => ({
+              ...prev,
+              [fileData.id]: { status: 'complete', progress: 100 }
+            }));
+          }
+        } else {
+          let errorMsg = 'Upload failed';
+          try {
+            const errData = JSON.parse(xhr.responseText);
+            errorMsg = errData.message || errorMsg;
+          } catch {}
+          setUploadProgress(prev => ({
+            ...prev,
+            [fileData.id]: { status: 'error', progress: 0, error: errorMsg }
+          }));
+        }
+      });
+
+      xhr.addEventListener('error', () => {
+        setUploadProgress(prev => ({
+          ...prev,
+          [fileData.id]: { status: 'error', progress: 0, error: 'Network error — check server is running' }
+        }));
+      });
+
+      xhr.addEventListener('timeout', () => {
+        setUploadProgress(prev => ({
+          ...prev,
+          [fileData.id]: { status: 'error', progress: 0, error: 'Upload timed out' }
+        }));
+      });
+
+      xhr.open('POST', `${API_URL}/tracks/upload`);
+      xhr.timeout = 0; // No timeout for large uploads
+      const token = localStorage.getItem('token');
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+      xhr.send(formData);
+    } catch (error) {
+      setUploadProgress(prev => ({
+        ...prev,
+        [fileData.id]: { status: 'error', progress: 0, error: error.message }
+      }));
+    }
+  };
+
+  const uploadAll = () => {
+    uploadFiles.forEach(fileData => {
+      if (!uploadProgress[fileData.id] || uploadProgress[fileData.id].status === 'pending') {
+        uploadFile(fileData);
+      }
+    });
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+  };
+
+  const getFileIcon = (fileName) => {
+    if (fileName.endsWith('.zip')) return FolderArchive;
+    return Music;
+  };
+
+  const getStatusIcon = (fileId) => {
+    const status = uploadProgress[fileId]?.status;
+    if (status === 'complete') return <CheckCircle className="w-5 h-5 text-green-400" />;
+    if (status === 'error') return <AlertCircle className="w-5 h-5 text-red-400" />;
+    if (status === 'processing') return <Loader className="w-5 h-5 text-yellow-400 animate-spin" />;
+    if (status === 'uploading') return <Loader className="w-5 h-5 text-accent animate-spin" />;
+    return <File className="w-5 h-5 text-brand-text-tertiary" />;
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="relative w-full sm:max-w-4xl sm:mx-4 max-h-[95vh] sm:max-h-[90vh] bg-dark-surface/95 backdrop-blur-xl rounded-t-2xl sm:rounded-2xl border border-white/10 shadow-2xl shadow-black/40 animate-in zoom-in duration-300 flex flex-col">
+        <button 
+          onClick={onClose}
+          className="absolute top-4 right-4 sm:top-5 sm:right-5 w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-white hover:bg-brand-text-secondary border border-brand-black/10 hover:border-brand-black/20 flex items-center justify-center transition-all duration-150 hover:scale-110 text-black z-10"
+        >
+          <X className="w-4 h-4" strokeWidth={2} />
+        </button>
+
+        <div className="p-4 sm:p-8 border-b border-white/10">
+          <h2 className="text-xl sm:text-2xl font-bold text-white mb-1 sm:mb-2">Upload Tracks</h2>
+          <p className="text-xs sm:text-sm text-brand-text-tertiary">Upload tracks or ZIP files</p>
+        </div>
+
+        <div className="p-4 sm:p-8 flex-1 overflow-y-auto">
+          {/* Drag & Drop Area */}
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+            className={`border-2 border-dashed rounded-xl p-6 sm:p-12 text-center cursor-pointer transition-all duration-200 mb-4 sm:mb-6 ${
+              isDragging
+                ? 'border-accent bg-accent/10'
+                : 'border-white/20 hover:border-accent/50 hover:bg-white/5'
+            }`}
+          >
+            <Upload className={`w-8 h-8 sm:w-12 sm:h-12 mx-auto mb-3 sm:mb-4 ${
+              isDragging ? 'text-accent' : 'text-brand-text-tertiary'
+            }`} />
+            <h3 className="text-base sm:text-lg font-semibold text-white mb-1 sm:mb-2">
+              {isDragging ? 'Drop files here' : 'Tap to browse or drop files'}
+            </h3>
+            <p className="text-xs sm:text-sm text-brand-text-tertiary">
+              MP3, WAV, FLAC, ZIP (max 500MB)
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept="audio/*,.zip"
+              onChange={handleFileSelect}
+              className="hidden"
+            />
+          </div>
+
+          {/* File List */}
+          {uploadFiles.length > 0 && (
+            <div className="space-y-2 sm:space-y-3">
+              <div className="flex items-center justify-between mb-3 sm:mb-4">
+                <h3 className="text-base sm:text-lg font-semibold text-white">
+                  Files ({uploadFiles.length})
+                </h3>
+                <button
+                  onClick={uploadAll}
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-all duration-200 text-xs sm:text-sm"
+                >
+                  Upload All
+                </button>
+              </div>
+
+              {uploadFiles.map((fileData) => {
+                const FileIcon = getFileIcon(fileData.name);
+                const progress = uploadProgress[fileData.id];
+                
+                return (
+                  <div
+                    key={fileData.id}
+                    className="bg-dark-elevated rounded-lg p-3 sm:p-4 border border-white/10 hover:border-white/20 transition-all duration-200"
+                  >
+                    <div className="flex items-center gap-2.5 sm:gap-4">
+                      <div className="flex-shrink-0">
+                        {getStatusIcon(fileData.id)}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1">
+                          <FileIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-accent flex-shrink-0" />
+                          <p className="text-xs sm:text-sm font-medium text-white truncate">
+                            {fileData.name}
+                          </p>
+                        </div>
+                        <p className="text-[10px] sm:text-xs text-brand-text-tertiary">
+                          {formatFileSize(fileData.size)}
+                        </p>
+                        {progress && (progress.status === 'uploading' || progress.status === 'processing') && (
+                          <div className="mt-2">
+                            <div className="w-full bg-dark-surface rounded-full h-1.5">
+                              <div
+                                className={`h-1.5 rounded-full transition-all duration-300 ${
+                                  progress.status === 'processing' ? 'bg-yellow-400 animate-pulse' : 'bg-accent'
+                                }`}
+                                style={{ width: `${progress.progress}%` }}
+                              />
+                            </div>
+                            <p className="text-xs text-brand-text-tertiary mt-1">
+                              {progress.status === 'processing'
+                                ? 'Processing tracks on server...'
+                                : `Uploading ${Math.round(progress.progress)}%`
+                              }
+                            </p>
+                          </div>
+                        )}
+                        {progress && progress.status === 'error' && (
+                          <p className="text-xs text-red-400 mt-1">
+                            {progress.error || 'Upload failed'}
+                          </p>
+                        )}
+                        {progress && progress.status === 'complete' && (
+                          <div className="mt-1">
+                            <p className="text-xs text-green-400">
+                              {progress.data?.data?.trackCount
+                                ? `✓ ${progress.data.data.trackCount} of ${progress.data.data.totalFiles} tracks processed`
+                                : '✓ Upload complete'
+                              }
+                            </p>
+                            {progress.data?.data?.errors?.length > 0 && (
+                              <p className="text-xs text-yellow-400 mt-0.5">
+                                ⚠ {progress.data.data.errors.length} track(s) had errors
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => removeFile(fileData.id)}
+                        className="flex-shrink-0 p-2 hover:bg-dark-surface rounded-lg transition-colors text-brand-text-tertiary hover:text-red-400"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

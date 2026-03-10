@@ -143,7 +143,7 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
               <div className="flex items-center justify-between px-3 pb-3 pt-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   {track.genre && (
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${getGenreColor(track.genre)}`}>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold whitespace-nowrap truncate ${getGenreColor(track.genre)}`}>
                       {track.genre}
                     </span>
                   )}
@@ -265,7 +265,7 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
               </div>
 
               <div className="w-16 flex items-center justify-center">
-                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white bg-accent/80 border border-accent/40">
+                <span className="px-2 py-0.5 rounded-md text-[10px] font-bold text-white bg-accent/80 border border-accent/40 whitespace-nowrap truncate">
                   {track.genre}
                 </span>
               </div>
