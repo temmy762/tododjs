@@ -104,6 +104,43 @@ export default function AdminSubscriptions() {
             </div>
           </div>
 
+          {/* Subscription Usage Breakdown */}
+          <div className="mb-8">
+            <h3 className="text-xl font-bold text-white mb-6">Subscription Usage</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-sm font-semibold text-brand-text-tertiary uppercase tracking-wider">Free Users</h4>
+                  <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+                </div>
+                <div className="text-3xl font-bold text-white mb-2">{stats.freeCount.toLocaleString()}</div>
+                <div className="text-xs text-brand-text-tertiary">
+                  {stats.totalUsers > 0 ? ((stats.freeCount / stats.totalUsers) * 100).toFixed(1) : '0'}% of total users
+                </div>
+              </div>
+              <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-sm font-semibold text-brand-text-tertiary uppercase tracking-wider">Premium Users</h4>
+                  <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                </div>
+                <div className="text-3xl font-bold text-white mb-2">{stats.premiumCount.toLocaleString()}</div>
+                <div className="text-xs text-brand-text-tertiary">
+                  {stats.totalUsers > 0 ? ((stats.premiumCount / stats.totalUsers) * 100).toFixed(1) : '0'}% of total users
+                </div>
+              </div>
+              <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-sm font-semibold text-brand-text-tertiary uppercase tracking-wider">Pro Users</h4>
+                  <div className="w-3 h-3 rounded-full bg-orange-500"></div>
+                </div>
+                <div className="text-3xl font-bold text-white mb-2">{stats.proCount.toLocaleString()}</div>
+                <div className="text-xs text-brand-text-tertiary">
+                  {stats.totalUsers > 0 ? ((stats.proCount / stats.totalUsers) * 100).toFixed(1) : '0'}% of total users
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Subscription Plans */}
           <div>
             <div className="flex items-center justify-between mb-6">

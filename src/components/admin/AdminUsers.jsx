@@ -172,6 +172,7 @@ export default function AdminUsers() {
               <thead>
                 <tr className="border-b border-white/10 bg-dark-surface">
                   <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">Member</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">Phone</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">Role / Plan</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">Joined</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">Last Login</th>
@@ -195,6 +196,9 @@ export default function AdminUsers() {
                             <div className="text-sm text-brand-text-tertiary">{user.email}</div>
                           </div>
                         </div>
+                      </td>
+                      <td className="px-6 py-4 text-sm text-brand-text-tertiary">
+                        {user.phoneNumber || '—'}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
