@@ -159,22 +159,29 @@ export const verifyUserForAction = async (action = 'this action') => {
     // If no credential exists, register one first
     if (!credentialId) {
       try {
+        console.log('Setting up biometric authentication...');
         const userId = 'user_' + Date.now();
         const credential = await registerPasskey(userId, 'TodoDJS User', 'user@tododjs.com');
         credentialId = credential.credentialId;
         localStorage.setItem('tododjs_passkey_id', credentialId);
+        console.log('Biometric authentication setup successful');
       } catch (regError) {
-        console.warn('Failed to register passkey:', regError);
-        // Fall back to confirmation dialog
-        return window.confirm(
-          `Confirm ${action}\n\nBiometric setup failed. Click OK to confirm this action.`
+        console.warn('Biometric setup not available:', regError.message);
+        // Fall back to confirmation dialog with clear messaging
+        const confirmed = window.confirm(
+          `⚠️ Biometric Authentication Unavailable\n\n` +
+          `Your device doesn't support biometric authentication or it's not set up.\n\n` +
+          `To ${action}, click OK to confirm.`
         );
+        return confirmed;
       }
     }
 
     // Now authenticate with the registered credential
     try {
+      console.log('Requesting biometric authentication...');
       await authenticateWithPasskey(credentialId);
+      console.log('Biometric authentication successful');
       return true;
     } catch (authError) {
       if (authError.name === 'NotAllowedError' || authError.message.includes('cancelled')) {
@@ -183,12 +190,17 @@ export const verifyUserForAction = async (action = 'this action') => {
         return false;
       }
       
-      // Credential might be invalid, try re-registering
+      // Credential might be invalid, clear it for next time
       localStorage.removeItem('tododjs_passkey_id');
-      console.warn('Biometric auth failed, falling back to confirmation:', authError);
-      return window.confirm(
-        `Confirm ${action}\n\nBiometric authentication failed. Click OK to confirm this action.`
+      console.warn('Biometric authentication failed:', authError.message);
+      
+      // Fall back to confirmation dialog
+      const confirmed = window.confirm(
+        `⚠️ Biometric Authentication Failed\n\n` +
+        `Unable to verify with biometrics.\n\n` +
+        `To ${action}, click OK to confirm.`
       );
+      return confirmed;
     }
   } catch (error) {
     console.error('User verification failed:', error);
