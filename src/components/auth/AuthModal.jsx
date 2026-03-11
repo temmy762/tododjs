@@ -16,8 +16,18 @@ function getDeviceId() {
 }
 
 export default function AuthModal({ onClose, onSuccess }) {
-  const { t, ready } = useTranslation();
+  const { t, ready, i18n: i18nInstance } = useTranslation();
   const [mode, setMode] = useState('login'); // 'login' or 'register'
+  
+  // Safe translation function with fallbacks
+  const safeT = (key, fallback = '') => {
+    try {
+      return t(key) || fallback;
+    } catch (error) {
+      console.error('Translation error:', error);
+      return fallback;
+    }
+  };
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -40,7 +50,7 @@ export default function AuthModal({ onClose, onSuccess }) {
     try {
       if (mode === 'register') {
         if (formData.password !== formData.confirmPassword) {
-          setError(t('messages.passwordMismatch') || 'Passwords do not match');
+          setError(safeT('messages.passwordMismatch', 'Passwords do not match'));
           setLoading(false);
           return;
         }
@@ -79,7 +89,7 @@ export default function AuthModal({ onClose, onSuccess }) {
           }
           onSuccess(data.user);
         } else {
-          setError(data.message || t('messages.signupError'));
+          setError(data.message || safeT('messages.signupError', 'Signup failed'));
         }
       } else {
         console.log('Attempting login with:', formData.email);
@@ -150,7 +160,7 @@ export default function AuthModal({ onClose, onSuccess }) {
       <div className="bg-dark-elevated rounded-lg max-w-md w-full p-6 my-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold">
-            {mode === 'login' ? t('auth.welcomeBack') : t('auth.createAccount')}
+            {mode === 'login' ? safeT('auth.welcomeBack', 'Welcome Back') : safeT('auth.createAccount', 'Create Account')}
           </h2>
           <button onClick={onClose} className="text-brand-text-tertiary hover:text-white">
             <X size={24} />
@@ -168,7 +178,7 @@ export default function AuthModal({ onClose, onSuccess }) {
           {mode === 'register' && (
             <>
               <div>
-                <label className="block text-sm font-medium mb-2">{t('auth.name')}</label>
+                <label className="block text-sm font-medium mb-2">{safeT('auth.name', 'Name')}</label>
                 <div className="relative">
                   <User size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                   <input
@@ -182,7 +192,7 @@ export default function AuthModal({ onClose, onSuccess }) {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">{t('auth.phoneNumber') || 'Phone Number'}</label>
+                <label className="block text-sm font-medium mb-2">{safeT('auth.phoneNumber', 'Phone Number')}</label>
                 <div className="relative">
                   <Phone size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                   <input
@@ -219,7 +229,7 @@ export default function AuthModal({ onClose, onSuccess }) {
           )}
 
           <div>
-            <label className="block text-sm font-medium mb-2">{t('auth.email')}</label>
+            <label className="block text-sm font-medium mb-2">{safeT('auth.email', 'Email')}</label>
             <div className="relative">
               <Mail size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
               <input
@@ -234,7 +244,7 @@ export default function AuthModal({ onClose, onSuccess }) {
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-2">{t('auth.password')}</label>
+            <label className="block text-sm font-medium mb-2">{safeT('auth.password', 'Password')}</label>
             <div className="relative">
               <Lock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
               <input
@@ -258,7 +268,7 @@ export default function AuthModal({ onClose, onSuccess }) {
 
           {mode === 'register' && (
             <div>
-              <label className="block text-sm font-medium mb-2">{t('auth.confirmPassword') || 'Confirm Password'}</label>
+              <label className="block text-sm font-medium mb-2">{safeT('auth.confirmPassword', 'Confirm Password')}</label>
               <div className="relative">
                 <Lock size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                 <input
@@ -283,14 +293,14 @@ export default function AuthModal({ onClose, onSuccess }) {
                   onChange={(e) => setRememberMe(e.target.checked)}
                   className="w-4 h-4 rounded border-white/10 bg-white/5 text-accent focus:ring-accent focus:ring-offset-0"
                 />
-                <span className="text-sm text-brand-text-tertiary">{t('auth.rememberMe')}</span>
+                <span className="text-sm text-brand-text-tertiary">{safeT('auth.rememberMe', 'Remember me')}</span>
               </label>
               <button
                 type="button"
                 onClick={() => setShowForgotPassword(true)}
                 className="text-sm text-accent hover:text-accent-hover transition-colors"
               >
-                {t('auth.forgotPassword')}
+                {safeT('auth.forgotPassword', 'Forgot password?')}
               </button>
             </div>
           )}
@@ -300,18 +310,18 @@ export default function AuthModal({ onClose, onSuccess }) {
             disabled={loading}
             className="w-full py-3 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? t('common.loading') : mode === 'login' ? t('auth.loginButton') : t('auth.signupButton')}
+            {loading ? safeT('common.loading', 'Loading...') : mode === 'login' ? safeT('auth.loginButton', 'Login') : safeT('auth.signupButton', 'Sign Up')}
           </button>
         </form>
 
         <div className="mt-6 text-center">
           <p className="text-brand-text-tertiary">
-            {mode === 'login' ? t('auth.dontHaveAccount') + ' ' : t('auth.alreadyHaveAccount') + ' '}
+            {mode === 'login' ? safeT('auth.dontHaveAccount', "Don't have an account?") + ' ' : safeT('auth.alreadyHaveAccount', 'Already have an account?') + ' '}
             <button
               onClick={switchMode}
               className="text-accent hover:text-accent-hover font-medium"
             >
-              {mode === 'login' ? t('auth.signupHere') : t('auth.loginHere')}
+              {mode === 'login' ? safeT('auth.signupHere', 'Sign up here') : safeT('auth.loginHere', 'Login here')}
             </button>
           </p>
         </div>
