@@ -79,13 +79,15 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
 
   const subscriptionStatus = user?.subscription?.status;
   const subscriptionPlanId = user?.subscription?.planId;
+  const isAdmin = user?.role === 'admin';
   const isActivePaid = subscriptionStatus === 'active' && !!subscriptionPlanId;
   const planLabel = useMemo(() => {
+    if (isAdmin) return 'Admin';
     if (!isActivePaid) return 'Free';
     return subscriptionPlanId || user?.subscription?.plan || 'Premium';
-  }, [isActivePaid, subscriptionPlanId, user?.subscription?.plan]);
+  }, [isAdmin, isActivePaid, subscriptionPlanId, user?.subscription?.plan]);
 
-  const planColor = isActivePaid ? 'text-yellow-400' : 'text-brand-text-tertiary';
+  const planColor = isAdmin ? 'text-purple-400' : (isActivePaid ? 'text-yellow-400' : 'text-brand-text-tertiary');
 
   const stats = [
     { label: 'DOWNLOADS', value: user?.downloads?.total?.toString() || '0', icon: Download },
