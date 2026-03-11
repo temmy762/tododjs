@@ -82,7 +82,7 @@ const userSchema = new mongoose.Schema({
       deviceType: { type: String, enum: ['mobile', 'desktop', 'tablet', 'unknown'], default: 'unknown' },
       browser: { type: String, default: 'Unknown' },
       os: { type: String, default: 'Unknown' },
-      deviceInfo: { type: String, default: 'Unknown Device' },
+      deviceInfo: { type: mongoose.Schema.Types.Mixed, default: 'Unknown Device' },
       ipAddress: { type: String },
       location: { type: String, default: null },
       lastActive: { type: Date, default: Date.now },
