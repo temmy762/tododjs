@@ -79,7 +79,12 @@ export default function AuthModal({ onClose, onSuccess }) {
           setError(data.message || 'Signup failed');
         }
       } else {
+        console.log('=== LOGIN DEBUG ===');
+        console.log('API_URL:', API_URL);
+        console.log('Full URL:', `${API_URL}/auth/login`);
         console.log('Attempting login with:', formData.email);
+        console.log('Device ID:', getDeviceId());
+        
         const response = await fetch(`${API_URL}/auth/login`, {
           method: 'POST',
           headers: {
@@ -94,8 +99,10 @@ export default function AuthModal({ onClose, onSuccess }) {
         });
 
         console.log('Login response status:', response.status);
+        console.log('Login response headers:', response.headers);
         const data = await response.json();
         console.log('Login response data:', data);
+        console.log('=== END LOGIN DEBUG ===');
 
         if (data.success) {
           localStorage.setItem('token', data.token);
