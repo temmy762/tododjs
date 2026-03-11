@@ -153,12 +153,49 @@ export const verifyUserForAction = async (action = 'this action') => {
       );
     }
 
-    // Attempt biometric authentication
-    await authenticateWithPasskey();
-    return true;
+    // Check if we have a stored credential ID
+    let credentialId = localStorage.getItem('tododjs_passkey_id');
+    
+    // If no credential exists, register one first
+    if (!credentialId) {
+      try {
+        const userId = 'user_' + Date.now();
+        const credential = await registerPasskey(userId, 'TodoDJS User', 'user@tododjs.com');
+        credentialId = credential.credentialId;
+        localStorage.setItem('tododjs_passkey_id', credentialId);
+      } catch (regError) {
+        console.warn('Failed to register passkey:', regError);
+        // Fall back to confirmation dialog
+        return window.confirm(
+          `Confirm ${action}\n\nBiometric setup failed. Click OK to confirm this action.`
+        );
+      }
+    }
+
+    // Now authenticate with the registered credential
+    try {
+      await authenticateWithPasskey(credentialId);
+      return true;
+    } catch (authError) {
+      if (authError.name === 'NotAllowedError' || authError.message.includes('cancelled')) {
+        // User cancelled
+        console.log('User cancelled biometric authentication');
+        return false;
+      }
+      
+      // Credential might be invalid, try re-registering
+      localStorage.removeItem('tododjs_passkey_id');
+      console.warn('Biometric auth failed, falling back to confirmation:', authError);
+      return window.confirm(
+        `Confirm ${action}\n\nBiometric authentication failed. Click OK to confirm this action.`
+      );
+    }
   } catch (error) {
     console.error('User verification failed:', error);
-    return false;
+    // Final fallback to confirmation dialog
+    return window.confirm(
+      `Confirm ${action}\n\nClick OK to confirm this action.`
+    );
   }
 };
 
