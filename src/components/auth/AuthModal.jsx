@@ -112,48 +112,54 @@ export default function AuthModal({ onClose, onSuccess }) {
           }
           onSuccess(data.user);
         } else if (data.deviceLimitReached) {
-          // Device limit reached - ask for confirmation with biometric verification
+          // Device limit reached - require biometric verification
           const deviceName = data.oldestDevice?.deviceName || 'Unknown device';
           
-          // Request biometric verification
-          const verified = await verifyUserForAction('replace your oldest device and continue');
-          
-          if (verified) {
-            // User verified - retry login with confirmation flag
-            setLoading(true);
-            try {
-              const retryResponse = await fetch(`${API_URL}/auth/login`, {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                  email: formData.email,
-                  password: formData.password,
-                  deviceId: getDeviceId(),
-                  confirmDeviceReplacement: true
-                })
-              });
-              
-              const retryData = await retryResponse.json();
-              
-              if (retryData.success) {
-                localStorage.setItem('token', retryData.token);
-                if (rememberMe) {
-                  localStorage.setItem('rememberMe', 'true');
+          try {
+            // Request STRICT biometric verification (no fallback)
+            const verified = await verifyUserForAction('replace your oldest device and continue');
+            
+            if (verified) {
+              // User verified - retry login with confirmation flag
+              setLoading(true);
+              try {
+                const retryResponse = await fetch(`${API_URL}/auth/login`, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  credentials: 'include',
+                  body: JSON.stringify({
+                    email: formData.email,
+                    password: formData.password,
+                    deviceId: getDeviceId(),
+                    confirmDeviceReplacement: true
+                  })
+                });
+                
+                const retryData = await retryResponse.json();
+                
+                if (retryData.success) {
+                  localStorage.setItem('token', retryData.token);
+                  if (rememberMe) {
+                    localStorage.setItem('rememberMe', 'true');
+                  }
+                  onSuccess(retryData.user);
+                } else {
+                  setError(retryData.message || 'Login failed');
                 }
-                onSuccess(retryData.user);
-              } else {
-                setError(retryData.message || 'Login failed');
+              } catch (retryError) {
+                setError('Failed to complete login. Please try again.');
+              } finally {
+                setLoading(false);
               }
-            } catch (retryError) {
-              setError('Failed to complete login. Please try again.');
-            } finally {
-              setLoading(false);
+            } else {
+              // User cancelled biometric verification
+              setError('Device replacement cancelled. Please sign out from another device to continue.');
             }
-          } else {
-            setError('Device replacement cancelled. Please sign out from another device to continue.');
+          } catch (biometricError) {
+            // Biometric verification failed or unavailable
+            setError(biometricError.message || 'Biometric authentication is required to replace devices. Please ensure your device supports biometric authentication.');
           }
           return;
         } else {

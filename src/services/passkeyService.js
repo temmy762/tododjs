@@ -147,10 +147,9 @@ export const verifyUserForAction = async (action = 'this action') => {
     const isAvailable = await isPlatformAuthenticatorAvailable();
     
     if (!isAvailable) {
-      // Fallback: Show confirmation dialog if biometric not available
-      return window.confirm(
-        `Confirm ${action}\n\nBiometric authentication is not available. Click OK to confirm this action.`
-      );
+      // STRICT: No fallback - biometric authentication is required
+      console.error('Biometric authentication not available on this device');
+      throw new Error('Biometric authentication is required for this action. Your device does not support biometric authentication.');
     }
 
     // Check if we have a stored credential ID
@@ -166,14 +165,9 @@ export const verifyUserForAction = async (action = 'this action') => {
         localStorage.setItem('tododjs_passkey_id', credentialId);
         console.log('Biometric authentication setup successful');
       } catch (regError) {
-        console.warn('Biometric setup not available:', regError.message);
-        // Fall back to confirmation dialog with clear messaging
-        const confirmed = window.confirm(
-          `⚠️ Biometric Authentication Unavailable\n\n` +
-          `Your device doesn't support biometric authentication or it's not set up.\n\n` +
-          `To ${action}, click OK to confirm.`
-        );
-        return confirmed;
+        console.error('Biometric setup failed:', regError.message);
+        // STRICT: No fallback - biometric setup is required
+        throw new Error('Failed to set up biometric authentication. Please ensure your device has biometric authentication enabled (Windows Hello, TouchID, FaceID, or fingerprint).');
       }
     }
 
@@ -192,22 +186,15 @@ export const verifyUserForAction = async (action = 'this action') => {
       
       // Credential might be invalid, clear it for next time
       localStorage.removeItem('tododjs_passkey_id');
-      console.warn('Biometric authentication failed:', authError.message);
+      console.error('Biometric authentication failed:', authError.message);
       
-      // Fall back to confirmation dialog
-      const confirmed = window.confirm(
-        `⚠️ Biometric Authentication Failed\n\n` +
-        `Unable to verify with biometrics.\n\n` +
-        `To ${action}, click OK to confirm.`
-      );
-      return confirmed;
+      // STRICT: No fallback - authentication must succeed
+      throw new Error('Biometric authentication failed. Please try again or ensure your biometric authentication is properly set up.');
     }
   } catch (error) {
     console.error('User verification failed:', error);
-    // Final fallback to confirmation dialog
-    return window.confirm(
-      `Confirm ${action}\n\nClick OK to confirm this action.`
-    );
+    // Re-throw the error instead of falling back to confirmation
+    throw error;
   }
 };
 
