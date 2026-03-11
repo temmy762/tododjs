@@ -198,20 +198,22 @@ export default function DeviceManagement() {
 
   return (
     <div className="p-6">
-      {/* Device Usage Info */}
-      <div className="mb-6 p-4 rounded-lg bg-dark-surface border border-white/10">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-brand-text-tertiary">
-            You're using <span className="font-semibold text-white">{devices.length}</span> of <span className="font-semibold text-white">{maxDevices}</span> available device{maxDevices !== 1 ? 's' : ''}
-          </p>
-          {biometricAvailable && (
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/30">
-              <Fingerprint className="w-4 h-4 text-green-400" />
-              <span className="text-xs font-semibold text-green-400">Biometric Enabled</span>
-            </div>
-          )}
+      {/* Device Usage Info - Only show for paid accounts */}
+      {maxDevices > 0 && (
+        <div className="mb-6 p-4 rounded-lg bg-dark-surface border border-white/10">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-brand-text-tertiary">
+              You're using <span className="font-semibold text-white">{devices.length}</span> of <span className="font-semibold text-white">{maxDevices}</span> available device{maxDevices !== 1 ? 's' : ''}
+            </p>
+            {biometricAvailable && (
+              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/30">
+                <Fingerprint className="w-4 h-4 text-green-400" />
+                <span className="text-xs font-semibold text-green-400">Biometric Enabled</span>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Notification */}
       {notification && (
