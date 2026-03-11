@@ -104,16 +104,37 @@ export const checkDeviceLimit = async (req, res, next) => {
 
     // Check if device limit reached (after cleanup)
     if (user.subscription.devices.length >= plan.features.maxDevices) {
-      return res.status(403).json({
-        success: false,
-        message: `Device limit reached (${plan.features.maxDevices} devices max). Remove a device to continue.`,
-        deviceLimitReached: true,
-        maxDevices: plan.features.maxDevices,
-        currentDevices: user.subscription.devices.map(d => ({
-          deviceName: d.deviceName || `${d.browser} on ${d.os}`,
-          lastActive: d.lastActive
-        }))
-      });
+      // Auto-replace strategy: Remove oldest device and continue
+      // Sort by lastActive (oldest first)
+      user.subscription.devices.sort((a, b) => new Date(a.lastActive) - new Date(b.lastActive));
+      
+      // Get the device that will be replaced
+      const replacedDevice = user.subscription.devices[0];
+      
+      // Remove the oldest device
+      user.subscription.devices.shift();
+      
+      console.log(`   🔄 Device limit reached. Replacing oldest device: ${replacedDevice.deviceName || replacedDevice.deviceId}`);
+      
+      // Send email notification about device replacement
+      try {
+        await sendEmail({
+          to: user.email,
+          subject: 'Device Replaced on Your Account',
+          html: `
+            <h2>Device Automatically Replaced</h2>
+            <p>Hi ${user.name},</p>
+            <p>You've reached your device limit (${plan.features.maxDevices} device${plan.features.maxDevices > 1 ? 's' : ''}).</p>
+            <p><strong>Replaced device:</strong> ${replacedDevice.deviceName || `${replacedDevice.browser} on ${replacedDevice.os}`}</p>
+            <p>This device has been automatically signed out to allow your new login.</p>
+            <p>If this wasn't you, please secure your account immediately.</p>
+          `
+        });
+      } catch (emailError) {
+        console.error('Failed to send device replacement email:', emailError);
+      }
+      
+      // Continue to register the new device below
     }
 
     // Parse device information

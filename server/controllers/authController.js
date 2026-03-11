@@ -37,9 +37,12 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
     sameSite: 'lax'
   };
 
+  let deviceReplaced = null;
+
   // Register or update device using consolidated subscription.devices
   if (deviceId) {
     const { parseDeviceInfo } = await import('../utils/deviceParser.js');
+    const SubscriptionPlan = (await import('../models/SubscriptionPlan.js')).default;
     const deviceInfo = parseDeviceInfo(userAgent);
     
     const existingDevice = user.subscription.devices.find(d => d.deviceId === deviceId);
@@ -49,6 +52,21 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
       existingDevice.deviceInfo = deviceInfo;
       existingDevice.ipAddress = ipAddress;
     } else {
+      // Check device limit before adding new device
+      const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
+      const maxDevices = plan?.features?.maxDevices || 1;
+
+      if (user.subscription.devices.length >= maxDevices) {
+        // Device limit reached - replace oldest device
+        user.subscription.devices.sort((a, b) => new Date(a.lastActive) - new Date(b.lastActive));
+        const oldestDevice = user.subscription.devices[0];
+        deviceReplaced = {
+          deviceName: oldestDevice.deviceName || `${oldestDevice.browser} on ${oldestDevice.os}`,
+          lastActive: oldestDevice.lastActive
+        };
+        user.subscription.devices.shift();
+      }
+
       // Add new device
       user.subscription.devices.push({
         deviceId,
@@ -68,21 +86,29 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
 
   const avatar = await signAvatarUrl(user);
 
+  const response = {
+    success: true,
+    token,
+    user: {
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      phoneNumber: user.phoneNumber || '',
+      role: user.role,
+      subscription: user.subscription,
+      avatar
+    }
+  };
+
+  // Add device replacement notification if applicable
+  if (deviceReplaced) {
+    response.deviceReplaced = deviceReplaced;
+    response.message = `Previous device (${deviceReplaced.deviceName}) was signed out to allow this login.`;
+  }
+
   res.status(statusCode)
     .cookie('token', token, options)
-    .json({
-      success: true,
-      token,
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        phoneNumber: user.phoneNumber || '',
-        role: user.role,
-        subscription: user.subscription,
-        avatar
-      }
-    });
+    .json(response);
 };
 
 // @desc    Register user

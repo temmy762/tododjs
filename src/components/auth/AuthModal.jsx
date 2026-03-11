@@ -109,6 +109,16 @@ export default function AuthModal({ onClose, onSuccess }) {
           if (rememberMe) {
             localStorage.setItem('rememberMe', 'true');
           }
+          
+          // Show notification if device was replaced
+          if (data.deviceReplaced) {
+            // Show a brief notification before closing
+            setError(''); // Clear any errors
+            setTimeout(() => {
+              alert(`Device Replaced\n\n${data.message}\n\nYou can manage your devices from your profile.`);
+            }, 100);
+          }
+          
           onSuccess(data.user);
         } else {
           setError(data.message || 'Login failed');
