@@ -16,7 +16,7 @@ function getDeviceId() {
 }
 
 export default function AuthModal({ onClose, onSuccess }) {
-  const { t } = useTranslation();
+  const { t, ready } = useTranslation();
   const [mode, setMode] = useState('login'); // 'login' or 'register'
   const [formData, setFormData] = useState({
     name: '',
@@ -131,6 +131,19 @@ export default function AuthModal({ onClose, onSuccess }) {
       confirmPassword: ''
     });
   };
+
+  // Show loading state while i18n is initializing
+  if (!ready) {
+    return (
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div className="bg-dark-elevated rounded-lg max-w-md w-full p-6">
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
