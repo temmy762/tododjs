@@ -45,19 +45,51 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
     const SubscriptionPlan = (await import('../models/SubscriptionPlan.js')).default;
     const deviceInfo = parseDeviceInfo(userAgent);
     
+    // Determine max devices based on subscription status
+    let maxDevices = 0; // Free accounts get 0 devices (no downloads)
+    
+    if (user.subscription.planId && user.subscription.status === 'active') {
+      const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
+      if (plan) {
+        maxDevices = plan.features.maxDevices;
+      }
+    }
+    
     const existingDevice = user.subscription.devices.find(d => d.deviceId === deviceId);
     if (existingDevice) {
-      // Update existing device
-      existingDevice.lastActive = new Date();
-      existingDevice.deviceInfo = deviceInfo;
-      existingDevice.ipAddress = ipAddress;
+      // Update existing device (only if user has active subscription)
+      if (maxDevices > 0) {
+        existingDevice.lastActive = new Date();
+        existingDevice.deviceInfo = deviceInfo;
+        existingDevice.ipAddress = ipAddress;
+      }
     } else {
-      // Check device limit before adding new device
-      const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
-      const maxDevices = plan?.features?.maxDevices || 1;
-
-      if (user.subscription.devices.length >= maxDevices) {
-        // Device limit reached - replace oldest device
+      // Free users cannot register devices
+      if (maxDevices === 0) {
+        // Don't register device for free users
+        console.log('Free user - no device registration');
+      } else if (user.subscription.devices.length >= maxDevices) {
+        // Device limit reached - check if user confirmed replacement
+        const confirmReplacement = req.body.confirmDeviceReplacement;
+        
+        if (!confirmReplacement) {
+          // Return error asking for confirmation
+          user.subscription.devices.sort((a, b) => new Date(a.lastActive) - new Date(b.lastActive));
+          const oldestDevice = user.subscription.devices[0];
+          
+          return res.status(403).json({
+            success: false,
+            deviceLimitReached: true,
+            maxDevices: maxDevices,
+            message: `You already have ${maxDevices} active device${maxDevices > 1 ? 's' : ''}. Sign out from another device to continue.`,
+            oldestDevice: {
+              deviceName: oldestDevice.deviceName || `${oldestDevice.browser} on ${oldestDevice.os}`,
+              lastActive: oldestDevice.lastActive
+            }
+          });
+        }
+        
+        // User confirmed - replace oldest device
         user.subscription.devices.sort((a, b) => new Date(a.lastActive) - new Date(b.lastActive));
         const oldestDevice = user.subscription.devices[0];
         deviceReplaced = {
@@ -65,20 +97,33 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
           lastActive: oldestDevice.lastActive
         };
         user.subscription.devices.shift();
+        
+        // Add new device
+        user.subscription.devices.push({
+          deviceId,
+          deviceName: deviceInfo.deviceName,
+          deviceType: deviceInfo.deviceType,
+          browser: deviceInfo.browser,
+          os: deviceInfo.os,
+          deviceInfo,
+          ipAddress,
+          lastActive: new Date(),
+          addedAt: new Date()
+        });
+      } else {
+        // Under limit - add new device
+        user.subscription.devices.push({
+          deviceId,
+          deviceName: deviceInfo.deviceName,
+          deviceType: deviceInfo.deviceType,
+          browser: deviceInfo.browser,
+          os: deviceInfo.os,
+          deviceInfo,
+          ipAddress,
+          lastActive: new Date(),
+          addedAt: new Date()
+        });
       }
-
-      // Add new device
-      user.subscription.devices.push({
-        deviceId,
-        deviceName: deviceInfo.deviceName,
-        deviceType: deviceInfo.deviceType,
-        browser: deviceInfo.browser,
-        os: deviceInfo.os,
-        deviceInfo,
-        ipAddress,
-        lastActive: new Date(),
-        addedAt: new Date()
-      });
     }
   }
 

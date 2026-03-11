@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { X, Mail, Lock, User, Eye, EyeOff, AlertCircle, Phone } from 'lucide-react';
 import API_URL from '../../config/api';
 import ForgotPasswordModal from '../ForgotPasswordModal';
+import { verifyUserForAction } from '../../services/passkeyService';
 
 // Generate or retrieve a persistent device ID for this browser
 function getDeviceId() {
@@ -109,17 +110,52 @@ export default function AuthModal({ onClose, onSuccess }) {
           if (rememberMe) {
             localStorage.setItem('rememberMe', 'true');
           }
-          
-          // Show notification if device was replaced
-          if (data.deviceReplaced) {
-            // Show a brief notification before closing
-            setError(''); // Clear any errors
-            setTimeout(() => {
-              alert(`Device Replaced\n\n${data.message}\n\nYou can manage your devices from your profile.`);
-            }, 100);
-          }
-          
           onSuccess(data.user);
+        } else if (data.deviceLimitReached) {
+          // Device limit reached - ask for confirmation with biometric verification
+          const deviceName = data.oldestDevice?.deviceName || 'Unknown device';
+          
+          // Request biometric verification
+          const verified = await verifyUserForAction('replace your oldest device and continue');
+          
+          if (verified) {
+            // User verified - retry login with confirmation flag
+            setLoading(true);
+            try {
+              const retryResponse = await fetch(`${API_URL}/auth/login`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                  email: formData.email,
+                  password: formData.password,
+                  deviceId: getDeviceId(),
+                  confirmDeviceReplacement: true
+                })
+              });
+              
+              const retryData = await retryResponse.json();
+              
+              if (retryData.success) {
+                localStorage.setItem('token', retryData.token);
+                if (rememberMe) {
+                  localStorage.setItem('rememberMe', 'true');
+                }
+                onSuccess(retryData.user);
+              } else {
+                setError(retryData.message || 'Login failed');
+              }
+            } catch (retryError) {
+              setError('Failed to complete login. Please try again.');
+            } finally {
+              setLoading(false);
+            }
+          } else {
+            setError('Device replacement cancelled. Please sign out from another device to continue.');
+          }
+          return;
         } else {
           setError(data.message || 'Login failed');
         }
