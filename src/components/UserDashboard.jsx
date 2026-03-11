@@ -5,6 +5,7 @@ import {
   LogOut, Pencil, Shield, Play, Trash2
 } from 'lucide-react';
 import API_URL from '../config/api';
+import DeviceManagement from './DeviceManagement';
 
 const API = API_URL;
 
@@ -244,6 +245,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
   const tabs = [
     { id: 'overview', label: 'Overview' },
     { id: 'favorites', label: 'Favorites' },
+    { id: 'devices', label: 'Devices' },
     { id: 'edit', label: 'Edit Profile' },
     { id: 'password', label: 'Change Password' },
   ];
@@ -599,6 +601,13 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── Devices Tab ── */}
+          {activeTab === 'devices' && (
+            <div>
+              <DeviceManagement />
             </div>
           )}
 
