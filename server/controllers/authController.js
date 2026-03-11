@@ -27,7 +27,7 @@ const generateToken = (id) => {
 const sendTokenResponse = async (user, statusCode, res, req) => {
   const token = generateToken(user._id);
   const deviceId = req?.body?.deviceId || req?.headers['x-device-id'] || null;
-  const deviceInfo = req?.headers['user-agent'] || 'Unknown Device';
+  const userAgent = req?.headers['user-agent'] || 'Unknown Device';
   const ipAddress = req?.ip || req?.connection?.remoteAddress || 'unknown';
 
   const options = {
@@ -37,22 +37,29 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
     sameSite: 'lax'
   };
 
-  // Register or update device
+  // Register or update device using consolidated subscription.devices
   if (deviceId) {
-    const existingDevice = user.registeredDevices.find(d => d.deviceId === deviceId);
+    const { parseDeviceInfo } = await import('../utils/deviceParser.js');
+    const deviceInfo = parseDeviceInfo(userAgent);
+    
+    const existingDevice = user.subscription.devices.find(d => d.deviceId === deviceId);
     if (existingDevice) {
-      existingDevice.activeToken = token;
-      existingDevice.lastLoginAt = new Date();
+      // Update existing device
+      existingDevice.lastActive = new Date();
       existingDevice.deviceInfo = deviceInfo;
       existingDevice.ipAddress = ipAddress;
     } else {
-      user.registeredDevices.push({
+      // Add new device
+      user.subscription.devices.push({
         deviceId,
+        deviceName: deviceInfo.deviceName,
+        deviceType: deviceInfo.deviceType,
+        browser: deviceInfo.browser,
+        os: deviceInfo.os,
         deviceInfo,
         ipAddress,
-        activeToken: token,
-        registeredAt: new Date(),
-        lastLoginAt: new Date()
+        lastActive: new Date(),
+        addedAt: new Date()
       });
     }
   }
