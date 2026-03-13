@@ -15,14 +15,10 @@ function getDeviceId() {
 }
 
 export default function AuthModal({ onClose, onSuccess }) {
-  const [mode, setMode] = useState('login'); // 'login' or 'register'
+  // Only login mode - registration happens through subscription payment
   const [formData, setFormData] = useState({
-    name: '',
     email: '',
-    phoneNumber: '',
-    password: '',
-    confirmPassword: '',
-    preferredLanguage: 'en'
+    password: ''
   });
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
@@ -36,51 +32,8 @@ export default function AuthModal({ onClose, onSuccess }) {
     setLoading(true);
 
     try {
-      if (mode === 'register') {
-        if (formData.password !== formData.confirmPassword) {
-          setError('Passwords do not match');
-          setLoading(false);
-          return;
-        }
-
-        if (formData.phoneNumber) {
-          const cleaned = formData.phoneNumber.replace(/[\s\-\(\)]/g, '');
-          if (!/^\+?[1-9]\d{6,14}$/.test(cleaned)) {
-            setError('Please enter a valid phone number (e.g. +1234567890)');
-            setLoading(false);
-            return;
-          }
-        }
-
-        const response = await fetch(`${API_URL}/auth/register`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include',
-          body: JSON.stringify({
-            name: formData.name,
-            email: formData.email,
-            phoneNumber: formData.phoneNumber,
-            password: formData.password,
-            deviceId: getDeviceId(),
-            preferredLanguage: formData.preferredLanguage
-          })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-          localStorage.setItem('token', data.token);
-          if (rememberMe) {
-            localStorage.setItem('rememberMe', 'true');
-          }
-          onSuccess(data.user);
-        } else {
-          setError(data.message || 'Signup failed');
-        }
-      } else {
-        console.log('=== LOGIN DEBUG ===');
+      // Only login - registration happens through subscription payment
+      console.log('=== LOGIN DEBUG ===');
         console.log('API_URL:', API_URL);
         console.log('Full URL:', `${API_URL}/auth/login`);
         console.log('Attempting login with:', formData.email);
@@ -208,57 +161,6 @@ export default function AuthModal({ onClose, onSuccess }) {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === 'register' && (
-            <>
-              <div>
-                <label className="block text-sm font-medium mb-2">Name</label>
-                <div className="relative">
-                  <User size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
-                  <input
-                    type="text"
-                    value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent"
-                    placeholder="John Doe"
-                    required
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">Phone Number</label>
-                <div className="relative">
-                  <Phone size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
-                  <input
-                    type="tel"
-                    value={formData.phoneNumber}
-                    onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
-                    className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent"
-                    placeholder="+1 (555) 123-4567"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Preferred Language <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.preferredLanguage}
-                  onChange={(e) => {
-                    const newLang = e.target.value;
-                    setFormData({ ...formData, preferredLanguage: newLang });
-                  }}
-                  className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white"
-                  required
-                >
-                  <option value="en" className="bg-dark-elevated">English</option>
-                  <option value="es" className="bg-dark-elevated">Español</option>
-                </select>
-                <p className="text-xs text-brand-text-tertiary mt-1">
-                  This will be used for all communications and interface
-                </p>
-              </div>
-            </>
-          )}
 
           <div>
             <label className="block text-sm font-medium mb-2">Email</label>
