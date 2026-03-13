@@ -221,15 +221,43 @@ export const handleWebhook = async (req, res) => {
 
 // Helper function to handle completed checkout
 async function handleCheckoutCompleted(session) {
-  const userId = session.metadata.userId;
   const planId = session.metadata.planId;
   const durationDays = parseInt(session.metadata.durationDays);
-
-  const user = await User.findById(userId);
+  const customerEmail = session.customer_details?.email || session.customer_email;
+  
   const plan = await SubscriptionPlan.findOne({ planId });
 
-  if (!user || !plan) {
-    console.error('User or plan not found in webhook handler');
+  if (!plan) {
+    console.error('Plan not found in webhook handler');
+    return;
+  }
+
+  // Check if user exists (for existing users upgrading) or create new user (for new subscriptions)
+  let user = session.metadata.userId ? await User.findById(session.metadata.userId) : null;
+  
+  if (!user && customerEmail) {
+    // New user - create account via subscription payment
+    user = await User.findOne({ email: customerEmail });
+    
+    if (!user) {
+      // Create new user account
+      const crypto = await import('crypto');
+      const tempPassword = crypto.randomBytes(32).toString('hex');
+      
+      user = await User.create({
+        name: session.customer_details?.name || customerEmail.split('@')[0],
+        email: customerEmail,
+        password: tempPassword, // Temporary password, user will reset via email
+        phoneNumber: session.customer_details?.phone || undefined,
+        preferredLanguage: 'en'
+      });
+      
+      console.log(`New user account created via subscription: ${customerEmail}`);
+    }
+  }
+
+  if (!user) {
+    console.error('Could not find or create user in webhook handler');
     return;
   }
 
@@ -258,12 +286,32 @@ async function handleCheckoutCompleted(session) {
     stripePaymentIntentId: session.payment_intent
   });
 
+  const isNewUser = !session.metadata.userId;
+  
   await user.save();
-  console.log(`Subscription activated for user ${userId}`);
+  console.log(`Subscription activated for user ${user._id}`);
 
-  // Notify user of payment receipt (non-blocking)
-  sendPaymentReceiptEmail(user, plan.name, plan.price, plan.currency, endDate)
-    .catch(err => console.error('User webhook payment receipt email failed:', err));
+  if (isNewUser) {
+    // New user - send password reset email instead of payment receipt
+    const { sendPasswordResetEmail } = await import('../services/emailService.js');
+    const crypto = await import('crypto');
+    
+    // Generate password reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    
+    user.resetPasswordToken = hashedToken;
+    user.resetPasswordExpire = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
+    await user.save();
+    
+    // Send welcome email with password reset link
+    sendPasswordResetEmail(user, resetToken, true) // true = isNewUser
+      .catch(err => console.error('Password reset email failed:', err));
+  } else {
+    // Existing user - send payment receipt
+    sendPaymentReceiptEmail(user, plan.name, plan.price, plan.currency, endDate)
+      .catch(err => console.error('User webhook payment receipt email failed:', err));
+  }
 
   // Notify admin of new payment (non-blocking)
   notifyAdminNewPayment(user, plan.name, plan.price, plan.currency)

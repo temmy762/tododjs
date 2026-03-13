@@ -156,10 +156,19 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
     .json(response);
 };
 
-// @desc    Register user
+// @desc    Register user (DISABLED - Registration only through subscription payment)
 // @route   POST /api/auth/register
 // @access  Public
 export const register = async (req, res) => {
+  // Free account registration is disabled
+  // Users must subscribe to create an account
+  return res.status(403).json({
+    success: false,
+    message: 'Free accounts are not available. Please subscribe to create an account.',
+    requiresSubscription: true
+  });
+
+  /* DISABLED CODE - Free registration no longer allowed
   try {
     const { name, email, password, phoneNumber, preferredLanguage } = req.body;
 
@@ -198,6 +207,7 @@ export const register = async (req, res) => {
       message: error.message
     });
   }
+  */
 };
 
 // @desc    Login user

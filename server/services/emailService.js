@@ -60,10 +60,13 @@ export async function sendWelcomeEmail(user) {
 
 /**
  * Password reset email with token link
+ * @param {Object} user - User object
+ * @param {string} resetToken - Reset token
+ * @param {boolean} isNewUser - If true, sends welcome email with password setup instead of reset
  */
-export async function sendPasswordResetEmail(user, resetToken) {
+export async function sendPasswordResetEmail(user, resetToken, isNewUser = false) {
   const lang = user.preferredLanguage || 'en';
-  const { subject, html, text } = getPasswordResetEmailTemplate(user, resetToken, lang);
+  const { subject, html, text } = getPasswordResetEmailTemplate(user, resetToken, lang, isNewUser);
   
   return sendEmail({
     to: user.email,

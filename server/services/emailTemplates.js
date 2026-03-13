@@ -221,9 +221,32 @@ export function getWelcomeEmailTemplate(user, lang = 'en') {
 }
 
 // Password reset email template
-export function getPasswordResetEmailTemplate(user, resetToken, lang = 'en') {
+export function getPasswordResetEmailTemplate(user, resetToken, lang = 'en', isNewUser = false) {
   const resetUrl = `${FRONTEND_URL}/reset-password?token=${resetToken}`;
   
+  if (isNewUser) {
+    // Welcome email for new users with password setup
+    const content = `
+      <div style="padding: 30px;">
+        <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">Hey <strong>${user.name}</strong>,</p>
+        <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">Welcome to TodoDJs! Your subscription is now active and your account has been created.</p>
+        <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">To get started, please set your password by clicking the button below:</p>
+        <div style="margin: 25px 0;">
+          <a href="${resetUrl}" style="display: inline-block; background: #10b981; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">Set Your Password</a>
+        </div>
+        <p style="font-size: 14px; color: #666; line-height: 1.6;">This link will expire in 24 hours. After setting your password, you can log in and start downloading tracks!</p>
+        <p style="font-size: 12px; color: #555; margin-top: 20px; word-break: break-all;">Or copy this link: ${resetUrl}</p>
+      </div>
+    `;
+    
+    return {
+      subject: 'Welcome to TodoDJs - Set Your Password',
+      html: getEmailTemplate(lang, 'Welcome to TodoDJs!', content),
+      text: `Hey ${user.name}, Welcome to TodoDJs! Your subscription is active. Set your password here: ${resetUrl}`
+    };
+  }
+  
+  // Regular password reset email
   const content = `
     <div style="padding: 30px;">
       <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">${t(lang, 'passwordReset.greeting')} <strong>${user.name}</strong>,</p>
