@@ -557,10 +557,6 @@ export default function MusicControlPanel({
         <PremiumPrompt
           type={user ? 'subscribe' : 'signup'}
           onClose={() => setShowPrompt(false)}
-          onSignUp={() => {
-            setShowPrompt(false);
-            onAuthRequired?.();
-          }}
           onSubscribe={() => {
             setShowPrompt(false);
             onSubscribe?.();

@@ -1,6 +1,8 @@
 import { X, Crown, Music, Download, Zap } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function PremiumPrompt({ type = 'subscribe', onClose, onSignUp, onSubscribe }) {
+  const { t } = useTranslation();
   const isAuth = type === 'subscribe';
 
   return (
@@ -22,19 +24,19 @@ export default function PremiumPrompt({ type = 'subscribe', onClose, onSignUp, o
           {!isAuth ? (
             <>
               <h2 className="text-xl font-bold text-white text-center mb-2">
-                Crea tu cuenta gratuita
+                {t('subscription.createFreeAccount')}
               </h2>
               <p className="text-sm text-brand-text-tertiary text-center mb-6">
-                Suscríbete para guardar música y probar la plataforma. Hazte Premium para desbloquear todo el contenido y descargar sin límites.
+                {t('subscription.signupDescription')}
               </p>
             </>
           ) : (
             <>
               <h2 className="text-xl font-bold text-white text-center mb-2">
-                Unlock Full Access
+                {t('subscription.unlockFullAccess')}
               </h2>
               <p className="text-sm text-brand-text-tertiary text-center mb-6">
-                Upgrade to Premium to download tracks, listen to full songs, and get unlimited access to the entire catalog.
+                {t('subscription.upgradeDescription')}
               </p>
             </>
           )}
@@ -45,55 +47,36 @@ export default function PremiumPrompt({ type = 'subscribe', onClose, onSignUp, o
               <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
                 <Music className="w-4 h-4 text-accent" />
               </div>
-              <span className="text-brand-text-secondary">Reproducción completa en streaming</span>
+              <span className="text-brand-text-secondary">{t('subscription.fullStreamingPlayback')}</span>
             </div>
             <div className="flex items-center gap-3 text-sm">
               <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
                 <Download className="w-4 h-4 text-accent" />
               </div>
-              <span className="text-brand-text-secondary">Descargas ilimitadas en alta calidad</span>
+              <span className="text-brand-text-secondary">{t('subscription.unlimitedHighQualityDownloads')}</span>
             </div>
             <div className="flex items-center gap-3 text-sm">
               <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
                 <Zap className="w-4 h-4 text-accent" />
               </div>
-              <span className="text-brand-text-secondary">Acceso a Records Pools y Packs Premium</span>
+              <span className="text-brand-text-secondary">{t('subscription.recordPoolsAccess')}</span>
             </div>
           </div>
 
           {/* Action buttons */}
           <div className="space-y-2">
-            {!isAuth ? (
-              <>
-                <button
-                  onClick={onSignUp}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-accent to-purple-500 hover:from-accent-hover hover:to-purple-600 text-white font-bold text-sm transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-accent/30"
-                >
-                  Crea Tu Cuenta Gratis
-                </button>
-                <button
-                  onClick={onClose}
-                  className="w-full py-2.5 rounded-xl text-brand-text-tertiary hover:text-white text-sm transition-colors"
-                >
-                  Quizás Más Tarde
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  onClick={onSubscribe}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-accent to-purple-500 hover:from-accent-hover hover:to-purple-600 text-white font-bold text-sm transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-accent/30"
-                >
-                  Suscribete.
-                </button>
-                <button
-                  onClick={onClose}
-                  className="w-full py-2.5 rounded-xl text-brand-text-tertiary hover:text-white text-sm transition-colors"
-                >
-                  Continue with preview
-                </button>
-              </>
-            )}
+            <button
+              onClick={onSubscribe}
+              className="w-full py-3 rounded-xl bg-gradient-to-r from-accent to-purple-500 hover:from-accent-hover hover:to-purple-600 text-white font-bold text-sm transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-accent/30"
+            >
+              {t('subscription.subscribeNow')}
+            </button>
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 rounded-xl text-brand-text-tertiary hover:text-white text-sm transition-colors"
+            >
+              {t('subscription.continueWithPreview')}
+            </button>
           </div>
         </div>
       </div>

@@ -60,6 +60,7 @@ function App() {
   const [showPricing, setShowPricing] = useState(false);
   const [showCheckoutModal, setShowCheckoutModal] = useState(false);
   const [selectedSubscriptionPlan, setSelectedSubscriptionPlan] = useState(null);
+  const [pendingPlan, setPendingPlan] = useState(null);
   const [showSubscriptionDashboard, setShowSubscriptionDashboard] = useState(false);
   const tonalityRef = useRef(null);
   const [liveTracks, setLiveTracks] = useState([]);
@@ -326,6 +327,11 @@ function App() {
   const handleAuthSuccess = (userData) => {
     setUser(userData);
     setAuthModalOpen(false);
+    if (pendingPlan) {
+      setSelectedSubscriptionPlan(pendingPlan);
+      setShowCheckoutModal(true);
+      setPendingPlan(null);
+    }
   };
 
   const handleLogout = async () => {
@@ -579,8 +585,13 @@ function App() {
         ) : activePage === 'pricing' ? (
           <PricingPage 
             onSelectPlan={(plan) => {
-              setSelectedSubscriptionPlan(plan);
-              setShowCheckoutModal(true);
+              if (!user) {
+                setPendingPlan(plan);
+                setAuthModalOpen(true);
+              } else {
+                setSelectedSubscriptionPlan(plan);
+                setShowCheckoutModal(true);
+              }
             }}
             user={user}
           />

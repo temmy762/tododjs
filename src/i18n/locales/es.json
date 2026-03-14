@@ -49,7 +49,8 @@
     "forgotPassword": "¿Olvidaste tu contraseña?",
     "rememberMe": "Recuérdame",
     "confirmPassword": "Confirmar Contraseña",
-    "phoneNumber": "Número de Teléfono"
+    "phoneNumber": "Número de Teléfono",
+    "preferredLanguage": "Idioma Preferido"
   },
   "common": {
     "browse": "Explorar",
@@ -149,7 +150,18 @@
     "subscriptionActivated": "¡Tu suscripción ha sido activada!",
     "thankYou": "Gracias por suscribirte",
     "unlockFeatures": "Desbloquear Funciones Premium",
-    "startingFrom": "Desde"
+    "startingFrom": "Desde",
+    "createFreeAccount": "Crea tu cuenta gratuita",
+    "signupDescription": "Suscríbete para guardar música y probar la plataforma. Hazte Premium para desbloquear todo el contenido y descargar sin límites.",
+    "unlockFullAccess": "Unlock Full Access",
+    "upgradeDescription": "Upgrade to Premium to download tracks, listen to full songs, and get unlimited access to the entire catalog.",
+    "fullStreamingPlayback": "Reproducción completa en streaming",
+    "unlimitedHighQualityDownloads": "Descargas ilimitadas en alta calidad",
+    "recordPoolsAccess": "Acceso a Records Pools y Packs Premium",
+    "createAccountFree": "Crea Tu Cuenta Gratis",
+    "maybeLater": "Quizás Más Tarde",
+    "subscribeNow": "Suscribete.",
+    "continueWithPreview": "Continue with preview"
   },
   "whatsapp": {
     "chatWithUs": "Chatea con nosotros",
@@ -258,6 +270,8 @@
     "deleteSuccess": "Eliminado exitosamente",
     "deleteError": "Error al eliminar",
     "requireLogin": "Por favor inicia sesión para continuar",
+    "stripeRedirect": "Serás redirigido a la página segura de pago de Stripe para completar tu suscripción.",
+    "securePayment": "Pago 100% seguro a través de Stripe",
     "requireSubscription": "Esta función requiere una suscripción",
     "networkError": "Error de red. Por favor intenta de nuevo."
   },

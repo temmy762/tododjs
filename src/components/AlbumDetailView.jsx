@@ -443,10 +443,6 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
         <PremiumPrompt
           type={promptType === 'signup' ? 'signup' : 'subscribe'}
           onClose={() => setPromptType(null)}
-          onSignUp={() => {
-            setPromptType(null);
-            onAuthRequired?.();
-          }}
           onSubscribe={() => {
             setPromptType(null);
             onSubscribe?.();

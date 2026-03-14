@@ -32,6 +32,7 @@
     "confirmPassword": "Confirm Password",
     "fullName": "Full Name",
     "phoneNumber": "Phone Number",
+    "preferredLanguage": "Preferred Language",
     "rememberMe": "Remember me",
     "forgotPassword": "Forgot password?",
     "noAccount": "Don't have an account?",
@@ -140,7 +141,18 @@
     "subscriptionActivated": "Your subscription has been activated!",
     "thankYou": "Thank you for subscribing",
     "unlockFeatures": "Unlock Premium Features",
-    "startingFrom": "Starting from"
+    "startingFrom": "Starting from",
+    "createFreeAccount": "Create Your Free Account",
+    "signupDescription": "Sign up to save music and try the platform. Go Premium to unlock all content and unlimited downloads.",
+    "unlockFullAccess": "Unlock Full Access",
+    "upgradeDescription": "Upgrade to Premium to download tracks, listen to full songs, and get unlimited access to the entire catalog.",
+    "fullStreamingPlayback": "Full-length song streaming",
+    "unlimitedHighQualityDownloads": "Unlimited high-quality downloads",
+    "recordPoolsAccess": "Access to Record Pools and Premium Packs",
+    "createAccountFree": "Create Your Free Account",
+    "maybeLater": "Maybe Later",
+    "subscribeNow": "Subscribe Now",
+    "continueWithPreview": "Continue with preview"
   },
   "whatsapp": {
     "chatWithUs": "Chat with us",
@@ -248,7 +260,9 @@
     "saveError": "Failed to save changes",
     "deleteSuccess": "Deleted successfully",
     "deleteError": "Failed to delete",
-    "requireLogin": "Please login to continue",
+    "requireLogin": "Please log in to continue",
+    "stripeRedirect": "You will be redirected to Stripe's secure payment page to complete your subscription.",
+    "securePayment": "100% secure payment powered by Stripe",
     "updateDetails": "Update Details",
     "changePassword": "Change Password",
     "preferences": "Preferences"

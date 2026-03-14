@@ -11,6 +11,7 @@ import {
   Palette, 
   Settings, 
   Shield,
+  Monitor,
   CreditCard,
   FolderOpen,
   Upload,
@@ -32,6 +33,7 @@ import AdminRecordPool from './AdminRecordPool';
 import AdminDownloadStats from './AdminDownloadStats';
 import UploadProgressTracker from './UploadProgressTracker';
 import AdminMashups from './AdminMashups';
+import AdminUserDevices from './AdminUserDevices';
 import ErrorBoundary from '../ErrorBoundary';
 
 export default function AdminDashboard({ onClose, user, onUserUpdate }) {
@@ -47,6 +49,7 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
     { id: 'downloads', label: t('library.downloads'), icon: TrendingUp },
     { id: 'tracks', label: t('admin.tracks'), icon: Music },
     { id: 'users', label: t('admin.users'), icon: Users },
+    { id: 'devices', label: 'Devices & Sessions', icon: Monitor },
     { id: 'subscriptions', label: t('admin.subscriptions'), icon: CreditCard },
     { id: 'analytics', label: t('admin.analytics'), icon: Database },
     { id: 'genres', label: t('admin.genres'), icon: Palette },
@@ -74,6 +77,8 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
         return <AdminPlaylists />;
       case 'users':
         return <AdminUsers />;
+      case 'devices':
+        return <AdminUserDevices />;
       case 'subscriptions':
         return <AdminSubscriptions />;
       case 'analytics':
