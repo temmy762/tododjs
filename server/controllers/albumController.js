@@ -6,6 +6,7 @@ import { uploadToWasabi, deleteFromWasabi, getSignedDownloadUrl } from '../confi
 import { resolveSignedUrls, resolveSignedUrl } from '../utils/signedUrls.js';
 import { extractMetadataFromZip, detectDuplicates } from '../utils/metadataExtractor.js';
 import { detectTonality } from '../services/tonalityDetection.js';
+import { detectGenre } from '../services/genreDetection.js';
 import AdmZip from 'adm-zip';
 import path from 'path';
 import { parseBuffer } from 'music-metadata';
@@ -174,6 +175,7 @@ async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverA
 
       // Tonality + BPM detection (ID3 → Essentia.js audio analysis → AI fallback)
       const { tonality, detectedBpm } = await detectTonality(mp3Buffer, metadata);
+      const genreResult = await detectGenre(mp3Buffer, metadata);
 
       const trackKey = `sources/${source.name}-${source.year}/albums/${album.name}/${mp3Name}`;
       const trackUpload = await uploadToWasabi(mp3Buffer, trackKey, 'audio/mpeg');
@@ -187,7 +189,10 @@ async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverA
         albumId: album._id,
         title: metadata.title,
         artist: metadata.artist,
-        genre: album.genre || source.name || 'Various',
+        genre: genreResult.genre || album.genre || source.name || 'House',
+        genreConfidence: genreResult.confidence,
+        genreSource: genreResult.source,
+        genreNeedsReview: genreResult.needsManualReview,
         bpm: detectedBpm || metadata.bpm || 128,
         tonality,
         pool: source.name,
@@ -315,6 +320,7 @@ export const uploadTrackToAlbum = async (req, res) => {
     }
 
     const { tonality, detectedBpm } = await detectTonality(mp3File.buffer, metadata);
+    const genreResult = await detectGenre(mp3File.buffer, metadata);
 
     const trackKey = `sources/${source?.name || 'unknown'}-${source?.year || '0'}/albums/${album.name}/${mp3File.originalname}`;
     const trackUpload = await uploadToWasabi(mp3File.buffer, trackKey, 'audio/mpeg');
@@ -328,7 +334,10 @@ export const uploadTrackToAlbum = async (req, res) => {
       albumId: album._id,
       title: metadata.title,
       artist: metadata.artist,
-      genre: album.genre || 'House',
+      genre: genreResult.genre || album.genre || 'House',
+      genreConfidence: genreResult.confidence,
+      genreSource: genreResult.source,
+      genreNeedsReview: genreResult.needsManualReview,
       bpm: detectedBpm || metadata.bpm || 128,
       tonality,
       pool: source?.name || '',

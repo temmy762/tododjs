@@ -4,6 +4,7 @@ import Source from '../models/Source.js';
 import DatePack from '../models/DatePack.js';
 import { getSignedDownloadUrl, uploadToWasabi, deleteFromWasabi } from '../config/wasabi.js';
 import { detectTonality } from '../services/tonalityDetection.js';
+import { detectGenre } from '../services/genreDetection.js';
 import { parseBuffer } from 'music-metadata';
 import AdmZip from 'adm-zip';
 import https from 'https';
@@ -540,6 +541,7 @@ async function processOneTrack(mp3Buffer, mp3Name, basePath, userId) {
   }
 
   const { tonality, detectedBpm } = await detectTonality(mp3Buffer, metadata);
+  const genreResult = await detectGenre(mp3Buffer, metadata);
 
   const trackKey = `${basePath}/${Date.now()}-${mp3Name}`;
   const trackUpload = await uploadToWasabi(mp3Buffer, trackKey, 'audio/mpeg');
@@ -547,7 +549,10 @@ async function processOneTrack(mp3Buffer, mp3Name, basePath, userId) {
   const track = await Track.create({
     title: metadata.title,
     artist: metadata.artist,
-    genre: 'House',
+    genre: genreResult.genre || 'House',
+    genreConfidence: genreResult.confidence,
+    genreSource: genreResult.source,
+    genreNeedsReview: genreResult.needsManualReview,
     bpm: detectedBpm || metadata.bpm || 128,
     tonality,
     coverArt: embeddedCoverUrl || undefined,

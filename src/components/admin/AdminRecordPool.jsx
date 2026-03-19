@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star, Minimize2, Maximize2 } from 'lucide-react';
+import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star } from 'lucide-react';
 import ManageAlbumModal from './ManageAlbumModal';
+import BulkUploadModal from './BulkUploadModal';
 import API_URL from '../../config/api';
 
 const API = API_URL;
@@ -16,7 +17,7 @@ export default function AdminRecordPool() {
   const [selectedDateCard, setSelectedDateCard] = useState(null);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [modal, setModal] = useState(null); // 'createSource' | 'editSource' | 'createDateCard' | 'editDateCard' | 'uploadAlbum'
+  const [modal, setModal] = useState(null); // 'createSource' | 'editSource' | 'createDateCard' | 'editDateCard' | 'uploadAlbum' | 'bulkUpload'
   const [editItem, setEditItem] = useState(null);
 
   const fetchSources = useCallback(async () => {
@@ -140,9 +141,14 @@ export default function AdminRecordPool() {
           <div>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold">Sources</h2>
-              <button onClick={() => { setModal('createSource'); setEditItem(null); }} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
-                <Plus size={18} /> New Source
-              </button>
+              <div className="flex gap-3">
+                <button onClick={() => { setModal('bulkUpload'); }} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors">
+                  <Upload size={18} /> Bulk Upload ZIP
+                </button>
+                <button onClick={() => { setModal('createSource'); setEditItem(null); }} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
+                  <Plus size={18} /> New Source
+                </button>
+              </div>
             </div>
             {loading ? <LoadingSpinner /> : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -225,6 +231,13 @@ export default function AdminRecordPool() {
             dateCard={modal === 'editDateCard' ? editItem : null}
             onClose={() => setModal(null)}
             onSuccess={() => { setModal(null); fetchDateCards(selectedSource._id); }}
+          />
+        )}
+
+        {modal === 'bulkUpload' && (
+          <BulkUploadModal
+            onClose={() => setModal(null)}
+            onSuccess={() => { setModal(null); fetchSources(); }}
           />
         )}
 

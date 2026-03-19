@@ -109,3 +109,151 @@ export async function analyzeAudio(mp3Buffer) {
     confidence: keyResult.confidence
   };
 }
+
+/**
+ * Analyze audio features for genre classification using Essentia.js.
+ * Uses spectral, rhythmic, and tonal descriptors to predict genre.
+ * @param {Buffer} mp3Buffer - Raw MP3 file buffer
+ * @returns {Promise<{genre: string, confidence: number, features: object}>}
+ */
+export async function analyzeGenre(mp3Buffer) {
+  const essentia = await getEssentia();
+
+  // Decode MP3 to PCM float32
+  let audioBuffer;
+  try {
+    audioBuffer = await decode(mp3Buffer);
+  } catch (err) {
+    console.error('Audio decode error:', err.message);
+    return { genre: null, confidence: 0, features: null };
+  }
+
+  // Get mono channel
+  let monoData;
+  if (audioBuffer.numberOfChannels >= 2) {
+    const left = audioBuffer.getChannelData(0);
+    const right = audioBuffer.getChannelData(1);
+    monoData = new Float32Array(left.length);
+    for (let i = 0; i < left.length; i++) {
+      monoData[i] = (left[i] + right[i]) / 2;
+    }
+  } else {
+    monoData = audioBuffer.getChannelData(0);
+  }
+
+  const signal = essentia.arrayToVector(monoData);
+  const sampleRate = audioBuffer.sampleRate;
+
+  const features = {};
+
+  try {
+    // Spectral features for genre classification
+    const windowSize = 2048;
+    const hopSize = 1024;
+    const spectrum = essentia.Spectrum(signal, windowSize);
+    const spectralCentroid = essentia.SpectralCentroidTime(spectrum.spectrum);
+    const spectralRolloff = essentia.SpectralRollOff(spectrum.spectrum, 0.85, sampleRate);
+    const spectralFlux = essentia.SpectralFlux(spectrum.spectrum, hopSize, true);
+    const zeroCrossingRate = essentia.ZeroCrossingRate(signal, hopSize, windowSize);
+
+    features.spectralCentroid = spectralCentroid.centroid;
+    features.spectralRolloff = spectralRolloff.rollOff;
+    features.spectralFlux = spectralFlux.spectralFlux;
+    features.zeroCrossingRate = zeroCrossingRate.zcr;
+
+    // Rhythm features - BPM and beat strength
+    const bpmData = essentia.PercivalBpmEstimator(signal, 1024, 2048, 128, 128, 210, 50, sampleRate);
+    features.bpm = bpmData.bpm;
+    features.rhythmConfidence = bpmData.confidence || 0.5;
+
+    // Low-level energy features
+    const rms = essentia.RMS(signal);
+    features.rms = rms.rms;
+
+    // Clean up
+    spectrum.spectrum.delete();
+    signal.delete();
+
+    // Genre classification based on audio features
+    // These thresholds are tuned for electronic/DJ music genres
+    const genre = classifyGenreFromFeatures(features);
+
+    return {
+      genre: genre.name,
+      confidence: genre.confidence,
+      features
+    };
+
+  } catch (err) {
+    console.error('Genre analysis error:', err.message);
+    signal.delete();
+    return { genre: null, confidence: 0, features: null };
+  }
+}
+
+/**
+ * Classify genre based on extracted audio features.
+ * Tuned for DJ/electronic music genres.
+ */
+function classifyGenreFromFeatures(features) {
+  const { bpm, spectralCentroid, zeroCrossingRate, spectralFlux, rms } = features;
+
+  // House/Tech House: 120-130 BPM, moderate energy
+  if (bpm >= 120 && bpm <= 130) {
+    if (spectralCentroid > 2000 && spectralFlux > 0.015) {
+      return { name: 'Tech House', confidence: 0.75 };
+    }
+    if (spectralCentroid < 2500) {
+      return { name: 'Deep House', confidence: 0.70 };
+    }
+    return { name: 'House', confidence: 0.65 };
+  }
+
+  // Techno: 130-150 BPM, harder, more energy
+  if (bpm >= 130 && bpm <= 150) {
+    if (spectralCentroid > 3000 || spectralFlux > 0.02) {
+      return { name: 'Techno', confidence: 0.75 };
+    }
+    return { name: 'Tech House', confidence: 0.60 };
+  }
+
+  // Trance/Progressive: 128-140 BPM, melodic
+  if (bpm >= 128 && bpm <= 140) {
+    if (spectralCentroid > 4000) {
+      return { name: 'Trance', confidence: 0.65 };
+    }
+    return { name: 'Progressive House', confidence: 0.60 };
+  }
+
+  // Drum & Bass: 160-180 BPM, high energy
+  if (bpm >= 160 && bpm <= 180) {
+    return { name: 'Drum & Bass', confidence: 0.80 };
+  }
+
+  // Hip-Hop/R&B: 80-100 BPM, lower spectral centroid
+  if (bpm >= 80 && bpm <= 105) {
+    if (zeroCrossingRate < 0.05) {
+      return { name: 'Hip-Hop', confidence: 0.70 };
+    }
+    return { name: 'R&B', confidence: 0.60 };
+  }
+
+  // Afrobeat/Amapiano: 100-115 BPM, percussive
+  if (bpm >= 100 && bpm <= 115) {
+    if (spectralFlux > 0.02) {
+      return { name: 'Afrobeat', confidence: 0.65 };
+    }
+    return { name: 'Amapiano', confidence: 0.60 };
+  }
+
+  // Reggaeton/Latin: 85-100 BPM, specific rhythmic patterns
+  if (bpm >= 85 && bpm <= 100) {
+    if (spectralCentroid > 2000) {
+      return { name: 'Reggaeton', confidence: 0.65 };
+    }
+    return { name: 'Latin', confidence: 0.55 };
+  }
+
+  // Default: Electronic (moderate confidence)
+  return { name: 'Electronic', confidence: 0.50 };
+}

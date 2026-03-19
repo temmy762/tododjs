@@ -10,6 +10,7 @@ import path from 'path';
 import fs from 'fs';
 import { parseBuffer } from 'music-metadata';
 import { detectTonality } from '../services/tonalityDetection.js';
+import { detectGenre } from '../services/genreDetection.js';
 
 // Helper: Open a ZIP file with yauzl (supports >2GB)
 function openZipFile(filePath) {
@@ -455,6 +456,7 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
       }
 
       const tonality = await detectTonality(mp3Buffer, metadata);
+      const genreResult = await detectGenre(mp3Buffer, metadata);
 
       const trackKey = `collections/${collection.name}/albums/${albumName}/${mp3Name}`;
       const trackUpload = await uploadToWasabi(
@@ -469,7 +471,10 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
         albumId: album._id,
         title: metadata.title,
         artist: metadata.artist,
-        genre: genre || 'House',
+        genre: genreResult.genre || genre || 'House',
+        genreConfidence: genreResult.confidence,
+        genreSource: genreResult.source,
+        genreNeedsReview: genreResult.needsManualReview,
         bpm: metadata.bpm || 128,
         tonality: tonality,
         pool: collection.platform,
@@ -664,5 +669,187 @@ export const getCollectionStats = async (req, res) => {
       success: false,
       message: error.message
     });
+  }
+};
+
+// @desc    Preview ZIP structure before upload (extract folder names, count albums/tracks)
+// @route   POST /api/collections/preview-zip
+// @access  Private/Admin
+export const previewZipStructure = async (req, res) => {
+  try {
+    const zipFile = req.file;
+    if (!zipFile) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please upload a ZIP file'
+      });
+    }
+
+    const zipPath = zipFile.path;
+    const collectionName = path.basename(zipFile.originalname, '.zip');
+
+    const zip = new AdmZip(zipPath);
+    const zipEntries = zip.getEntries();
+
+    // Extract folder structure
+    const datePacks = new Map();
+    let totalAlbums = 0;
+    let totalTracks = 0;
+
+    for (const entry of zipEntries) {
+      if (entry.isDirectory) continue;
+
+      const parts = entry.entryName.split('/').filter(p => p);
+      if (parts.length === 0) continue;
+
+      // Check if it's an MP3
+      const isMP3 = parts[parts.length - 1].toLowerCase().endsWith('.mp3');
+
+      if (parts.length >= 2) {
+        const datePackName = parts[0];
+        const albumName = parts[1];
+
+        if (!datePacks.has(datePackName)) {
+          datePacks.set(datePackName, { name: datePackName, albums: new Map() });
+        }
+
+        const datePack = datePacks.get(datePackName);
+
+        if (!datePack.albums.has(albumName)) {
+          datePack.albums.set(albumName, { name: albumName, trackCount: 0 });
+        }
+
+        if (isMP3) {
+          const album = datePack.albums.get(albumName);
+          album.trackCount++;
+          totalTracks++;
+        }
+      }
+    }
+
+    // Convert maps to arrays for response
+    const datePackList = [];
+    for (const dp of datePacks.values()) {
+      const albumList = [];
+      for (const album of dp.albums.values()) {
+        if (album.trackCount > 0) {
+          albumList.push({
+            name: album.name,
+            trackCount: album.trackCount
+          });
+          totalAlbums++;
+        }
+      }
+
+      if (albumList.length > 0) {
+        datePackList.push({
+          name: dp.name,
+          albums: albumList
+        });
+      }
+    }
+
+    // Clean up temp file
+    fs.unlinkSync(zipPath);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        collectionName,
+        datePacks: datePackList,
+        totalDatePacks: datePackList.length,
+        totalAlbums,
+        totalTracks,
+        fileSize: zipFile.size
+      }
+    });
+  } catch (error) {
+    console.error('Preview ZIP structure error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// @desc    Get collection processing status
+// @route   GET /api/collections/:id/status
+// @access  Private/Admin
+export const getCollectionStatus = async (req, res) => {
+  try {
+    const collection = await Collection.findById(req.params.id);
+
+    if (!collection) {
+      return res.status(404).json({
+        success: false,
+        message: 'Collection not found'
+      });
+    }
+
+    // Count related items
+    const datePacks = await DatePack.countDocuments({ collectionId: collection._id });
+    const albums = await Album.countDocuments({ collectionId: collection._id });
+    const tracks = await Track.countDocuments({ collectionId: collection._id });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        collectionId: collection._id,
+        name: collection.name,
+        status: collection.status,
+        processingProgress: collection.processingProgress,
+        totalDatePacks: datePacks,
+        totalAlbums: albums,
+        totalTracks: tracks,
+        totalSize: collection.totalSize,
+        updatedAt: collection.updatedAt
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
+
+// @desc    Cancel collection processing
+// @route   POST /api/collections/:id/cancel
+// @access  Private/Admin
+export const cancelCollectionProcessing = async (req, res) => {
+  try {
+    const collection = await Collection.findById(req.params.id);
+    if (!collection) {
+      return res.status(404).json({ success: false, message: 'Collection not found' });
+    }
+    collection.status = 'cancelled';
+    await collection.save();
+    res.status(200).json({ success: true, message: 'Processing cancelled' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Retry failed tracks
+// @route   POST /api/collections/:id/retry-failed
+// @access  Private/Admin
+export const retryFailedTracks = async (req, res) => {
+  try {
+    const collection = await Collection.findById(req.params.id);
+    if (!collection) {
+      return res.status(404).json({ success: false, message: 'Collection not found' });
+    }
+    const { trackIds } = req.body;
+    const failedTracks = await Track.find({ _id: { $in: trackIds }, status: 'failed' });
+    for (const track of failedTracks) {
+      track.status = 'pending';
+      await track.save();
+    }
+    collection.status = 'processing';
+    collection.processingProgress = 0;
+    await collection.save();
+    res.status(200).json({ success: true, message: `Retrying ${failedTracks.length} tracks`, data: { retryCount: failedTracks.length } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };

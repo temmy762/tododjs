@@ -18,7 +18,11 @@ import {
   getCollection,
   updateCollection,
   deleteCollection,
-  getCollectionStats
+  getCollectionStats,
+  previewZipStructure,
+  getCollectionStatus,
+  cancelCollectionProcessing,
+  retryFailedTracks
 } from '../controllers/collectionController.js';
 import { getDatePacksByCollection } from '../controllers/datePackController.js';
 import { protect, authorize } from '../middleware/auth.js';
@@ -42,6 +46,9 @@ const upload = multer({
   }
 });
 
+router.route('/preview-zip')
+  .post(protect, authorize('admin'), upload.single('zip'), previewZipStructure);
+
 router.route('/')
   .get(getCollections)
   .post(protect, authorize('admin'), upload.fields([
@@ -56,6 +63,15 @@ router.route('/:id')
 
 router.route('/:id/stats')
   .get(getCollectionStats);
+
+router.route('/:id/status')
+  .get(protect, authorize('admin'), getCollectionStatus);
+
+router.route('/:id/cancel')
+  .post(protect, authorize('admin'), cancelCollectionProcessing);
+
+router.route('/:id/retry-failed')
+  .post(protect, authorize('admin'), retryFailedTracks);
 
 router.route('/:collectionId/date-packs')
   .get(getDatePacksByCollection);

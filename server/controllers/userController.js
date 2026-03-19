@@ -133,7 +133,7 @@ export const getDeviceOverview = async (req, res) => {
     const total = await User.countDocuments(query);
 
     const users = await User.find(query)
-      .select('name email role subscription.status subscription.plan subscription.devices subscription.sharedWith subscription.sharedBy lastLogin isActive createdAt')
+      .select('name email role subscription.status subscription.plan subscription.devices subscription.sharedWith subscription.sharedBy subscription.stripeCustomerId subscription.stripeSubscriptionId lastLogin isActive createdAt')
       .sort('-lastLogin')
       .skip(skip)
       .limit(parseInt(limit))
@@ -165,7 +165,9 @@ export const getDeviceOverview = async (req, res) => {
           status: u.subscription?.status,
           plan: u.subscription?.plan,
           sharedWith: u.subscription?.sharedWith || [],
-          sharedBy: u.subscription?.sharedBy || null
+          sharedBy: u.subscription?.sharedBy || null,
+          stripeCustomerId: u.subscription?.stripeCustomerId || null,
+          stripeSubscriptionId: u.subscription?.stripeSubscriptionId || null
         },
         devices,
         activeSessions,

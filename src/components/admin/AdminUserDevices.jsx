@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   Monitor, Smartphone, Tablet, Globe, Wifi, WifiOff, Shield, AlertTriangle,
   Search, RefreshCw, Trash2, ChevronDown, ChevronUp, Users, Activity,
-  MapPin, Clock, Zap, Eye, UserX, CheckCircle, XCircle
+  MapPin, Clock, Zap, Eye, UserX, CheckCircle, XCircle, CreditCard, Hash
 } from 'lucide-react';
 import API_URL from '../../config/api';
 
@@ -148,6 +148,35 @@ function UserDeviceRow({ user, onRevoke, onRevokeAll }) {
           <div className="flex md:hidden items-center gap-4 mb-3 text-sm">
             <span className="text-brand-text-tertiary">{activeSessions} active · {user.devices?.length || 0} devices · {user.uniqueIPs?.length || 0} IPs</span>
           </div>
+
+          {/* Stripe IDs */}
+          {(user.subscription?.stripeCustomerId || user.subscription?.stripeSubscriptionId) && (
+            <div className="mb-3 p-3 rounded-lg bg-dark-surface border border-white/10">
+              <p className="text-xs font-semibold text-brand-text-secondary mb-2 flex items-center gap-1">
+                <CreditCard className="w-3 h-3" /> Stripe Information
+              </p>
+              <div className="space-y-1">
+                {user.subscription.stripeCustomerId && (
+                  <div className="flex items-start gap-2">
+                    <Hash className="w-3 h-3 text-brand-text-tertiary mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-brand-text-tertiary">Customer ID</p>
+                      <p className="text-xs font-mono text-white truncate">{user.subscription.stripeCustomerId}</p>
+                    </div>
+                  </div>
+                )}
+                {user.subscription.stripeSubscriptionId && (
+                  <div className="flex items-start gap-2">
+                    <Hash className="w-3 h-3 text-brand-text-tertiary mt-0.5 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-brand-text-tertiary">Subscription ID</p>
+                      <p className="text-xs font-mono text-white truncate">{user.subscription.stripeSubscriptionId}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Sharing info */}
           {user.subscription?.sharedWith?.length > 0 && (
