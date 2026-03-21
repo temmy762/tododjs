@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Upload, Archive, AlertCircle, CheckCircle, Loader, FolderTree, Music, ChevronDown, ChevronUp, ChevronRight, RotateCcw, Ban } from 'lucide-react';
+import ScanPreviewModal from './ScanPreviewModal';
 
 export default function BulkUploadModal({ onClose, onSuccess }) {
   const [file, setFile] = useState(null);
@@ -17,6 +18,9 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   const [collectionId, setCollectionId] = useState(null);
   const [showStructureGuide, setShowStructureGuide] = useState(false);
   const pollIntervalRef = useRef(null);
+  
+  // New state for 3-phase workflow
+  const [uploadPhase, setUploadPhase] = useState('upload'); // 'upload' | 'preview' | 'processing'
 
   const toggleDatePack = (name) => {
     setExpandedDatePacks(prev => {
@@ -199,7 +203,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     }
   };
 
-  const handleUpload = async () => {
+  const handleUpload = async (previewData) => {
     if (!file) {
       setError('Please select a ZIP file');
       return;
@@ -211,6 +215,17 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
 
     const formData = new FormData();
     formData.append('zipFile', file);
+    
+    // Add metadata from preview/edit step
+    formData.append('platform', 'PlayList Pro');
+    formData.append('name', previewData?.collectionName || extractedStructure?.suggestedCollectionName || file.name.replace('.zip', ''));
+    formData.append('year', new Date().getFullYear().toString());
+    formData.append('month', (new Date().getMonth() + 1).toString().padStart(2, '0'));
+    
+    // Send scan result for card creation
+    if (previewData || extractedStructure) {
+      formData.append('scanResult', JSON.stringify(previewData || extractedStructure));
+    }
 
     const xhr = new XMLHttpRequest();
 
@@ -222,12 +237,15 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     });
 
     xhr.addEventListener('load', () => {
+      console.log('Upload response status:', xhr.status);
+      console.log('Upload response text:', xhr.responseText);
       if (xhr.status === 200 || xhr.status === 201) {
         const response = JSON.parse(xhr.responseText);
-        const newCollectionId = response.data?._id;
+        const newCollectionId = response.data?.collection?._id;
         setCollectionId(newCollectionId);
         setSuccess('Upload complete! Processing in background...');
         setProcessingStatus('processing');
+        setUploadPhase('processing');
 
         // Start polling for status
         if (newCollectionId) {
@@ -236,7 +254,12 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
 
         onSuccess?.(response.data);
       } else {
-        setError('Upload failed. Please try again.');
+        let errorMsg = 'Upload failed. Please try again.';
+        try {
+          const resp = JSON.parse(xhr.responseText);
+          if (resp.message) errorMsg = resp.message;
+        } catch (e) {}
+        setError(errorMsg);
         setUploading(false);
       }
     });
@@ -578,16 +601,45 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
           </button>
           {file && !uploading && !success && (
             <button
-              onClick={handleUpload}
+              onClick={() => {
+                if (extractedStructure) {
+                  setUploadPhase('preview');
+                } else {
+                  handleUpload();
+                }
+              }}
               disabled={validating}
               className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors flex items-center gap-2 disabled:opacity-50"
             >
-              <Upload className="w-4 h-4" />
-              {validating ? 'Analyzing...' : 'Upload & Process'}
+              {validating ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Analyzing...
+                </>
+              ) : extractedStructure ? (
+                <>
+                  <CheckCircle className="w-4 h-4" />
+                  Preview Structure
+                </>
+              ) : (
+                <>
+                  <Upload className="w-4 h-4" />
+                  Upload & Process
+                </>
+              )}
             </button>
           )}
         </div>
       </div>
+      {/* Scan Preview Modal */}
+      <ScanPreviewModal
+        isOpen={uploadPhase === 'preview'}
+        onClose={() => setUploadPhase('upload')}
+        scanResult={extractedStructure}
+        file={file}
+        onConfirm={(previewData) => handleUpload(previewData)}
+        isProcessing={uploading}
+      />
     </div>
   );
 }

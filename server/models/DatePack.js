@@ -9,7 +9,7 @@ const datePackSchema = new mongoose.Schema({
   sourceId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Source',
-    required: [true, 'Source is required']
+    required: false
   },
   collectionId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -22,7 +22,7 @@ const datePackSchema = new mongoose.Schema({
   },
   thumbnail: {
     type: String,
-    required: [true, 'Please provide a thumbnail']
+    required: false
   },
   thumbnailKey: {
     type: String,
@@ -47,11 +47,15 @@ const datePackSchema = new mongoose.Schema({
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: true
+    required: false
   },
   isActive: {
     type: Boolean,
     default: true
+  },
+  // New field for scan-first workflow
+  sourceFolderName: {
+    type: String
   }
 }, {
   timestamps: true

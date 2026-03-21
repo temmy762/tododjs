@@ -61,8 +61,8 @@ const collectionSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['processing', 'completed', 'failed'],
-    default: 'processing'
+    enum: ['pending', 'processing', 'completed', 'failed'],
+    default: 'pending'
   },
   processingProgress: {
     type: Number,
@@ -72,6 +72,24 @@ const collectionSchema = new mongoose.Schema({
   },
   errorMessage: {
     type: String
+  },
+  // New fields for scan-first workflow
+  scanResult: {
+    motherFolderName: { type: String },
+    detectedGenres: [{ type: String }],
+    folderStructure: { type: Object }
+  },
+  uploadDate: {
+    type: Date,
+    default: Date.now
+  },
+  extractedDate: {
+    type: Date
+  },
+  collectionNameSource: {
+    type: String,
+    enum: ['motherFolder', 'zipFilename', 'userEdited'],
+    default: 'motherFolder'
   }
 }, {
   timestamps: true

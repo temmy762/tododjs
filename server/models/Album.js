@@ -88,6 +88,18 @@ const albumSchema = new mongoose.Schema({
   processingError: {
     type: String,
     default: null
+  },
+  // New fields for scan-first workflow
+  sourceFolderName: {
+    type: String
+  },
+  detectedGenre: {
+    type: String
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'processing', 'complete', 'failed'],
+    default: 'pending'
   }
 }, {
   timestamps: true
