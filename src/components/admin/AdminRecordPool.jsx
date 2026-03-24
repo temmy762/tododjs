@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star } from 'lucide-react';
 import ManageAlbumModal from './ManageAlbumModal';
 import BulkUploadModal from './BulkUploadModal';
+import CollectionCard from './CollectionCard';
 import API_URL from '../../config/api';
 
 const API = API_URL;
@@ -9,31 +10,31 @@ const getToken = () => localStorage.getItem('token');
 const authHeaders = () => ({ 'Authorization': `Bearer ${getToken()}` });
 
 export default function AdminRecordPool() {
-  const [view, setView] = useState('sources'); // sources | dateCards | albums
-  const [sources, setSources] = useState([]);
+  const [view, setView] = useState('collections'); // collections | dateCards | albums
+  const [collections, setCollections] = useState([]);
   const [dateCards, setDateCards] = useState([]);
   const [albums, setAlbums] = useState([]);
-  const [selectedSource, setSelectedSource] = useState(null);
+  const [selectedCollection, setSelectedCollection] = useState(null);
   const [selectedDateCard, setSelectedDateCard] = useState(null);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState(null); // 'createSource' | 'editSource' | 'createDateCard' | 'editDateCard' | 'uploadAlbum' | 'bulkUpload'
   const [editItem, setEditItem] = useState(null);
 
-  const fetchSources = useCallback(async () => {
+  const fetchCollections = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API}/sources`);
+      const res = await fetch(`${API}/collections`);
       const data = await res.json();
-      if (data.success) setSources(data.data);
-    } catch (err) { console.error('Error fetching sources:', err); }
+      if (data.success) setCollections(data.data);
+    } catch (err) { console.error('Error fetching collections:', err); }
     finally { setLoading(false); }
   }, []);
 
-  const fetchDateCards = useCallback(async (sourceId) => {
+  const fetchDateCards = useCallback(async (collectionId) => {
     try {
       setLoading(true);
-      const res = await fetch(`${API}/date-packs/source/${sourceId}`);
+      const res = await fetch(`${API}/collections/${collectionId}/date-packs`);
       const data = await res.json();
       if (data.success) setDateCards(data.data);
     } catch (err) { console.error('Error fetching date cards:', err); }
@@ -50,13 +51,32 @@ export default function AdminRecordPool() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchSources(); }, [fetchSources]);
+  useEffect(() => { fetchCollections(); }, [fetchCollections]);
 
-  const navigateToSource = (source) => {
-    setSelectedSource(source);
+  useEffect(() => {
+    if (!collections || collections.length === 0) return;
+    let toOpen = null;
+    try {
+      toOpen = localStorage.getItem('admin:recordpool:openCollectionId');
+    } catch {}
+    if (!toOpen) return;
+
+    const match = collections.find(c => String(c._id) === String(toOpen));
+    if (!match) return;
+
+    try {
+      localStorage.removeItem('admin:recordpool:openCollectionId');
+    } catch {}
+
+    navigateToCollection(match);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collections]);
+
+  const navigateToCollection = (collection) => {
+    setSelectedCollection(collection);
     setSelectedDateCard(null);
     setView('dateCards');
-    fetchDateCards(source._id);
+    fetchDateCards(collection._id);
   };
 
   const navigateToDateCard = (dc) => {
@@ -66,25 +86,37 @@ export default function AdminRecordPool() {
   };
 
   const navigateBack = (target) => {
-    if (target === 'sources') {
-      setView('sources');
-      setSelectedSource(null);
+    if (target === 'collections') {
+      setView('collections');
+      setSelectedCollection(null);
       setSelectedDateCard(null);
-      fetchSources();
+      fetchCollections();
     } else if (target === 'dateCards') {
       setView('dateCards');
       setSelectedDateCard(null);
-      if (selectedSource) fetchDateCards(selectedSource._id);
+      if (selectedCollection) fetchDateCards(selectedCollection._id);
     }
   };
 
-  const handleDeleteSource = async (source) => {
-    if (!confirm(`Delete "${source.name}"? This will delete ALL date cards, albums, and tracks under it.`)) return;
+  const handleDeleteCollection = async (collection) => {
+    if (!confirm(`Delete "${collection.name}"? This will delete all date packs, albums, and tracks under it.`)) return;
     try {
-      const res = await fetch(`${API}/sources/${source._id}`, { method: 'DELETE', headers: authHeaders() });
+      const res = await fetch(`${API}/collections/${collection._id}`, {
+        method: 'DELETE',
+        headers: authHeaders()
+      });
       const data = await res.json();
-      if (data.success) fetchSources();
-    } catch (err) { console.error('Error deleting source:', err); }
+      if (data.success) {
+        if (selectedCollection?._id === collection._id) {
+          setSelectedCollection(null);
+          setSelectedDateCard(null);
+          setView('collections');
+        }
+        fetchCollections();
+      }
+    } catch (err) {
+      console.error('Error deleting collection:', err);
+    }
   };
 
   const handleDeleteDateCard = async (dc) => {
@@ -92,7 +124,7 @@ export default function AdminRecordPool() {
     try {
       const res = await fetch(`${API}/date-packs/${dc._id}`, { method: 'DELETE', headers: authHeaders() });
       const data = await res.json();
-      if (data.success && selectedSource) fetchDateCards(selectedSource._id);
+      if (data.success && selectedCollection) fetchDateCards(selectedCollection._id);
     } catch (err) { console.error('Error deleting date card:', err); }
   };
 
@@ -111,20 +143,20 @@ export default function AdminRecordPool() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold mb-1">Record Pool Management</h1>
-            <p className="text-brand-text-tertiary text-sm">Manage sources, date cards, and albums</p>
+            <p className="text-brand-text-tertiary text-sm">Manage collections, date cards, and albums</p>
           </div>
         </div>
 
         {/* Breadcrumbs */}
         <div className="flex items-center gap-2 mb-6 text-sm">
-          <button onClick={() => navigateBack('sources')} className={`flex items-center gap-1 transition-colors ${view === 'sources' ? 'text-white font-semibold' : 'text-brand-text-tertiary hover:text-accent'}`}>
-            <Home size={14} /> Sources
+          <button onClick={() => navigateBack('collections')} className={`flex items-center gap-1 transition-colors ${view === 'collections' ? 'text-white font-semibold' : 'text-brand-text-tertiary hover:text-accent'}`}>
+            <Home size={14} /> Collections
           </button>
-          {selectedSource && (
+          {selectedCollection && (
             <>
               <ChevronRight size={14} className="text-brand-text-tertiary" />
               <button onClick={() => navigateBack('dateCards')} className={`transition-colors ${view === 'dateCards' ? 'text-white font-semibold' : 'text-brand-text-tertiary hover:text-accent'}`}>
-                {selectedSource.name}
+                {selectedCollection.name}
               </button>
             </>
           )}
@@ -136,29 +168,32 @@ export default function AdminRecordPool() {
           )}
         </div>
 
-        {/* Sources View */}
-        {view === 'sources' && (
+        {/* Collections View */}
+        {view === 'collections' && (
           <div>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold">Sources</h2>
+              <h2 className="text-2xl font-bold">Collections</h2>
               <div className="flex gap-3">
                 <button onClick={() => { setModal('bulkUpload'); }} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors">
                   <Upload size={18} /> Bulk Upload ZIP
-                </button>
-                <button onClick={() => { setModal('createSource'); setEditItem(null); }} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
-                  <Plus size={18} /> New Source
                 </button>
               </div>
             </div>
             {loading ? <LoadingSpinner /> : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {sources.map(s => (
-                  <SourceCard key={s._id} source={s} onView={navigateToSource} onEdit={() => { setEditItem(s); setModal('editSource'); }} onDelete={handleDeleteSource} />
+                {collections.map(c => (
+                  <CollectionCard
+                    key={c._id}
+                    collection={c}
+                    onView={(col) => navigateToCollection(col)}
+                    onEdit={() => {}}
+                    onDelete={(col) => handleDeleteCollection(col)}
+                  />
                 ))}
-                {sources.length === 0 && (
+                {collections.length === 0 && (
                   <div className="col-span-full text-center py-16">
                     <FolderOpen size={48} className="mx-auto mb-4 text-brand-text-tertiary opacity-50" />
-                    <p className="text-brand-text-tertiary">No sources yet. Create your first source!</p>
+                    <p className="text-brand-text-tertiary">No collections yet. Bulk upload a ZIP to create one.</p>
                   </div>
                 )}
               </div>
@@ -167,13 +202,10 @@ export default function AdminRecordPool() {
         )}
 
         {/* Date Cards View */}
-        {view === 'dateCards' && selectedSource && (
+        {view === 'dateCards' && selectedCollection && (
           <div>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold">Date Cards — {selectedSource.name}</h2>
-              <button onClick={() => { setModal('createDateCard'); setEditItem(null); }} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
-                <Plus size={18} /> New Date Card
-              </button>
+              <h2 className="text-2xl font-bold">Date Cards — {selectedCollection.name}</h2>
             </div>
             {loading ? <LoadingSpinner /> : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -217,35 +249,18 @@ export default function AdminRecordPool() {
         )}
 
         {/* Modals */}
-        {(modal === 'createSource' || modal === 'editSource') && (
-          <SourceModal
-            source={modal === 'editSource' ? editItem : null}
-            onClose={() => setModal(null)}
-            onSuccess={() => { setModal(null); fetchSources(); }}
-          />
-        )}
-
-        {(modal === 'createDateCard' || modal === 'editDateCard') && selectedSource && (
-          <DateCardModal
-            sourceId={selectedSource._id}
-            dateCard={modal === 'editDateCard' ? editItem : null}
-            onClose={() => setModal(null)}
-            onSuccess={() => { setModal(null); fetchDateCards(selectedSource._id); }}
-          />
-        )}
-
         {modal === 'bulkUpload' && (
           <BulkUploadModal
             onClose={() => setModal(null)}
-            onSuccess={() => { setModal(null); fetchSources(); }}
+            onSuccess={() => { setModal(null); fetchCollections(); }}
           />
         )}
 
-        {modal === 'uploadAlbum' && selectedSource && selectedDateCard && (
+        {modal === 'uploadAlbum' && selectedCollection && selectedDateCard && (
           <AlbumUploadModal
-            sourceId={selectedSource._id}
+            sourceId={selectedCollection._id}
             datePackId={selectedDateCard._id}
-            sourceName={selectedSource.name}
+            sourceName={selectedCollection.name}
             dateCardName={selectedDateCard.name}
             onClose={() => setModal(null)}
             onSuccess={() => { setModal(null); fetchAlbums(selectedDateCard._id); }}
@@ -310,22 +325,60 @@ function SourceCard({ source, onView, onEdit, onDelete }) {
 // Date Card Item
 function DateCardItem({ dateCard, onView, onEdit, onDelete }) {
   const dateStr = new Date(dateCard.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  const [imgError, setImgError] = useState(false);
+  const status = dateCard?.status;
+  const statusClasses = status === 'completed'
+    ? 'bg-green-500/20 text-green-300 border border-green-500/30'
+    : status === 'processing'
+      ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30'
+      : status === 'failed'
+        ? 'bg-red-500/20 text-red-300 border border-red-500/30'
+        : 'bg-white/10 text-white/80 border border-white/10';
+
   return (
     <div className="bg-dark-elevated rounded-xl border border-white/10 overflow-hidden hover:border-accent/40 transition-all duration-300 group cursor-pointer" onClick={() => onView(dateCard)}>
       <div className="relative aspect-square overflow-hidden">
-        <img src={dateCard.thumbnail} alt={dateCard.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+        {!imgError && dateCard.thumbnail ? (
+          <img
+            src={dateCard.thumbnail}
+            alt={dateCard.name}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div className="w-full h-full bg-dark-surface flex items-center justify-center">
+            <Calendar size={44} className="text-white/10" />
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
         <div className="absolute top-3 right-3 px-2 py-1 bg-black/60 backdrop-blur-sm rounded-lg text-xs font-medium text-white/90">
           <Calendar size={12} className="inline mr-1" />{dateStr}
         </div>
+        {status ? (
+          <div className={`absolute top-3 left-3 px-2 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-wide ${statusClasses}`}>
+            {status}
+          </div>
+        ) : null}
         <div className="absolute bottom-3 left-3 right-3">
-          <h3 className="font-bold text-white truncate">{dateCard.name}</h3>
+          <h3 className="font-bold text-white truncate leading-tight">{dateCard.name}</h3>
         </div>
       </div>
       <div className="p-3">
-        <div className="flex items-center justify-between text-sm mb-3">
-          <span className="text-brand-text-tertiary"><Disc size={13} className="inline mr-1" />{dateCard.totalAlbums || 0} albums</span>
-          <span className="text-brand-text-tertiary"><Music size={13} className="inline mr-1" />{dateCard.totalTracks || 0} tracks</span>
+        <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+          <div className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-2">
+            <div className="text-[11px] text-brand-text-tertiary">Albums</div>
+            <div className="text-white font-semibold flex items-center gap-1">
+              <Disc size={14} className="text-accent" />
+              {dateCard.totalAlbums || 0}
+            </div>
+          </div>
+          <div className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-2">
+            <div className="text-[11px] text-brand-text-tertiary">Tracks</div>
+            <div className="text-white font-semibold flex items-center gap-1">
+              <Music size={14} className="text-accent" />
+              {dateCard.totalTracks || 0}
+            </div>
+          </div>
         </div>
         <div className="flex gap-2" onClick={e => e.stopPropagation()}>
           <button onClick={() => onEdit(dateCard)} className="flex-1 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition-colors flex items-center justify-center gap-1">

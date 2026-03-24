@@ -1,11 +1,20 @@
 import { useState, useEffect } from 'react';
 import { Download, TrendingUp, Calendar, Database } from 'lucide-react';
-import API_URL from '../../config/api';
+import API_URL, { getAuthHeaders } from '../../config/api';
 
 export default function AdminDownloadStats() {
   const [stats, setStats] = useState(null);
   const [period, setPeriod] = useState('30d');
   const [loading, setLoading] = useState(false);
+
+  const safeJson = async (response) => {
+    const text = await response.text();
+    try {
+      return { ok: true, json: JSON.parse(text) };
+    } catch (e) {
+      return { ok: false, status: response.status, raw: text };
+    }
+  };
 
   useEffect(() => {
     fetchStats();
@@ -14,19 +23,35 @@ export default function AdminDownloadStats() {
   const fetchStats = async () => {
     try {
       setLoading(true);
-      const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/downloads/stats?period=${period}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: getAuthHeaders(false),
+        credentials: 'include'
       });
-      if (!response.ok) throw new Error('Failed to fetch statistics');
-      const json = await response.json();
+
+      const parsed = await safeJson(response);
+      if (!parsed.ok) {
+        throw new Error(`Stats endpoint returned non-JSON (HTTP ${parsed.status}): ${parsed.raw?.slice(0, 160)}`);
+      }
+
+      const json = parsed.json;
+      if (!response.ok) {
+        throw new Error(json?.message || `Failed to fetch statistics (HTTP ${response.status})`);
+      }
+
       if (json.success) {
-        setStats(json.data);
+        const data = json.data || {};
+        setStats({
+          ...data,
+          totalDownloads: data.totalDownloads ?? 0,
+          downloadsByType: Array.isArray(data.downloadsByType) ? data.downloadsByType : [],
+          topSources: Array.isArray(data.topSources) ? data.topSources : [],
+          downloadsOverTime: Array.isArray(data.downloadsOverTime) ? data.downloadsOverTime : []
+        });
       } else {
         throw new Error(json.message || 'Failed to load statistics');
       }
     } catch (error) {
-      console.error('Error fetching stats:', error);
+      console.error('Error fetching stats:', error?.message || error);
     } finally {
       setLoading(false);
     }
@@ -55,6 +80,8 @@ export default function AdminDownloadStats() {
 
   const singleDownloads = stats.downloadsByType?.find(d => d._id === 'single')?.count || 0;
   const bulkDownloads = stats.downloadsByType?.find(d => d._id === 'bulk')?.count || 0;
+
+  const totalDownloads = stats.totalDownloads ?? 0;
 
   return (
     <div className="p-8">
@@ -86,25 +113,25 @@ export default function AdminDownloadStats() {
         <StatCard
           icon={Download}
           label="Total Downloads"
-          value={stats.totalDownloads.toLocaleString()}
+          value={Number(totalDownloads || 0).toLocaleString()}
           color="blue"
         />
         <StatCard
           icon={TrendingUp}
           label="Single Downloads"
-          value={singleDownloads.toLocaleString()}
+          value={Number(singleDownloads || 0).toLocaleString()}
           color="green"
         />
         <StatCard
           icon={Database}
           label="Bulk Downloads"
-          value={bulkDownloads.toLocaleString()}
+          value={Number(bulkDownloads || 0).toLocaleString()}
           color="purple"
         />
         <StatCard
           icon={Calendar}
           label="Avg per Day"
-          value={Math.round(stats.totalDownloads / (period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 90)).toLocaleString()}
+          value={Math.round(Number(totalDownloads || 0) / (period === '24h' ? 1 : period === '7d' ? 7 : period === '30d' ? 30 : 90)).toLocaleString()}
           color="orange"
         />
       </div>
@@ -125,7 +152,7 @@ export default function AdminDownloadStats() {
                 </div>
               </div>
               <div className="text-right">
-                <div className="font-bold text-accent">{source.downloads.toLocaleString()}</div>
+                <div className="font-bold text-accent">{Number(source.downloads || 0).toLocaleString()}</div>
                 <div className="text-xs text-brand-text-tertiary">downloads</div>
               </div>
             </div>

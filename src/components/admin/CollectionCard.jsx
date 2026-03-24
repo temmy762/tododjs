@@ -41,8 +41,8 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete })
         )}
         
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
-          {collection.status === 'completed' && (
-            <div className="absolute bottom-0 left-0 right-0 p-4 flex gap-2">
+          <div className="absolute bottom-0 left-0 right-0 p-4 flex gap-2">
+            {collection.status === 'completed' && (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -53,26 +53,26 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete })
                 <FolderOpen size={16} />
                 View Date Packs
               </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEdit(collection);
-                }}
-                className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
-              >
-                <Edit2 size={16} />
-              </button>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onDelete(collection);
-                }}
-                className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500 rounded-lg transition-colors"
-              >
-                <Trash2 size={16} />
-              </button>
-            </div>
-          )}
+            )}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onEdit(collection);
+              }}
+              className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(collection);
+              }}
+              className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500 rounded-lg transition-colors"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
         </div>
 
         {collection.status === 'processing' && (

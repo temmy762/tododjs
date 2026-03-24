@@ -61,6 +61,9 @@ app.use(cors({
       'https://www.tododjs.com',
       'https://api.tododjs.com',
       /^http:\/\/127\.0\.0\.1:\d+$/,  // Allow any port on 127.0.0.1 for browser preview
+      /^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:\d+$/,  // Allow LAN dev (common Vite "Network" URL)
+      /^http:\/\/10\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+$/,  // Allow LAN dev (10/8)
+      /^http:\/\/172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}:\d+$/,  // Allow LAN dev (172.16/12)
       /^https?:\/\/(.*\.)?tododjs\.com$/  // Allow all tododjs.com subdomains
     ];
     

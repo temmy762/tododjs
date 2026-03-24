@@ -597,8 +597,14 @@ export const getDownloadStats = async (req, res) => {
     ]);
 
     // Top sources
+    // Some downloads may not have sourceId (e.g. legacy downloads tied to album/track only)
     const topSources = await Download.aggregate([
-      { $match: { createdAt: { $gte: startDate } } },
+      {
+        $match: {
+          createdAt: { $gte: startDate },
+          sourceId: { $ne: null }
+        }
+      },
       { $group: { _id: '$sourceId', downloads: { $sum: 1 } } },
       { $sort: { downloads: -1 } },
       { $limit: 5 }
@@ -608,14 +614,16 @@ export const getDownloadStats = async (req, res) => {
       _id: { $in: topSources.map(s => s._id) }
     });
 
-    const topSourcesData = topSources.map(s => {
-      const source = sourcesWithDetails.find(src => src._id.toString() === s._id.toString());
-      return {
-        source: source?.name,
-        platform: source?.platform,
-        downloads: s.downloads
-      };
-    });
+    const topSourcesData = topSources
+      .filter(s => s?._id)
+      .map(s => {
+        const source = sourcesWithDetails.find(src => String(src._id) === String(s._id));
+        return {
+          source: source?.name,
+          platform: source?.platform,
+          downloads: s.downloads || 0
+        };
+      });
 
     // Downloads over time
     const downloadsOverTime = await Download.aggregate([

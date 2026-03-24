@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
   LayoutDashboard, 
@@ -40,6 +40,25 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
   const { t } = useTranslation();
   const [activeSection, setActiveSection] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  useEffect(() => {
+    const onNavigate = (e) => {
+      const section = e?.detail?.section;
+      const collectionId = e?.detail?.collectionId;
+      if (collectionId) {
+        try {
+          localStorage.setItem('admin:recordpool:openCollectionId', String(collectionId));
+        } catch {}
+      }
+      if (section) {
+        setActiveSection(section);
+        setSidebarOpen(false);
+      }
+    };
+
+    window.addEventListener('admin:navigate', onNavigate);
+    return () => window.removeEventListener('admin:navigate', onNavigate);
+  }, []);
 
   const navItems = [
     { id: 'overview', label: t('admin.overview'), icon: LayoutDashboard },

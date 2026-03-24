@@ -8,6 +8,7 @@ export default function ManageAlbumModal({ album, onClose, onUpdate }) {
   const [tracks, setTracks] = useState([]);
   const [filteredTracks, setFilteredTracks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [editingTrack, setEditingTrack] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [playingTrack, setPlayingTrack] = useState(null);
@@ -25,19 +26,32 @@ export default function ManageAlbumModal({ album, onClose, onUpdate }) {
   const fetchTracks = async () => {
     try {
       setLoading(true);
+      setError('');
       const token = localStorage.getItem('token');
       const response = await fetch(`${API_URL}/albums/${album._id}/tracks`, {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
-      const data = await response.json();
-      if (data.success) {
-        setTracks(data.data);
-        setFilteredTracks(data.data);
+
+      let data = null;
+      try {
+        data = await response.json();
+      } catch (e) {
+        throw new Error(`Server returned invalid JSON (HTTP ${response.status})`);
       }
+
+      if (!response.ok || !data?.success) {
+        throw new Error(data?.message || `Failed to load tracks (HTTP ${response.status})`);
+      }
+
+      setTracks(data.data || []);
+      setFilteredTracks(data.data || []);
     } catch (error) {
       console.error('Error fetching tracks:', error);
+      setTracks([]);
+      setFilteredTracks([]);
+      setError(error.message || 'Failed to load tracks');
     } finally {
       setLoading(false);
     }
@@ -220,7 +234,7 @@ export default function ManageAlbumModal({ album, onClose, onUpdate }) {
             <div className="flex-1">
               <h2 className="text-2xl font-bold mb-1">{album.name}</h2>
               <p className="text-brand-text-tertiary">
-                {album.sourceId?.name} • {album.year} • {filteredTracks.length} of {tracks.length} tracks
+                {album.sourceId?.name} • {album.year} • {filteredTracks.length} of {(tracks.length || album.trackCount || 0)} tracks
               </p>
             </div>
             <button
@@ -245,6 +259,11 @@ export default function ManageAlbumModal({ album, onClose, onUpdate }) {
           {loading ? (
             <div className="text-center py-12 text-brand-text-tertiary">
               Loading tracks...
+            </div>
+          ) : error ? (
+            <div className="text-center py-12">
+              <p className="text-red-400 font-medium">{error}</p>
+              <p className="text-brand-text-tertiary text-sm mt-2">If this keeps happening, your session token may have expired. Try logging out/in and reloading.</p>
             </div>
           ) : (
             <div className="space-y-2">

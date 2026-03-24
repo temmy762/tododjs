@@ -108,14 +108,29 @@ export const getDatePacksBySource = async (req, res) => {
 // @access  Public
 export const getDatePacksByCollection = async (req, res) => {
   try {
-    const datePacks = await DatePack.find({ collectionId: req.params.collectionId })
-      .populate('sourceId', 'name')
-      .sort('date');
+    const datePacks = await DatePack.find({
+      collectionId: req.params.collectionId,
+      isActive: true
+    })
+      .populate('sourceId', 'name thumbnail')
+      .sort('-date')
+      .lean();
+
+    for (const dp of datePacks) {
+      const [albumCount, trackCount] = await Promise.all([
+        Album.countDocuments({ datePackId: dp._id, isActive: true }),
+        Track.countDocuments({ datePackId: dp._id })
+      ]);
+      dp.totalAlbums = albumCount;
+      dp.totalTracks = trackCount;
+    }
+
+    const datePacksWithUrls = await resolveSignedUrls(datePacks, ['thumbnail']);
 
     res.status(200).json({
       success: true,
-      count: datePacks.length,
-      data: datePacks
+      count: datePacksWithUrls.length,
+      data: datePacksWithUrls
     });
   } catch (error) {
     res.status(500).json({
@@ -172,10 +187,17 @@ export const getAlbumsByDatePack = async (req, res) => {
       .sort('-createdAt')
       .lean();
 
-    // Compute live download counts per album
-    for (const album of albums) {
-      album.totalDownloads = await Download.countDocuments({ albumId: album._id });
-    }
+    // Compute live counts per album
+    await Promise.all(
+      albums.map(async (album) => {
+        const [downloadCount, trackCount] = await Promise.all([
+          Download.countDocuments({ albumId: album._id }),
+          Track.countDocuments({ albumId: album._id })
+        ]);
+        album.totalDownloads = downloadCount;
+        album.trackCount = trackCount;
+      })
+    );
 
     const albumsWithUrls = await resolveSignedUrls(albums, ['coverArt']);
 

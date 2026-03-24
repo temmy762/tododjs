@@ -13,6 +13,198 @@ import { detectTonality } from '../services/tonalityDetection.js';
 import { detectGenre } from '../services/genreDetection.js';
 import { generateCollectionName, detectGenres, extractDateFromFolderName } from '../utils/collectionNameGenerator.js';
 
+function buildPreviewFromZipFile(zipPathOrBuffer, originalName, fileSize, depth = 0) {
+  const zipFileName = path.basename(originalName, '.zip');
+
+  const zip = new AdmZip(zipPathOrBuffer);
+  const zipEntries = zip.getEntries();
+
+  const normalizeEntryParts = (entryName, rootFolderName) => {
+    const raw = entryName.split('/').filter(p => p);
+    if (!rootFolderName) return raw;
+    if (raw.length > 0 && raw[0] === rootFolderName) return raw.slice(1);
+    return raw;
+  };
+
+  let motherFolderName = '';
+  for (const entry of zipEntries) {
+    const parts = entry.entryName.split('/').filter(p => p);
+    if (parts.length > 0) {
+      motherFolderName = parts[0];
+      break;
+    }
+  }
+
+  const suggestedCollectionName = generateCollectionName(motherFolderName);
+
+  const isDateLikeFolderName = (name) => {
+    if (!name) return false;
+    return /(\d{2})[._-](\d{2})[._-](\d{2,4})/.test(name);
+  };
+
+  // If the ZIP only has 2-level MP3 paths like "X/track.mp3", X could be:
+  // - a DatePack (DatePack/track.mp3)
+  // - an Album under a single root DatePack (Root/Album/track.mp3)
+  // Heuristic: if the 2-level folder names are mostly NOT date-like, treat them as albums under root.
+  let twoLevelFolderCount = 0;
+  let twoLevelDateLikeCount = 0;
+  for (const entry of zipEntries) {
+    if (entry.isDirectory) continue;
+    const parts = normalizeEntryParts(entry.entryName, motherFolderName);
+    if (parts.length !== 2) continue;
+    const fileName = parts[parts.length - 1];
+    if (!fileName.toLowerCase().endsWith('.mp3')) continue;
+    twoLevelFolderCount++;
+    if (isDateLikeFolderName(parts[0])) twoLevelDateLikeCount++;
+  }
+  const interpretTwoLevelAsAlbumsUnderRoot =
+    twoLevelFolderCount > 0 && (twoLevelDateLikeCount / twoLevelFolderCount) < 0.5;
+
+  const datePacks = new Map();
+  let totalAlbums = 0;
+  let totalTracks = 0;
+
+  for (const entry of zipEntries) {
+    if (entry.isDirectory) continue;
+
+    const parts = normalizeEntryParts(entry.entryName, motherFolderName);
+    if (parts.length === 0) continue;
+
+    const fileName = parts[parts.length - 1];
+    const isMP3 = fileName.toLowerCase().endsWith('.mp3');
+    if (!isMP3) continue;
+
+    let datePackName = null;
+    let albumName = null;
+
+    // Supported:
+    // - DatePack/track.mp3
+    // - DatePack/Album/track.mp3
+    // - Album/track.mp3 (under a root folder) -> root DatePack + Album
+    // - track.mp3 (no folders) -> default DatePack + Album
+    if (parts.length >= 3) {
+      datePackName = parts[0];
+      albumName = parts[1];
+    } else if (parts.length === 2) {
+      if (interpretTwoLevelAsAlbumsUnderRoot) {
+        datePackName = motherFolderName || 'Main';
+        albumName = parts[0];
+      } else {
+        datePackName = parts[0];
+        albumName = parts[0];
+      }
+    } else {
+      datePackName = motherFolderName || 'Main';
+      albumName = motherFolderName || 'Main';
+    }
+
+    if (!datePacks.has(datePackName)) {
+      datePacks.set(datePackName, { name: datePackName, albums: new Map() });
+    }
+
+    const datePack = datePacks.get(datePackName);
+    if (!datePack.albums.has(albumName)) {
+      datePack.albums.set(albumName, { name: albumName, trackCount: 0 });
+    }
+
+    const album = datePack.albums.get(albumName);
+    album.trackCount++;
+    totalTracks++;
+  }
+
+  const datePackList = [];
+  for (const dp of datePacks.values()) {
+    const albumList = [];
+    for (const album of dp.albums.values()) {
+      if (album.trackCount > 0) {
+        albumList.push({
+          name: album.name,
+          trackCount: album.trackCount
+        });
+        totalAlbums++;
+      }
+    }
+
+    if (albumList.length > 0) {
+      datePackList.push({
+        name: dp.name,
+        albums: albumList
+      });
+    }
+  }
+
+  const detectedGenres = detectGenres(datePackList);
+
+  const extractedDate = extractDateFromFolderName(motherFolderName) ||
+    (datePackList.length > 0 ? extractDateFromFolderName(datePackList[0].name) : null);
+
+  if (totalTracks === 0 && depth === 0) {
+    const nestedZipEntries = zipEntries.filter(entry =>
+      !entry.isDirectory &&
+      entry.entryName.toLowerCase().endsWith('.zip') &&
+      !entry.entryName.includes('__MACOSX')
+    );
+
+    if (nestedZipEntries.length > 0) {
+      const nestedDatePacks = [];
+      let nestedTotalAlbums = 0;
+      let nestedTotalTracks = 0;
+
+      for (const nested of nestedZipEntries) {
+        try {
+          const nestedName = path.basename(nested.entryName, '.zip');
+          const nestedPreview = buildPreviewFromZipFile(nested.getData(), nested.entryName, nested.header?.size || 0, depth + 1);
+          if (nestedPreview?.datePacks?.length > 0) {
+            for (const dp of nestedPreview.datePacks) {
+              nestedDatePacks.push({
+                name: nestedName,
+                albums: dp.albums || []
+              });
+              nestedTotalAlbums += (dp.albums || []).length;
+              for (const a of (dp.albums || [])) nestedTotalTracks += (a.trackCount || 0);
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
+      if (nestedDatePacks.length > 0) {
+        const nestedGenres = detectGenres(nestedDatePacks);
+        const extractedDateNested = nestedZipEntries.length > 0
+          ? (extractDateFromFolderName(path.basename(nestedZipEntries[0].entryName, '.zip')) || extractedDate)
+          : extractedDate;
+
+        return {
+          collectionName: zipFileName,
+          suggestedCollectionName,
+          motherFolderName,
+          detectedGenres: nestedGenres,
+          extractedDate: extractedDateNested,
+          datePacks: nestedDatePacks,
+          totalDatePacks: nestedDatePacks.length,
+          totalAlbums: nestedTotalAlbums,
+          totalTracks: nestedTotalTracks,
+          fileSize
+        };
+      }
+    }
+  }
+
+  return {
+    collectionName: zipFileName,
+    suggestedCollectionName,
+    motherFolderName,
+    detectedGenres,
+    extractedDate,
+    datePacks: datePackList,
+    totalDatePacks: datePackList.length,
+    totalAlbums,
+    totalTracks,
+    fileSize
+  };
+}
+
 // Helper: Open a ZIP file with yauzl (supports >2GB)
 function openZipFile(filePath) {
   return new Promise((resolve, reject) => {
@@ -60,6 +252,158 @@ function extractEntryToFile(zipfile, entry, outputPath) {
       writeStream.on('finish', () => resolve(outputPath));
       writeStream.on('error', reject);
       readStream.on('error', reject);
+    });
+  });
+}
+
+function extractEntryToFileByName(zipPath, targetFileName, outputPath) {
+  return new Promise((resolve, reject) => {
+    yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
+      if (err) return reject(err);
+
+      let done = false;
+
+      const cleanup = () => {
+        try {
+          zipfile.removeAllListeners('entry');
+          zipfile.removeAllListeners('end');
+          zipfile.removeAllListeners('error');
+        } catch {
+          // ignore
+        }
+      };
+
+      zipfile.on('error', (e) => {
+        if (done) return;
+        done = true;
+        cleanup();
+        try { zipfile.close(); } catch { /* ignore */ }
+        reject(e);
+      });
+
+      zipfile.on('end', () => {
+        if (done) return;
+        done = true;
+        cleanup();
+        try { zipfile.close(); } catch { /* ignore */ }
+        reject(new Error(`Inner ZIP entry not found: ${targetFileName}`));
+      });
+
+      zipfile.on('entry', (entry) => {
+        if (done) return;
+
+        if (entry.fileName !== targetFileName) {
+          zipfile.readEntry();
+          return;
+        }
+
+        zipfile.openReadStream(entry, (streamErr, readStream) => {
+          if (streamErr) {
+            done = true;
+            cleanup();
+            try { zipfile.close(); } catch { /* ignore */ }
+            reject(streamErr);
+            return;
+          }
+
+          const writeStream = fs.createWriteStream(outputPath);
+          readStream.pipe(writeStream);
+
+          const onError = (e) => {
+            if (done) return;
+            done = true;
+            cleanup();
+            try { zipfile.close(); } catch { /* ignore */ }
+            reject(e);
+          };
+
+          readStream.on('error', onError);
+          writeStream.on('error', onError);
+          writeStream.on('finish', () => {
+            if (done) return;
+            done = true;
+            cleanup();
+            try { zipfile.close(); } catch { /* ignore */ }
+            resolve(outputPath);
+          });
+        });
+      });
+
+      zipfile.readEntry();
+    });
+  });
+}
+
+function extractEntryToBufferByName(zipPath, targetFileName) {
+  return new Promise((resolve, reject) => {
+    yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
+      if (err) return reject(err);
+
+      let done = false;
+
+      const cleanup = () => {
+        try {
+          zipfile.removeAllListeners('entry');
+          zipfile.removeAllListeners('end');
+          zipfile.removeAllListeners('error');
+        } catch {
+          // ignore
+        }
+      };
+
+      zipfile.on('error', (e) => {
+        if (done) return;
+        done = true;
+        cleanup();
+        try { zipfile.close(); } catch { /* ignore */ }
+        reject(e);
+      });
+
+      zipfile.on('end', () => {
+        if (done) return;
+        done = true;
+        cleanup();
+        try { zipfile.close(); } catch { /* ignore */ }
+        reject(new Error(`Entry not found: ${targetFileName}`));
+      });
+
+      zipfile.on('entry', (entry) => {
+        if (done) return;
+
+        if (entry.fileName !== targetFileName) {
+          zipfile.readEntry();
+          return;
+        }
+
+        zipfile.openReadStream(entry, (streamErr, readStream) => {
+          if (streamErr) {
+            done = true;
+            cleanup();
+            try { zipfile.close(); } catch { /* ignore */ }
+            reject(streamErr);
+            return;
+          }
+
+          const chunks = [];
+          readStream.on('data', (chunk) => chunks.push(chunk));
+          readStream.on('error', (e) => {
+            if (done) return;
+            done = true;
+            cleanup();
+            try { zipfile.close(); } catch { /* ignore */ }
+            reject(e);
+          });
+          readStream.on('end', () => {
+            if (done) return;
+            done = true;
+            cleanup();
+            try { zipfile.close(); } catch { /* ignore */ }
+            resolve(Buffer.concat(chunks));
+          });
+        });
+      });
+
+      zipfile.readEntry();
     });
   });
 }
@@ -204,10 +548,12 @@ export const uploadCollection = async (req, res) => {
     collection.totalDatePacks = createdDatePacks.length;
     await collection.save();
 
-    // Respond with created cards
+    // Respond immediately (cards may be created during processing if no scanResult)
     res.status(201).json({
       success: true,
-      message: 'Collection cards created. Processing started in background.',
+      message: createdDatePacks.length > 0
+        ? 'Collection cards created. Processing started in background.'
+        : 'Upload received. Processing started in background.',
       data: {
         collection: {
           _id: collection._id,
@@ -235,6 +581,44 @@ export const uploadCollection = async (req, res) => {
   }
 };
 
+export const previewZipStructures = async (req, res) => {
+  try {
+    const zipFiles = req.files;
+    if (!zipFiles || zipFiles.length === 0) {
+      return res.status(400).json({ success: false, message: 'Please upload ZIP files' });
+    }
+
+    const results = [];
+
+    for (const zipFile of zipFiles) {
+      try {
+        const zipInput = zipFile.buffer || zipFile.path;
+        const preview = buildPreviewFromZipFile(zipInput, zipFile.originalname, zipFile.size);
+        results.push({
+          fileName: zipFile.originalname,
+          success: true,
+          data: preview
+        });
+        if (zipFile?.path && fs.existsSync(zipFile.path)) fs.unlinkSync(zipFile.path);
+      } catch (error) {
+        results.push({
+          fileName: zipFile.originalname,
+          success: false,
+          message: error.message
+        });
+        if (zipFile?.path && fs.existsSync(zipFile.path)) fs.unlinkSync(zipFile.path);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      data: results
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 async function processCollectionAsync(collectionId, zipFilePath, collectionData, createdDatePacks, createdAlbums) {
   const tempDir = path.dirname(zipFilePath);
   const extractedDatePacks = [];
@@ -248,11 +632,29 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
     console.log(`☁️ Uploading ${zipSizeGB} GB ZIP to Wasabi S3...`);
     const zipStream = fs.createReadStream(zipFilePath);
     const collectionKey = `collections/${collection.name}/original.zip`;
+
+    let lastWasabiProgressUpdateMs = 0;
     const zipUpload = await uploadToWasabi(
       zipStream,
       collectionKey,
       'application/zip',
-      (progress) => console.log(`   ☁️ Wasabi upload: ${progress.toFixed(1)}%`)
+      async (progress) => {
+        console.log(`   ☁️ Wasabi upload: ${progress.toFixed(1)}%`);
+
+        const nowMs = Date.now();
+        if (nowMs - lastWasabiProgressUpdateMs < 1500) return;
+        lastWasabiProgressUpdateMs = nowMs;
+
+        const mapped = Math.max(0, Math.min(5, Math.round(progress * 0.05)));
+        if ((collection.processingProgress ?? 0) < mapped) {
+          collection.processingProgress = mapped;
+          try {
+            await collection.save();
+          } catch {
+            // ignore
+          }
+        }
+      }
     );
     console.log('✅ ZIP uploaded to Wasabi S3');
 
@@ -265,24 +667,298 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
     const existingDatePacks = await DatePack.find({ collectionId: collection._id });
     console.log(`📦 Found ${existingDatePacks.length} existing date pack cards`);
 
-    if (existingDatePacks.length === 0) {
-      console.log('⚠️ No date pack cards found, collection may have been created without scan');
-      collection.status = 'failed';
-      collection.errorMessage = 'No date pack cards found';
-      await collection.save();
-      return;
-    }
-
-    // Build a map of date pack name to ID
-    const datePackMap = new Map();
-    for (const dp of existingDatePacks) {
-      datePackMap.set(dp.name, dp._id.toString());
-    }
-
     // Open ZIP and find MP3 files
     const zipfile = await openZipFile(zipFilePath);
     const entries = await readAllEntries(zipfile);
     console.log(`📋 Total entries in ZIP: ${entries.length}`);
+
+    const innerZipEntries = entries
+      .filter(e =>
+        !e.fileName.endsWith('/') &&
+        e.fileName.toLowerCase().endsWith('.zip') &&
+        !e.fileName.includes('__MACOSX')
+      )
+      .map(e => e.fileName);
+
+    const outerMp3Count = entries.filter(e =>
+      !e.fileName.endsWith('/') &&
+      e.fileName.toLowerCase().endsWith('.mp3') &&
+      !e.fileName.includes('__MACOSX')
+    ).length;
+
+    if (outerMp3Count === 0) {
+      console.log(`🎧 Outer ZIP MP3 count: 0`);
+      console.log(`🗜️ Inner ZIP entries detected: ${innerZipEntries.length}`);
+      const sample = entries
+        .filter(e => !e.fileName.includes('__MACOSX'))
+        .slice(0, 25)
+        .map(e => e.fileName);
+      console.log(`📎 ZIP entry sample (first ${sample.length}):`, sample);
+    }
+
+    const processZipAsDatedPack = async (datedZipPath, datePackName) => {
+      const now = new Date();
+      const dateMatch = datePackName?.match(/(\d{2})[._-](\d{2})[._-](\d{2,4})/);
+      let packDate = now;
+      if (dateMatch) {
+        const [, day, month, year] = dateMatch;
+        const fullYear = year.length === 2 ? 2000 + parseInt(year) : parseInt(year);
+        packDate = new Date(fullYear, parseInt(month) - 1, parseInt(day));
+      }
+
+      const datePack = await DatePack.create({
+        name: datePackName,
+        collectionId: collection._id,
+        date: packDate,
+        status: 'pending',
+        sourceFolderName: datePackName
+      });
+
+      let albumsCreated = 0;
+      let tracksCreated = 0;
+      let bytesUploaded = 0;
+      const albumsCache = new Map();
+
+      const getOrCreateAlbum = async (albumName, trackCountHint) => {
+        const key = albumName || datePackName;
+        if (albumsCache.has(key)) return albumsCache.get(key);
+
+        const genreMatch = key.match(/\((.*?)\)/);
+        const genre = genreMatch ? genreMatch[1] : null;
+
+        const album = await Album.create({
+          collectionId: collection._id,
+          datePackId: datePack._id,
+          name: key,
+          genre: genre,
+          year: collection.year,
+          coverArt: collection.thumbnail,
+          trackCount: trackCountHint || 0,
+          uploadedBy: collection.uploadedBy
+        });
+
+        albumsCreated++;
+        albumsCache.set(key, album);
+        return album;
+      };
+
+      const processZipRecursively = async (zipPath, albumHint, depth = 0) => {
+        if (depth > 6) return;
+
+        const zf = await openZipFile(zipPath);
+        const zEntries = await readAllEntries(zf);
+        try { zf.close(); } catch { /* ignore */ }
+
+        const mp3Names = zEntries
+          .filter(e => !e.fileName.endsWith('/') && !e.fileName.includes('__MACOSX') && e.fileName.toLowerCase().endsWith('.mp3'))
+          .map(e => e.fileName);
+
+        const innerZipNames = zEntries
+          .filter(e => !e.fileName.endsWith('/') && !e.fileName.includes('__MACOSX') && e.fileName.toLowerCase().endsWith('.zip'))
+          .map(e => e.fileName);
+
+        if (mp3Names.length > 0) {
+          for (const mp3FileName of mp3Names) {
+            const mp3Parts = mp3FileName.split('/').filter(Boolean);
+            const parentFolder = mp3Parts.length >= 2 ? mp3Parts[mp3Parts.length - 2] : null;
+            const finalAlbumName = parentFolder || albumHint || datePackName;
+            const album = await getOrCreateAlbum(finalAlbumName, 0);
+
+            const mp3Buffer = await extractEntryToBufferByName(zipPath, mp3FileName);
+            const mp3Name = path.basename(mp3FileName);
+
+            let metadata = {
+              title: path.parse(mp3Name).name,
+              artist: 'Unknown Artist',
+              bpm: null,
+              duration: 0
+            };
+
+            try {
+              const musicMetadata = await parseBuffer(mp3Buffer, { mimeType: 'audio/mpeg' });
+              metadata = {
+                title: musicMetadata.common.title || metadata.title,
+                artist: musicMetadata.common.artist || metadata.artist,
+                bpm: musicMetadata.common.bpm || null,
+                duration: musicMetadata.format.duration || 0
+              };
+            } catch (error) {
+              // ignore
+            }
+
+            const tonality = await detectTonality(mp3Buffer, metadata);
+            const genreResult = await detectGenre(mp3Buffer, metadata);
+
+            const trackKey = `collections/${collection.name}/albums/${album.name}/${mp3Name}`;
+            const trackUpload = await uploadToWasabi(mp3Buffer, trackKey, 'audio/mpeg');
+
+            await Track.create({
+              collectionId: collection._id,
+              datePackId: datePack._id,
+              albumId: album._id,
+              title: metadata.title,
+              artist: metadata.artist,
+              genre: genreResult.genre || album.genre || 'House',
+              genreConfidence: genreResult.confidence,
+              genreSource: genreResult.source,
+              genreNeedsReview: genreResult.needsManualReview,
+              bpm: metadata.bpm || 128,
+              tonality: tonality,
+              pool: collection.platform,
+              coverArt: collection.thumbnail,
+              audioFile: {
+                url: trackUpload.location,
+                key: trackUpload.key,
+                format: 'MP3',
+                size: mp3Buffer.length,
+                duration: metadata.duration
+              },
+              versionType: 'Original Mix',
+              uploadedBy: collection.uploadedBy,
+              status: 'published'
+            });
+
+            bytesUploaded += mp3Buffer.length;
+            tracksCreated++;
+          }
+        }
+
+        for (const innerZipName of innerZipNames) {
+          const nestedAlbumHint = path.basename(innerZipName, '.zip') || albumHint;
+          const outPath = path.join(
+            tempDir,
+            `${Date.now()}-${Math.random().toString(16).slice(2)}-${path.basename(innerZipName)}`
+          );
+          await extractEntryToFileByName(zipPath, innerZipName, outPath);
+          await processZipRecursively(outPath, nestedAlbumHint, depth + 1);
+          if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+        }
+      };
+
+      await processZipRecursively(datedZipPath, datePackName, 0);
+
+      if (tracksCreated === 0) {
+        await DatePack.deleteOne({ _id: datePack._id });
+        await Album.deleteMany({ datePackId: datePack._id });
+        return { datePack: null, albumsCreated: 0, tracksCreated: 0, bytesUploaded: 0 };
+      }
+
+      const createdAlbumsList = await Album.find({ datePackId: datePack._id });
+      for (const a of createdAlbumsList) {
+        const c = await Track.countDocuments({ albumId: a._id });
+        a.trackCount = c;
+        await a.save();
+      }
+
+      return { datePack, albumsCreated: createdAlbumsList.length, tracksCreated, bytesUploaded };
+    };
+
+    if (outerMp3Count === 0 && innerZipEntries.length > 0) {
+      let totalAlbumsNested = 0;
+      let totalTracksNested = 0;
+      let totalBytesNested = 0;
+
+      for (let i = 0; i < innerZipEntries.length; i++) {
+        const innerZipName = innerZipEntries[i];
+        const baseName = path.basename(innerZipName, '.zip');
+        const outPath = path.join(
+          tempDir,
+          `${Date.now()}-${Math.random().toString(16).slice(2)}-${path.basename(innerZipName)}`
+        );
+        await extractEntryToFileByName(zipFilePath, innerZipName, outPath);
+        const result = await processZipAsDatedPack(outPath, baseName);
+        if (result.datePack) extractedDatePacks.push(result.datePack);
+        totalAlbumsNested += result.albumsCreated;
+        totalTracksNested += result.tracksCreated;
+        totalBytesNested += result.bytesUploaded;
+        if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+
+        const pct = innerZipEntries.length > 0
+          ? Math.min(95, Math.round(((i + 1) / innerZipEntries.length) * 95))
+          : 0;
+        collection.processingProgress = Math.max(collection.processingProgress || 0, pct);
+        await collection.save();
+      }
+
+      collection.totalDatePacks = extractedDatePacks.length;
+      collection.totalAlbums = totalAlbumsNested;
+      collection.totalTracks = totalTracksNested;
+      collection.totalSize = totalBytesNested;
+
+      if (totalTracksNested === 0 || extractedDatePacks.length === 0) {
+        collection.status = 'failed';
+        collection.processingProgress = 0;
+        await collection.save();
+        try { zipfile.close(); } catch { /* ignore */ }
+        console.log('❌ Nested ZIP processing found no MP3 files. Marking collection as failed.');
+        return;
+      }
+
+      collection.processingProgress = 100;
+      collection.status = 'completed';
+      await collection.save();
+
+      try { zipfile.close(); } catch { /* ignore */ }
+
+      console.log(`\n✅ Collection processing completed!`);
+      console.log(`   Albums: ${totalAlbumsNested}`);
+      console.log(`   Tracks: ${totalTracksNested}`);
+      console.log('🧹 Cleaned up temp ZIP file');
+
+      if (fs.existsSync(zipFilePath)) fs.unlinkSync(zipFilePath);
+      return;
+    }
+
+    const isDateLikeFolderName = (name) => {
+      if (!name) return false;
+      return /(\d{2})[._-](\d{2})[._-](\d{2,4})/.test(name);
+    };
+
+    const guessMotherFolderName = (zipEntries) => {
+      const counts = new Map();
+      let total = 0;
+      for (const e of zipEntries) {
+        if (e.fileName.endsWith('/')) continue;
+        const lower = e.fileName.toLowerCase();
+        if (!lower.endsWith('.mp3')) continue;
+        if (lower.includes('__macosx')) continue;
+        const parts = e.fileName.split('/').filter(Boolean);
+        if (parts.length === 0) continue;
+        total++;
+        counts.set(parts[0], (counts.get(parts[0]) || 0) + 1);
+      }
+      if (total === 0) return null;
+      let best = null;
+      let bestCount = 0;
+      for (const [k, v] of counts) {
+        if (v > bestCount) {
+          best = k;
+          bestCount = v;
+        }
+      }
+      if (!best) return null;
+      return (bestCount / total) >= 0.7 ? best : null;
+    };
+
+    const motherFolderName = collectionData?.scanResult?.motherFolderName || guessMotherFolderName(entries);
+
+    // Detect ambiguous 2-level layout for this ZIP (see buildPreviewFromZipFile)
+    let twoLevelFolderCount = 0;
+    let twoLevelDateLikeCount = 0;
+    for (const entry of entries) {
+      if (entry.fileName.endsWith('/')) continue;
+      if (!entry.fileName.toLowerCase().endsWith('.mp3')) continue;
+      if (entry.fileName.includes('__MACOSX')) continue;
+      const rawParts = entry.fileName.split('/').filter(p => p);
+      if (rawParts.length === 0) continue;
+      const rootFolder = motherFolderName || rawParts[0];
+      const parts = rawParts[0] === rootFolder ? rawParts.slice(1) : rawParts;
+      if (parts.length !== 2) continue;
+      twoLevelFolderCount++;
+      if (isDateLikeFolderName(parts[0])) twoLevelDateLikeCount++;
+    }
+    const interpretTwoLevelAsAlbumsUnderRoot =
+      twoLevelFolderCount > 0 && (twoLevelDateLikeCount / twoLevelFolderCount) < 0.5;
 
     // Find all MP3 files and group by date pack name
     const mp3FilesByDatePack = new Map();
@@ -291,20 +967,117 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
       if (!entry.fileName.toLowerCase().endsWith('.mp3')) continue;
       if (entry.fileName.includes('__MACOSX')) continue;
 
-      const parts = entry.fileName.split('/').filter(p => p);
-      if (parts.length >= 2) {
-        const datePackName = parts[0];
-        if (!mp3FilesByDatePack.has(datePackName)) {
-          mp3FilesByDatePack.set(datePackName, []);
+      const rawParts = entry.fileName.split('/').filter(p => p);
+      if (rawParts.length === 0) continue;
+
+      const rootFolder = motherFolderName || rawParts[0];
+      const parts = rawParts[0] === rootFolder ? rawParts.slice(1) : rawParts;
+      if (parts.length === 0) continue;
+
+      let datePackName = null;
+      let albumName = null;
+      if (parts.length >= 3) {
+        datePackName = parts[0];
+        albumName = parts[1];
+      } else if (parts.length === 2) {
+        if (interpretTwoLevelAsAlbumsUnderRoot) {
+          datePackName = rootFolder || 'Main';
+          albumName = parts[0];
+        } else {
+          datePackName = parts[0];
+          albumName = parts[0];
         }
-        mp3FilesByDatePack.get(datePackName).push({
-          fileName: entry.fileName,
-          albumName: parts[1] || 'Unknown Album'
-        });
+      } else {
+        datePackName = rootFolder || 'Main';
+        albumName = rootFolder || 'Main';
       }
+
+      if (!mp3FilesByDatePack.has(datePackName)) {
+        mp3FilesByDatePack.set(datePackName, []);
+      }
+      mp3FilesByDatePack.get(datePackName).push({
+        fileName: entry.fileName,
+        albumName: albumName || 'Unknown Album'
+      });
+    }
+
+    // If the collection was created without scan/preview, create DatePack/Album cards now.
+    const ensureCardsExist = async () => {
+      const existing = await DatePack.find({ collectionId: collection._id });
+      if (existing.length > 0) return existing;
+
+      console.log('🧱 No date pack cards found. Creating cards from ZIP contents...');
+      const now = new Date();
+      const created = [];
+
+      for (const [datePackName, mp3Files] of mp3FilesByDatePack) {
+        const dateMatch = datePackName?.match(/(\d{2})[._-](\d{2})[._-](\d{2,4})/);
+        let packDate = now;
+        if (dateMatch) {
+          const [, day, month, year] = dateMatch;
+          const fullYear = year.length === 2 ? 2000 + parseInt(year) : parseInt(year);
+          packDate = new Date(fullYear, parseInt(month) - 1, parseInt(day));
+        }
+
+        const datePack = await DatePack.create({
+          name: datePackName,
+          collectionId: collection._id,
+          date: packDate,
+          status: 'pending',
+          sourceFolderName: datePackName
+        });
+        created.push(datePack);
+
+        const mp3sByAlbum = new Map();
+        for (const mp3 of mp3Files) {
+          const aName = mp3.albumName || 'Unknown Album';
+          if (!mp3sByAlbum.has(aName)) mp3sByAlbum.set(aName, []);
+          mp3sByAlbum.get(aName).push(mp3);
+        }
+
+        for (const [albumName, albumMp3s] of mp3sByAlbum) {
+          const genreMatch = albumName.match(/\((.*?)\)/);
+          const detectedGenre = genreMatch ? genreMatch[1] : null;
+          await Album.create({
+            collectionId: collection._id,
+            datePackId: datePack._id,
+            name: albumName,
+            genre: detectedGenre,
+            year: collection.year,
+            coverArt: collection.thumbnail,
+            trackCount: albumMp3s.length,
+            uploadedBy: collection.uploadedBy,
+            status: 'pending',
+            sourceFolderName: albumName,
+            detectedGenre: detectedGenre
+          });
+        }
+      }
+
+      collection.totalDatePacks = created.length;
+      await collection.save();
+      console.log(`✅ Created ${created.length} date packs from ZIP contents`);
+      return created;
+    };
+
+    const finalDatePacks = await ensureCardsExist();
+
+    // Build a map of date pack name to ID
+    const datePackMap = new Map();
+    for (const dp of finalDatePacks) {
+      datePackMap.set(dp.name, dp._id.toString());
     }
 
     console.log(`📂 Found MP3s in ${mp3FilesByDatePack.size} date packs`);
+
+    if (mp3FilesByDatePack.size === 0) {
+      collection.status = 'failed';
+      collection.processingProgress = 0;
+      await collection.save();
+      try { zipfile.close(); } catch { /* ignore */ }
+      console.log('❌ No MP3 files found in ZIP. Marking collection as failed.');
+      return;
+    }
 
     let totalAlbums = 0;
     let totalTracks = 0;
@@ -359,6 +1132,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
     collection.status = 'completed';
     collection.processingProgress = 100;
     await collection.save();
+
+    try { zipfile.close(); } catch { /* ignore */ }
 
     console.log(`\n✅ Collection processing completed!`);
     console.log(`   Albums: ${totalAlbums}`);
@@ -505,7 +1280,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
             size: trackSize,
             duration: metadata.duration
           },
-          status: 'complete'
+          status: 'published'
         });
         
         albumTrackCount++;
@@ -900,110 +1675,17 @@ export const previewZipStructure = async (req, res) => {
       });
     }
 
-    const zipPath = zipFile.path;
-    const zipFileName = path.basename(zipFile.originalname, '.zip');
-
-    const zip = new AdmZip(zipPath);
-    const zipEntries = zip.getEntries();
-
-    // Extract mother folder (first folder in ZIP)
-    let motherFolderName = '';
-    for (const entry of zipEntries) {
-      const parts = entry.entryName.split('/').filter(p => p);
-      if (parts.length > 0) {
-        motherFolderName = parts[0];
-        break;
-      }
-    }
-
-    // Generate suggested collection name from mother folder
-    const suggestedCollectionName = generateCollectionName(motherFolderName);
-
-    // Extract folder structure
-    const datePacks = new Map();
-    let totalAlbums = 0;
-    let totalTracks = 0;
-
-    for (const entry of zipEntries) {
-      if (entry.isDirectory) continue;
-
-      const parts = entry.entryName.split('/').filter(p => p);
-      if (parts.length === 0) continue;
-
-      // Check if it's an MP3
-      const isMP3 = parts[parts.length - 1].toLowerCase().endsWith('.mp3');
-
-      if (parts.length >= 2) {
-        const datePackName = parts[0];
-        const albumName = parts[1];
-
-        if (!datePacks.has(datePackName)) {
-          datePacks.set(datePackName, { name: datePackName, albums: new Map() });
-        }
-
-        const datePack = datePacks.get(datePackName);
-
-        if (!datePack.albums.has(albumName)) {
-          datePack.albums.set(albumName, { name: albumName, trackCount: 0 });
-        }
-
-        if (isMP3) {
-          const album = datePack.albums.get(albumName);
-          album.trackCount++;
-          totalTracks++;
-        }
-      }
-    }
-
-    // Convert maps to arrays for response
-    const datePackList = [];
-    for (const dp of datePacks.values()) {
-      const albumList = [];
-      for (const album of dp.albums.values()) {
-        if (album.trackCount > 0) {
-          albumList.push({
-            name: album.name,
-            trackCount: album.trackCount
-          });
-          totalAlbums++;
-        }
-      }
-
-      if (albumList.length > 0) {
-        datePackList.push({
-          name: dp.name,
-          albums: albumList
-        });
-      }
-    }
-
-    // Detect genres from album names
-    const detectedGenres = detectGenres(datePackList);
-
-    // Extract date from mother folder or first date pack
-    const extractedDate = extractDateFromFolderName(motherFolderName) || 
-                         (datePackList.length > 0 ? extractDateFromFolderName(datePackList[0].name) : null);
-
-    // Clean up temp file
-    fs.unlinkSync(zipPath);
+    const zipInput = zipFile.buffer || zipFile.path;
+    const preview = buildPreviewFromZipFile(zipInput, zipFile.originalname, zipFile.size);
 
     res.status(200).json({
       success: true,
-      data: {
-        collectionName: zipFileName,
-        suggestedCollectionName,
-        motherFolderName,
-        detectedGenres,
-        extractedDate,
-        datePacks: datePackList,
-        totalDatePacks: datePackList.length,
-        totalAlbums,
-        totalTracks,
-        fileSize: zipFile.size
-      }
+      data: preview
     });
+
+    if (zipFile?.path && fs.existsSync(zipFile.path)) fs.unlinkSync(zipFile.path);
   } catch (error) {
-    console.error('Preview ZIP structure error:', error);
+    if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
     res.status(500).json({
       success: false,
       message: error.message

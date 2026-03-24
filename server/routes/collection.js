@@ -19,7 +19,6 @@ import {
   updateCollection,
   deleteCollection,
   getCollectionStats,
-  previewZipStructure,
   getCollectionStatus,
   cancelCollectionProcessing,
   retryFailedTracks
@@ -42,12 +41,9 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage: storage,
   limits: {
-    fileSize: 100000000000 // 100GB limit
+    fileSize: 150 * 1024 * 1024 * 1024 // 150GB limit
   }
 });
-
-router.route('/preview-zip')
-  .post(protect, authorize('admin'), upload.single('zip'), previewZipStructure);
 
 router.route('/')
   .get(getCollections)

@@ -1,12 +1,10 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { X, Upload, Archive, AlertCircle, CheckCircle, Loader, FolderTree, Music, ChevronDown, ChevronUp, ChevronRight, RotateCcw, Ban } from 'lucide-react';
-import ScanPreviewModal from './ScanPreviewModal';
+import { X, Upload, Archive, AlertCircle, CheckCircle, Loader, FolderTree, Music, ChevronDown, ChevronUp, ChevronRight, RotateCcw, Ban, FolderOpen } from 'lucide-react';
 import { API_URL } from '../../config/api';
 
 export default function BulkUploadModal({ onClose, onSuccess }) {
-  const [files, setFiles] = useState([]);
-  const [activeFileIndex, setActiveFileIndex] = useState(0);
-  const [extractedStructure, setExtractedStructure] = useState(null);
+  const [uploadItems, setUploadItems] = useState([]);
+  const [activeItemIndex, setActiveItemIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [processingStatus, setProcessingStatus] = useState('');
@@ -22,9 +20,42 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   const pollIntervalRef = useRef(null);
   
   // New state for 3-phase workflow
-  const [uploadPhase, setUploadPhase] = useState('upload'); // 'upload' | 'preview' | 'processing'
+  const [uploadPhase, setUploadPhase] = useState('upload'); // 'upload' | 'cards'
 
-  const activeFile = files[activeFileIndex] || null;
+  const activeItem = uploadItems[activeItemIndex] || null;
+  const activeFile = activeItem?.file || null;
+  const extractedStructure = activeItem?.scanResult || null;
+
+  const groupAlbumsByDatePackId = (albums = []) => {
+    const grouped = new Map();
+    for (const a of albums) {
+      const key = a?.datePackId ? String(a.datePackId) : '__unknown__';
+      if (!grouped.has(key)) grouped.set(key, []);
+      grouped.get(key).push(a);
+    }
+    return grouped;
+  };
+
+  const openInRecordPool = (collectionId) => {
+    if (!collectionId) return;
+    try {
+      window.dispatchEvent(
+        new CustomEvent('admin:navigate', {
+          detail: {
+            section: 'recordpool',
+            collectionId
+          }
+        })
+      );
+    } catch {
+      // ignore
+    }
+    onClose?.();
+  };
+
+  const updateItem = (index, patch) => {
+    setUploadItems(prev => prev.map((it, idx) => (idx === index ? { ...it, ...patch } : it)));
+  };
 
   const api = (path) => {
     const base = API_URL?.endsWith('/') ? API_URL.slice(0, -1) : API_URL;
@@ -129,7 +160,18 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
 
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const response = await fetch(api(`/collections/${id}/status`));
+        const token = localStorage.getItem('token');
+        const response = await fetch(api(`/collections/${id}/status`), {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : ''
+          }
+        });
+        if (response.status === 401 || response.status === 403) {
+          clearInterval(pollIntervalRef.current);
+          setProcessingStatus('failed');
+          setError('Unauthorized. Please log in as admin to track upload progress.');
+          return;
+        }
         const data = await response.json();
 
         if (data.success) {
@@ -200,8 +242,8 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
         setError(`Please upload ZIP files only (got: ${f.name})`);
         continue;
       }
-      if (f.size > 100 * 1024 * 1024 * 1024) {
-        setError('File size exceeds 100GB limit');
+      if (f.size > 150 * 1024 * 1024 * 1024) {
+        setError('File size exceeds 150GB limit');
         continue;
       }
       next.push(f);
@@ -214,145 +256,214 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     setProcessingStatus('');
     setCollectionId(null);
     setUploadProgress(0);
-    setExtractedStructure(null);
     setUploadPhase('upload');
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
 
-    setFiles(prev => {
+    setUploadItems(prev => {
       const wasEmpty = prev.length === 0;
-      const merged = [...prev, ...next];
-      if (wasEmpty) {
-        setActiveFileIndex(0);
-      }
+      const created = next.map((file) => ({
+        id: `${file.name}-${file.size}-${file.lastModified}`,
+        file,
+        scanStatus: 'scanned',
+        scanResult: null,
+        scanError: '',
+        overrides: {
+          collectionName: ''
+        },
+        uploadStatus: 'idle',
+        uploadError: '',
+        collectionId: null,
+        processingProgress: 0,
+        created: null
+      }));
+      const merged = [...prev, ...created];
+      if (wasEmpty) setActiveItemIndex(0);
       return merged;
     });
   };
 
-  const previewActiveFile = async () => {
-    if (!activeFile) return;
-    console.log('Validating file:', activeFile?.name, 'Type:', activeFile?.type);
-    setError('');
-    setValidating(true);
-    setExtractedStructure(null);
+  const uploadSingleItem = (item) => {
+    return new Promise((resolve, reject) => {
+      const formData = new FormData();
+      formData.append('zipFile', item.file);
+      formData.append('platform', 'PlayList Pro');
+      formData.append(
+        'name',
+        item.overrides?.collectionName?.trim() || item.scanResult?.suggestedCollectionName || item.file.name.replace('.zip', '')
+      );
+      formData.append('year', new Date().getFullYear().toString());
+      formData.append('month', (new Date().getMonth() + 1).toString().padStart(2, '0'));
 
-    const formData = new FormData();
-    formData.append('zip', activeFile);
+      if (item.scanResult) {
+        formData.append(
+          'scanResult',
+          JSON.stringify({
+            ...item.scanResult,
+            suggestedCollectionName: item.overrides?.collectionName?.trim() || item.scanResult.suggestedCollectionName
+          })
+        );
+      }
 
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(api('/collections/preview-zip'), {
-        method: 'POST',
-        headers: {
-          Authorization: token ? `Bearer ${token}` : ''
-        },
-        body: formData
+      const xhr = new XMLHttpRequest();
+
+      xhr.upload.addEventListener('progress', (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100);
+          setUploadProgress(percentComplete);
+        }
       });
 
-      const parsed = await safeJson(response);
-      if (!parsed.ok) {
-        setError(`Failed to analyze ZIP file (HTTP ${parsed.status}). ${parsed.error}`);
-        return;
-      }
+      xhr.addEventListener('load', () => {
+        if (xhr.status === 200 || xhr.status === 201) {
+          let response;
+          try {
+            response = JSON.parse(xhr.responseText);
+          } catch (e) {
+            return reject(new Error(`Server returned non-JSON response: ${xhr.responseText?.slice(0, 120)}`));
+          }
+          return resolve(response);
+        }
+        try {
+          const resp = JSON.parse(xhr.responseText);
+          return reject(new Error(resp.message || 'Upload failed. Please try again.'));
+        } catch (e) {
+          return reject(new Error('Upload failed. Please try again.'));
+        }
+      });
 
-      const data = parsed.json;
-      if (data.success) {
-        setExtractedStructure(data.data);
-      } else {
-        setError(data.message || 'Failed to preview ZIP structure');
+      xhr.addEventListener('error', () => {
+        reject(new Error('Network error. Please check your connection.'));
+      });
+
+      const token = localStorage.getItem('token');
+      xhr.open('POST', api('/collections'), true);
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       }
-    } catch (err) {
-      setError('Failed to analyze ZIP file: ' + err.message);
-    } finally {
-      setValidating(false);
-    }
+      xhr.send(formData);
+    });
   };
 
-  const handleUpload = async (previewData) => {
-    if (!activeFile) {
-      setError('Please select a ZIP file');
+  const handleNextBatch = async () => {
+    const ready = uploadItems.filter(i => i.scanStatus === 'scanned');
+    if (ready.length === 0) {
+      setError('No successfully scanned ZIP files to upload.');
       return;
     }
 
     setUploading(true);
     setUploadProgress(0);
     setError('');
+    setSuccess('');
+    setUploadPhase('cards');
 
-    const formData = new FormData();
-    formData.append('zipFile', activeFile);
-    
-    // Add metadata from preview/edit step
-    formData.append('platform', 'PlayList Pro');
-    formData.append('name', previewData?.collectionName || extractedStructure?.suggestedCollectionName || activeFile.name.replace('.zip', ''));
-    formData.append('year', new Date().getFullYear().toString());
-    formData.append('month', (new Date().getMonth() + 1).toString().padStart(2, '0'));
-    
-    // Send scan result for card creation
-    if (previewData || extractedStructure) {
-      formData.append('scanResult', JSON.stringify(previewData || extractedStructure));
-    }
+    for (let idx = 0; idx < uploadItems.length; idx++) {
+      const item = uploadItems[idx];
+      if (item.scanStatus !== 'scanned') continue;
 
-    const xhr = new XMLHttpRequest();
+      setActiveItemIndex(idx);
+      setUploadProgress(0);
 
-    xhr.upload.addEventListener('progress', (event) => {
-      if (event.lengthComputable) {
-        const percentComplete = Math.round((event.loaded / event.total) * 100);
-        setUploadProgress(percentComplete);
-      }
-    });
+      setUploadItems(prev => prev.map((p, pIdx) => (pIdx === idx ? { ...p, uploadStatus: 'uploading' } : p)));
 
-    xhr.addEventListener('load', () => {
-      console.log('Upload response status:', xhr.status);
-      console.log('Upload response text:', xhr.responseText);
-      if (xhr.status === 200 || xhr.status === 201) {
-        let response;
-        try {
-          response = JSON.parse(xhr.responseText);
-        } catch (e) {
-          setError(`Upload succeeded but server returned non-JSON response: ${xhr.responseText?.slice(0, 120)}`);
-          setUploading(false);
-          return;
-        }
-
+      try {
+        const response = await uploadSingleItem(item);
         const newCollectionId = response.data?.collection?._id;
         setCollectionId(newCollectionId);
-        setSuccess('Upload complete! Processing in background...');
-        setProcessingStatus('processing');
-        setUploadPhase('processing');
+        if (newCollectionId) startPolling(newCollectionId);
 
-        // Start polling for status
-        if (newCollectionId) {
-          startPolling(newCollectionId);
-        }
-
+        setUploadItems(prev => prev.map((p, pIdx) => (
+          pIdx === idx
+            ? {
+              ...p,
+              uploadStatus: 'processing',
+              uploadError: '',
+              collectionId: newCollectionId,
+              created: response.data,
+              processingProgress: 0
+            }
+            : p
+        )));
         onSuccess?.(response.data);
-      } else {
-        let errorMsg = 'Upload failed. Please try again.';
-        try {
-          const resp = JSON.parse(xhr.responseText);
-          if (resp.message) errorMsg = resp.message;
-        } catch (e) {}
-        setError(errorMsg);
-        setUploading(false);
+
+        // Wait for this collection to complete before moving to the next (sequential processing is safest)
+        await new Promise((resolve) => {
+          const interval = setInterval(async () => {
+            try {
+              const token = localStorage.getItem('token');
+              const statusResp = await fetch(api(`/collections/${newCollectionId}/status`), {
+                headers: {
+                  Authorization: token ? `Bearer ${token}` : ''
+                }
+              });
+              if (statusResp.status === 401 || statusResp.status === 403) {
+                clearInterval(interval);
+                setUploadItems(prev => prev.map((p, pIdx) => (
+                  pIdx === idx
+                    ? {
+                      ...p,
+                      uploadStatus: 'failed',
+                      uploadError: 'Unauthorized. Please log in as admin to track upload progress.'
+                    }
+                    : p
+                )));
+                resolve();
+                return;
+              }
+              const statusJson = await statusResp.json();
+              if (statusJson?.success) {
+                const { status, processingProgress } = statusJson.data;
+                setUploadProgress(processingProgress);
+
+                setUploadItems(prev => prev.map((p, pIdx) => (
+                  pIdx === idx
+                    ? {
+                      ...p,
+                      processingProgress: processingProgress ?? p.processingProgress ?? 0,
+                      uploadStatus: status === 'completed'
+                        ? 'completed'
+                        : status === 'failed'
+                          ? 'failed'
+                          : 'processing'
+                    }
+                    : p
+                )));
+                if (status === 'completed') {
+                  clearInterval(interval);
+                  resolve();
+                }
+                if (status === 'failed') {
+                  clearInterval(interval);
+                  resolve();
+                }
+              }
+            } catch (e) {
+              // ignore transient
+            }
+          }, 3000);
+        });
+      } catch (e) {
+        setUploadItems(prev => prev.map((p, pIdx) => (
+          pIdx === idx
+            ? {
+              ...p,
+              uploadStatus: 'failed',
+              uploadError: e?.message || 'Upload failed. Please try again.'
+            }
+            : p
+        )));
       }
-    });
-
-    xhr.addEventListener('error', () => {
-      setError('Network error. Please check your connection.');
-      setUploading(false);
-    });
-
-    const token = localStorage.getItem('token');
-    xhr.open('POST', api('/collections'), true);
-    if (token) {
-      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     }
-    xhr.send(formData);
+
+    setUploading(false);
+    setSuccess('Batch upload complete.');
   };
 
+  const hasPendingScans = uploadItems.some(i => i.scanStatus === 'pending');
+
   const clearFile = () => {
-    setFiles([]);
-    setActiveFileIndex(0);
-    setExtractedStructure(null);
+    setUploadItems([]);
+    setActiveItemIndex(0);
     setUploadProgress(0);
     setError('');
     setCollectionId(null);
@@ -362,16 +473,12 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   };
 
   const removeFileAtIndex = (index) => {
-    setFiles(prev => {
-      const next = prev.filter((_, i) => i !== index);
-      return next;
-    });
-    setActiveFileIndex(prevIdx => {
+    setUploadItems(prev => prev.filter((_, i) => i !== index));
+    setActiveItemIndex(prevIdx => {
       if (index < prevIdx) return Math.max(0, prevIdx - 1);
       if (index === prevIdx) return 0;
       return prevIdx;
     });
-    setExtractedStructure(null);
     setUploadProgress(0);
     setError('');
     setSuccess('');
@@ -399,6 +506,141 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
 
         {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[70vh] bg-dark-bg">
+          {uploadPhase === 'cards' ? (
+            <div className="space-y-4">
+              <div className="bg-dark-surface border border-white/10 rounded-lg p-4">
+                <div className="text-white font-semibold">Created Directories</div>
+                <div className="text-sm text-brand-text-tertiary mt-1">
+                  Each ZIP is converted into a Collection card with DatePacks and Albums.
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                {uploadItems.map((it, idx) => {
+                  const preview = it.scanResult;
+                  const createdCollection = it.created?.collection;
+                  const createdDatePacks = it.created?.datePacks || [];
+                  const createdAlbums = it.created?.albums || [];
+                  const albumsByDatePackId = groupAlbumsByDatePackId(createdAlbums);
+
+                  const name = createdCollection?.name
+                    || it.overrides?.collectionName?.trim()
+                    || it.file.name.replace('.zip', '');
+
+                  const dateLabel = createdCollection?.extractedDate
+                    ? new Date(createdCollection.extractedDate).toLocaleDateString()
+                    : null;
+
+                  const genres = [];
+                  const statusLabel = it.uploadStatus === 'uploading'
+                    ? 'uploading'
+                    : it.uploadStatus === 'processing'
+                      ? `${it.processingProgress ?? 0}%`
+                      : it.uploadStatus;
+
+                  return (
+                    <div
+                      key={it.id}
+                      className={`rounded-lg border p-4 ${idx === activeItemIndex ? 'border-accent bg-accent/5' : 'border-white/10 bg-dark-surface'}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setActiveItemIndex(idx)}
+                              className="text-left font-semibold text-white truncate hover:underline"
+                              title={name}
+                            >
+                              {name}
+                            </button>
+                            <span className="text-xs bg-white/10 text-brand-text-tertiary px-2 py-0.5 rounded">
+                              PlayList Pro
+                            </span>
+                            {dateLabel ? (
+                              <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">
+                                {dateLabel}
+                              </span>
+                            ) : null}
+                          </div>
+                          <div className="text-xs text-brand-text-tertiary mt-1">
+                            {it.file.name}
+                          </div>
+                          {it.uploadStatus === 'failed' && it.uploadError ? (
+                            <div className="mt-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+                              {it.uploadError}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="text-xs text-brand-text-tertiary whitespace-nowrap">
+                          {it.scanStatus !== 'scanned' ? 'not scanned' : null}
+                          {it.uploadStatus === 'idle' ? 'queued' : null}
+                          {it.uploadStatus === 'uploading' ? 'uploading' : null}
+                          {it.uploadStatus === 'processing' ? `processing ${it.processingProgress ?? 0}%` : null}
+                          {it.uploadStatus === 'completed' ? 'completed' : null}
+                          {it.uploadStatus === 'failed' ? 'failed' : null}
+                        </div>
+                      </div>
+
+                      {it.collectionId && (
+                        <div className="mt-3 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() => openInRecordPool(it.collectionId)}
+                            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white text-xs font-medium transition-colors"
+                          >
+                            <FolderOpen className="w-4 h-4" />
+                            Open in Record Pool
+                          </button>
+                        </div>
+                      )}
+
+                      {genres.length > 0 && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {genres.slice(0, 8).map(g => (
+                            <span key={g} className="text-xs bg-accent/20 text-accent px-3 py-1 rounded-full">
+                              {g}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {createdDatePacks.length > 0 && (
+                        <div className="mt-4 grid grid-cols-1 gap-2">
+                          {createdDatePacks.slice(0, 3).map((dp) => {
+                            const dpAlbums = albumsByDatePackId.get(String(dp._id)) || [];
+                            return (
+                              <div key={dp._id} className="bg-dark-bg border border-white/10 rounded-lg p-3">
+                                <div className="flex items-center justify-between">
+                                  <div className="text-sm text-white font-medium truncate">{dp.name}</div>
+                                  <div className="text-xs text-brand-text-tertiary">{dpAlbums.length} albums</div>
+                                </div>
+                                {dpAlbums.length > 0 && (
+                                  <div className="mt-2 grid grid-cols-1 gap-1">
+                                    {dpAlbums.slice(0, 4).map((a) => (
+                                      <div key={a._id} className="flex items-center justify-between text-xs text-brand-text-secondary">
+                                        <div className="truncate">{a.name}</div>
+                                        <div className="text-brand-text-tertiary whitespace-nowrap">{a.trackCount || 0} tracks</div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                          {createdDatePacks.length > 3 && (
+                            <div className="text-xs text-brand-text-tertiary">+{createdDatePacks.length - 3} more date packs</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <>
           {/* Info Box - Visual Structure Guide (Collapsible) */}
           <div className="bg-dark-surface border border-white/10 rounded-lg p-4 mb-4">
             <button
@@ -499,7 +741,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
           )}
 
           {/* Upload Area */}
-          {files.length === 0 ? (
+          {uploadItems.length === 0 ? (
             <div
               className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                 dragActive
@@ -539,8 +781,8 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                   <div>
                     <p className="font-medium text-white">
                       {activeFile?.name}
-                      {files.length > 1 ? (
-                        <span className="text-brand-text-tertiary font-normal"> ({activeFileIndex + 1}/{files.length})</span>
+                      {uploadItems.length > 1 ? (
+                        <span className="text-brand-text-tertiary font-normal"> ({activeItemIndex + 1}/{uploadItems.length})</span>
                       ) : null}
                     </p>
                     <p className="text-sm text-brand-text-tertiary">
@@ -558,15 +800,14 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                 )}
               </div>
 
-              {files.length > 1 && !uploading && (
+              {uploadItems.length > 1 && !uploading && (
                 <div className="mb-3 space-y-2">
-                  {files.map((f, idx) => (
-                    <div key={`${f.name}-${idx}`} className="flex items-center justify-between gap-2">
+                  {uploadItems.map((it, idx) => (
+                    <div key={it.id} className="flex items-center justify-between gap-2">
                       <button
                         type="button"
                         onClick={() => {
-                          setActiveFileIndex(idx);
-                          setExtractedStructure(null);
+                          setActiveItemIndex(idx);
                           setUploadProgress(0);
                           setError('');
                           setSuccess('');
@@ -575,13 +816,21 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                           if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
                         }}
                         className={`text-left flex-1 px-3 py-2 rounded border transition-colors ${
-                          idx === activeFileIndex
+                          idx === activeItemIndex
                             ? 'border-accent bg-accent/10 text-white'
                             : 'border-white/10 bg-dark-elevated text-brand-text-tertiary hover:text-white hover:border-white/20'
                         }`}
                       >
-                        <div className="text-sm font-medium">{f.name}</div>
-                        <div className="text-xs">{(f.size / 1024 / 1024).toFixed(1)} MB</div>
+                        <div className="text-sm font-medium">{it.file.name}</div>
+                        <div className="text-xs">
+                          {(it.file.size / 1024 / 1024).toFixed(1)} MB
+                          <span className="ml-2">
+                            {it.scanStatus === 'pending' ? '• scanning' : null}
+                            {it.scanStatus === 'scanned' ? '• scanned' : null}
+                            {it.scanStatus === 'failed' ? '• scan failed' : null}
+                            {it.uploadStatus && it.uploadStatus !== 'idle' ? ` • ${it.uploadStatus}` : ''}
+                          </span>
+                        </div>
                       </button>
                       <button
                         type="button"
@@ -592,6 +841,67 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* Batch Preview Card (per active ZIP) */}
+              {activeItem && (
+                <div className="mb-4 bg-dark-elevated rounded-lg border border-white/10 p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="text-sm text-brand-text-tertiary">Preview</div>
+                      <div className="text-white font-medium">{activeItem.file.name}</div>
+                      {activeItem.scanStatus === 'failed' && (
+                        <div className="text-xs text-red-400 mt-1">{activeItem.scanError || 'Failed to analyze ZIP'}</div>
+                      )}
+                    </div>
+                    <div className="text-xs text-brand-text-tertiary">
+                      {(activeItem.file.size / 1024 / 1024).toFixed(1)} MB
+                    </div>
+                  </div>
+
+                  {activeItem.scanStatus === 'scanned' && extractedStructure && (
+                    <>
+                      <div className="mt-4">
+                        <div className="text-xs text-brand-text-tertiary mb-1">Collection name</div>
+                        <input
+                          type="text"
+                          value={activeItem.overrides?.collectionName || extractedStructure.suggestedCollectionName || ''}
+                          onChange={(e) => updateItem(activeItemIndex, { overrides: { ...activeItem.overrides, collectionName: e.target.value } })}
+                          className="w-full bg-dark-bg border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-accent"
+                        />
+                        <div className="text-xs text-brand-text-tertiary mt-2">
+                          {extractedStructure.totalDatePacks} DatePacks
+                          {' • '}
+                          {extractedStructure.totalAlbums} Albums
+                          {' • '}
+                          {extractedStructure.totalTracks} Tracks
+                        </div>
+                      </div>
+
+                      {(extractedStructure.detectedGenres?.length > 0 || extractedStructure.extractedDate) && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {extractedStructure.extractedDate ? (
+                            <span className="text-xs bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full">
+                              {new Date(extractedStructure.extractedDate).toLocaleDateString()}
+                            </span>
+                          ) : null}
+                          {(extractedStructure.detectedGenres || []).slice(0, 6).map((g) => (
+                            <span key={g} className="text-xs bg-accent/20 text-accent px-3 py-1 rounded-full">
+                              {g}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {activeItem.scanStatus === 'pending' && (
+                    <div className="mt-3 flex items-center gap-2 text-accent">
+                      <Loader className="w-4 h-4 animate-spin" />
+                      <span className="text-sm">Analyzing ZIP structure...</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -723,6 +1033,8 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
               )}
             </div>
           )}
+            </>
+          )}
         </div>
 
         {/* Footer */}
@@ -734,16 +1046,12 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
           >
             Cancel
           </button>
-          {activeFile && !uploading && !success && (
+          {activeFile && !uploading && !success && uploadPhase !== 'cards' && (
             <button
               onClick={() => {
-                if (!extractedStructure) {
-                  previewActiveFile();
-                  return;
-                }
-                setUploadPhase('preview');
+                handleNextBatch();
               }}
-              disabled={validating}
+              disabled={validating || hasPendingScans}
               className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors flex items-center gap-2 disabled:opacity-50"
             >
               {validating ? (
@@ -751,30 +1059,21 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                   <Loader className="w-4 h-4 animate-spin" />
                   Analyzing...
                 </>
-              ) : extractedStructure ? (
+              ) : hasPendingScans ? (
                 <>
-                  <CheckCircle className="w-4 h-4" />
-                  Preview Structure
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Scanning...
                 </>
               ) : (
                 <>
                   <Upload className="w-4 h-4" />
-                  Analyze ZIP
+                  Next
                 </>
               )}
             </button>
           )}
         </div>
       </div>
-      {/* Scan Preview Modal */}
-      <ScanPreviewModal
-        isOpen={uploadPhase === 'preview'}
-        onClose={() => setUploadPhase('upload')}
-        scanResult={extractedStructure}
-        file={activeFile}
-        onConfirm={(previewData) => handleUpload(previewData)}
-        isProcessing={uploading}
-      />
     </div>
   );
 }
