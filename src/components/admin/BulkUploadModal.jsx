@@ -1,9 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { X, Upload, Archive, AlertCircle, CheckCircle, Loader, FolderTree, Music, ChevronDown, ChevronUp, ChevronRight, RotateCcw, Ban } from 'lucide-react';
 import ScanPreviewModal from './ScanPreviewModal';
+import { API_URL } from '../../config/api';
 
 export default function BulkUploadModal({ onClose, onSuccess }) {
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
+  const [activeFileIndex, setActiveFileIndex] = useState(0);
   const [extractedStructure, setExtractedStructure] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -22,6 +24,28 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   // New state for 3-phase workflow
   const [uploadPhase, setUploadPhase] = useState('upload'); // 'upload' | 'preview' | 'processing'
 
+  const activeFile = files[activeFileIndex] || null;
+
+  const api = (path) => {
+    const base = API_URL?.endsWith('/') ? API_URL.slice(0, -1) : API_URL;
+    const suffix = path.startsWith('/') ? path : `/${path}`;
+    return `${base}${suffix}`;
+  };
+
+  const safeJson = async (response) => {
+    const text = await response.text();
+    try {
+      return { ok: true, json: JSON.parse(text) };
+    } catch (e) {
+      return {
+        ok: false,
+        error: `Expected JSON but got: ${text.slice(0, 120)}`,
+        status: response.status,
+        raw: text
+      };
+    }
+  };
+
   const toggleDatePack = (name) => {
     setExpandedDatePacks(prev => {
       const newSet = new Set(prev);
@@ -38,9 +62,13 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     if (!collectionId) return;
     setIsCancelling(true);
     try {
-      const response = await fetch(`/api/collections/${collectionId}/cancel`, {
+      const token = localStorage.getItem('token');
+      const response = await fetch(api(`/collections/${collectionId}/cancel`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token ? `Bearer ${token}` : ''
+        }
       });
       const data = await response.json();
       if (data.success) {
@@ -62,9 +90,13 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   const handleRetryFailed = async () => {
     if (!collectionId || failedTracks.length === 0) return;
     try {
-      const response = await fetch(`/api/collections/${collectionId}/retry-failed`, {
+      const token = localStorage.getItem('token');
+      const response = await fetch(api(`/collections/${collectionId}/retry-failed`), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: token ? `Bearer ${token}` : ''
+        },
         body: JSON.stringify({ trackIds: failedTracks.map(t => t._id) })
       });
       const data = await response.json();
@@ -97,7 +129,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
 
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const response = await fetch(`/api/collections/${id}/status`);
+        const response = await fetch(api(`/collections/${id}/status`));
         const data = await response.json();
 
         if (data.success) {
@@ -145,66 +177,98 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     e.stopPropagation();
     setDragActive(false);
 
-    const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile) {
-      validateAndSetFile(droppedFile);
+    const droppedFiles = Array.from(e.dataTransfer.files || []).filter(Boolean);
+    if (droppedFiles.length > 0) {
+      validateAndAddFiles(droppedFiles);
     }
   }, []);
 
   const handleFileChange = (e) => {
-    const selectedFile = e.target.files[0];
-    if (selectedFile) {
-      validateAndSetFile(selectedFile);
+    const selected = Array.from(e.target.files || []).filter(Boolean);
+    if (selected.length > 0) {
+      validateAndAddFiles(selected);
     }
   };
 
   const [validating, setValidating] = useState(false);
 
-  const validateAndSetFile = async (selectedFile) => {
-    console.log('Validating file:', selectedFile?.name, 'Type:', selectedFile?.type);
-    if (!selectedFile.name.toLowerCase().endsWith('.zip')) {
-      setError(`Please upload a ZIP file (got: ${selectedFile.name})`);
-      return;
+  const validateAndAddFiles = async (selectedFiles) => {
+    const next = [];
+    for (const f of selectedFiles) {
+      if (!f?.name) continue;
+      if (!f.name.toLowerCase().endsWith('.zip')) {
+        setError(`Please upload ZIP files only (got: ${f.name})`);
+        continue;
+      }
+      if (f.size > 100 * 1024 * 1024 * 1024) {
+        setError('File size exceeds 100GB limit');
+        continue;
+      }
+      next.push(f);
     }
-    if (selectedFile.size > 100 * 1024 * 1024 * 1024) {
-      setError('File size exceeds 100GB limit');
-      return;
-    }
-    setFile(selectedFile);
+
+    if (next.length === 0) return;
+
+    setError('');
+    setSuccess('');
+    setProcessingStatus('');
+    setCollectionId(null);
+    setUploadProgress(0);
+    setExtractedStructure(null);
+    setUploadPhase('upload');
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+
+    setFiles(prev => {
+      const wasEmpty = prev.length === 0;
+      const merged = [...prev, ...next];
+      if (wasEmpty) {
+        setActiveFileIndex(0);
+      }
+      return merged;
+    });
+  };
+
+  const previewActiveFile = async () => {
+    if (!activeFile) return;
+    console.log('Validating file:', activeFile?.name, 'Type:', activeFile?.type);
     setError('');
     setValidating(true);
+    setExtractedStructure(null);
 
-    // Call preview endpoint
     const formData = new FormData();
-    formData.append('zip', selectedFile);
+    formData.append('zip', activeFile);
 
     try {
       const token = localStorage.getItem('token');
-      const response = await fetch('/api/collections/preview-zip', {
+      const response = await fetch(api('/collections/preview-zip'), {
         method: 'POST',
         headers: {
-          'Authorization': token ? `Bearer ${token}` : ''
+          Authorization: token ? `Bearer ${token}` : ''
         },
         body: formData
       });
 
-      const data = await response.json();
+      const parsed = await safeJson(response);
+      if (!parsed.ok) {
+        setError(`Failed to analyze ZIP file (HTTP ${parsed.status}). ${parsed.error}`);
+        return;
+      }
+
+      const data = parsed.json;
       if (data.success) {
         setExtractedStructure(data.data);
       } else {
         setError(data.message || 'Failed to preview ZIP structure');
-        setExtractedStructure(null);
       }
     } catch (err) {
       setError('Failed to analyze ZIP file: ' + err.message);
-      setExtractedStructure(null);
     } finally {
       setValidating(false);
     }
   };
 
   const handleUpload = async (previewData) => {
-    if (!file) {
+    if (!activeFile) {
       setError('Please select a ZIP file');
       return;
     }
@@ -214,11 +278,11 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     setError('');
 
     const formData = new FormData();
-    formData.append('zipFile', file);
+    formData.append('zipFile', activeFile);
     
     // Add metadata from preview/edit step
     formData.append('platform', 'PlayList Pro');
-    formData.append('name', previewData?.collectionName || extractedStructure?.suggestedCollectionName || file.name.replace('.zip', ''));
+    formData.append('name', previewData?.collectionName || extractedStructure?.suggestedCollectionName || activeFile.name.replace('.zip', ''));
     formData.append('year', new Date().getFullYear().toString());
     formData.append('month', (new Date().getMonth() + 1).toString().padStart(2, '0'));
     
@@ -240,7 +304,15 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
       console.log('Upload response status:', xhr.status);
       console.log('Upload response text:', xhr.responseText);
       if (xhr.status === 200 || xhr.status === 201) {
-        const response = JSON.parse(xhr.responseText);
+        let response;
+        try {
+          response = JSON.parse(xhr.responseText);
+        } catch (e) {
+          setError(`Upload succeeded but server returned non-JSON response: ${xhr.responseText?.slice(0, 120)}`);
+          setUploading(false);
+          return;
+        }
+
         const newCollectionId = response.data?.collection?._id;
         setCollectionId(newCollectionId);
         setSuccess('Upload complete! Processing in background...');
@@ -270,7 +342,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     });
 
     const token = localStorage.getItem('token');
-    xhr.open('POST', '/api/collections', true);
+    xhr.open('POST', api('/collections'), true);
     if (token) {
       xhr.setRequestHeader('Authorization', `Bearer ${token}`);
     }
@@ -278,7 +350,8 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   };
 
   const clearFile = () => {
-    setFile(null);
+    setFiles([]);
+    setActiveFileIndex(0);
     setExtractedStructure(null);
     setUploadProgress(0);
     setError('');
@@ -286,6 +359,25 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
     }
+  };
+
+  const removeFileAtIndex = (index) => {
+    setFiles(prev => {
+      const next = prev.filter((_, i) => i !== index);
+      return next;
+    });
+    setActiveFileIndex(prevIdx => {
+      if (index < prevIdx) return Math.max(0, prevIdx - 1);
+      if (index === prevIdx) return 0;
+      return prevIdx;
+    });
+    setExtractedStructure(null);
+    setUploadProgress(0);
+    setError('');
+    setSuccess('');
+    setProcessingStatus('');
+    setCollectionId(null);
+    if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
   };
 
   return (
@@ -407,7 +499,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
           )}
 
           {/* Upload Area */}
-          {!file ? (
+          {files.length === 0 ? (
             <div
               className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                 dragActive
@@ -427,6 +519,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                   <input
                     type="file"
                     accept=".zip"
+                    multiple
                     onChange={handleFileChange}
                     className="hidden"
                   />
@@ -444,9 +537,14 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                     <Archive className="w-6 h-6 text-accent" />
                   </div>
                   <div>
-                    <p className="font-medium text-white">{file.name}</p>
+                    <p className="font-medium text-white">
+                      {activeFile?.name}
+                      {files.length > 1 ? (
+                        <span className="text-brand-text-tertiary font-normal"> ({activeFileIndex + 1}/{files.length})</span>
+                      ) : null}
+                    </p>
                     <p className="text-sm text-brand-text-tertiary">
-                      {(file.size / 1024 / 1024).toFixed(1)} MB
+                      {activeFile ? `${(activeFile.size / 1024 / 1024).toFixed(1)} MB` : ''}
                     </p>
                   </div>
                 </div>
@@ -459,6 +557,43 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                   </button>
                 )}
               </div>
+
+              {files.length > 1 && !uploading && (
+                <div className="mb-3 space-y-2">
+                  {files.map((f, idx) => (
+                    <div key={`${f.name}-${idx}`} className="flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setActiveFileIndex(idx);
+                          setExtractedStructure(null);
+                          setUploadProgress(0);
+                          setError('');
+                          setSuccess('');
+                          setProcessingStatus('');
+                          setCollectionId(null);
+                          if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+                        }}
+                        className={`text-left flex-1 px-3 py-2 rounded border transition-colors ${
+                          idx === activeFileIndex
+                            ? 'border-accent bg-accent/10 text-white'
+                            : 'border-white/10 bg-dark-elevated text-brand-text-tertiary hover:text-white hover:border-white/20'
+                        }`}
+                      >
+                        <div className="text-sm font-medium">{f.name}</div>
+                        <div className="text-xs">{(f.size / 1024 / 1024).toFixed(1)} MB</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeFileAtIndex(idx)}
+                        className="text-brand-text-tertiary hover:text-white"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {/* Validating State */}
               {validating && (
@@ -599,14 +734,14 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
           >
             Cancel
           </button>
-          {file && !uploading && !success && (
+          {activeFile && !uploading && !success && (
             <button
               onClick={() => {
-                if (extractedStructure) {
-                  setUploadPhase('preview');
-                } else {
-                  handleUpload();
+                if (!extractedStructure) {
+                  previewActiveFile();
+                  return;
                 }
+                setUploadPhase('preview');
               }}
               disabled={validating}
               className="px-4 py-2 bg-accent text-white rounded-lg hover:bg-accent-hover transition-colors flex items-center gap-2 disabled:opacity-50"
@@ -624,7 +759,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
               ) : (
                 <>
                   <Upload className="w-4 h-4" />
-                  Upload & Process
+                  Analyze ZIP
                 </>
               )}
             </button>
@@ -636,7 +771,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
         isOpen={uploadPhase === 'preview'}
         onClose={() => setUploadPhase('upload')}
         scanResult={extractedStructure}
-        file={file}
+        file={activeFile}
         onConfirm={(previewData) => handleUpload(previewData)}
         isProcessing={uploading}
       />
