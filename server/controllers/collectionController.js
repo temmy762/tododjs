@@ -8,6 +8,7 @@ import yauzl from 'yauzl';
 import AdmZip from 'adm-zip';
 import path from 'path';
 import fs from 'fs';
+import { pipeline } from 'stream';
 import { parseBuffer } from 'music-metadata';
 import { detectTonality } from '../services/tonalityDetection.js';
 import { detectGenre } from '../services/genreDetection.js';
@@ -256,14 +257,23 @@ function extractEntryToFile(zipfile, entry, outputPath) {
   });
 }
 
-function extractEntryToFileByName(zipPath, targetFileName, outputPath) {
+function extractEntryToFileByName(zipPath, targetFileName, outputPath, timeoutMs = 120000) {
   return new Promise((resolve, reject) => {
     yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
       if (err) return reject(err);
 
       let done = false;
+      const startedAt = Date.now();
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        cleanup();
+        try { zipfile.close(); } catch { /* ignore */ }
+        reject(new Error(`Timeout extracting inner ZIP entry after ${timeoutMs}ms: ${targetFileName}`));
+      }, timeoutMs);
 
       const cleanup = () => {
+        try { clearTimeout(timer); } catch { /* ignore */ }
         try {
           zipfile.removeAllListeners('entry');
           zipfile.removeAllListeners('end');
@@ -307,8 +317,6 @@ function extractEntryToFileByName(zipPath, targetFileName, outputPath) {
           }
 
           const writeStream = fs.createWriteStream(outputPath);
-          readStream.pipe(writeStream);
-
           const onError = (e) => {
             if (done) return;
             done = true;
@@ -317,15 +325,24 @@ function extractEntryToFileByName(zipPath, targetFileName, outputPath) {
             reject(e);
           };
 
-          readStream.on('error', onError);
-          writeStream.on('error', onError);
-          writeStream.on('finish', () => {
+          pipeline(readStream, writeStream, (pipeErr) => {
+            if (pipeErr) return onError(pipeErr);
             if (done) return;
             done = true;
             cleanup();
             try { zipfile.close(); } catch { /* ignore */ }
+            const elapsedMs = Date.now() - startedAt;
+            try {
+              const st = fs.statSync(outputPath);
+              console.log(`   ✅ Extracted inner ZIP entry to file (${st.size} bytes, ${elapsedMs}ms): ${targetFileName}`);
+            } catch {
+              console.log(`   ✅ Extracted inner ZIP entry to file (${elapsedMs}ms): ${targetFileName}`);
+            }
             resolve(outputPath);
           });
+
+          readStream.on('error', onError);
+          writeStream.on('error', onError);
         });
       });
 
@@ -334,14 +351,23 @@ function extractEntryToFileByName(zipPath, targetFileName, outputPath) {
   });
 }
 
-function extractEntryToBufferByName(zipPath, targetFileName) {
+function extractEntryToBufferByName(zipPath, targetFileName, timeoutMs = 120000) {
   return new Promise((resolve, reject) => {
     yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
       if (err) return reject(err);
 
       let done = false;
+      const startedAt = Date.now();
+      const timer = setTimeout(() => {
+        if (done) return;
+        done = true;
+        cleanup();
+        try { zipfile.close(); } catch { /* ignore */ }
+        reject(new Error(`Timeout extracting ZIP entry after ${timeoutMs}ms: ${targetFileName}`));
+      }, timeoutMs);
 
       const cleanup = () => {
+        try { clearTimeout(timer); } catch { /* ignore */ }
         try {
           zipfile.removeAllListeners('entry');
           zipfile.removeAllListeners('end');
@@ -398,6 +424,8 @@ function extractEntryToBufferByName(zipPath, targetFileName) {
             done = true;
             cleanup();
             try { zipfile.close(); } catch { /* ignore */ }
+            const elapsedMs = Date.now() - startedAt;
+            console.log(`   ✅ Extracted ZIP entry to buffer (${Buffer.concat(chunks).length} bytes, ${elapsedMs}ms): ${targetFileName}`);
             resolve(Buffer.concat(chunks));
           });
         });
