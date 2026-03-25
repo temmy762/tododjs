@@ -696,7 +696,12 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
       console.log(`📎 ZIP entry sample (first ${sample.length}):`, sample);
     }
 
-    const processZipAsDatedPack = async (datedZipPath, datePackName) => {
+    const processZipAsDatedPack = async (datedZipPath, datePackName, opts = {}) => {
+      const {
+        existingDatePack = null,
+        progressStart = 5,
+        progressEnd = 95
+      } = opts;
       const now = new Date();
       const dateMatch = datePackName?.match(/(\d{2})[._-](\d{2})[._-](\d{2,4})/);
       let packDate = now;
@@ -706,13 +711,18 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
         packDate = new Date(fullYear, parseInt(month) - 1, parseInt(day));
       }
 
-      const datePack = await DatePack.create({
+      const datePack = existingDatePack || await DatePack.create({
         name: datePackName,
         collectionId: collection._id,
         date: packDate,
         status: 'pending',
         sourceFolderName: datePackName
       });
+
+      if (datePack.status !== 'processing') {
+        datePack.status = 'processing';
+        try { await datePack.save(); } catch { /* ignore */ }
+      }
 
       let albumsCreated = 0;
       let tracksCreated = 0;
@@ -740,6 +750,44 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
         albumsCreated++;
         albumsCache.set(key, album);
         return album;
+      };
+
+      let totalTracksHint = 0;
+      try {
+        const zfForCount = await openZipFile(datedZipPath);
+        const zEntriesForCount = await readAllEntries(zfForCount);
+        try { zfForCount.close(); } catch { /* ignore */ }
+        totalTracksHint = zEntriesForCount.filter(e =>
+          !e.fileName.endsWith('/') &&
+          !e.fileName.includes('__MACOSX') &&
+          e.fileName.toLowerCase().endsWith('.mp3')
+        ).length;
+
+        const albumNameSet = new Set();
+        for (const e of zEntriesForCount) {
+          if (e.fileName.endsWith('/')) continue;
+          if (e.fileName.includes('__MACOSX')) continue;
+          if (!e.fileName.toLowerCase().endsWith('.mp3')) continue;
+          const parts = e.fileName.split('/').filter(Boolean);
+          const parentFolder = parts.length >= 2 ? parts[parts.length - 2] : null;
+          const a = parentFolder || datePackName;
+          albumNameSet.add(a);
+        }
+
+        for (const aName of albumNameSet) {
+          await getOrCreateAlbum(aName, 0);
+        }
+      } catch {
+        // ignore
+      }
+
+      const maybeUpdateCollectionProgress = async () => {
+        if (totalTracksHint <= 0) return;
+        const pct = progressStart + ((tracksCreated / totalTracksHint) * (progressEnd - progressStart));
+        const mapped = Math.max(collection.processingProgress || 0, Math.min(progressEnd, Math.round(pct)));
+        if ((collection.processingProgress ?? 0) >= mapped) return;
+        collection.processingProgress = mapped;
+        try { await collection.save(); } catch { /* ignore */ }
       };
 
       const processZipRecursively = async (zipPath, albumHint, depth = 0) => {
@@ -820,6 +868,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
 
             bytesUploaded += mp3Buffer.length;
             tracksCreated++;
+            await maybeUpdateCollectionProgress();
           }
         }
 
@@ -850,6 +899,10 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
         await a.save();
       }
 
+      datePack.status = 'completed';
+      datePack.processingProgress = 100;
+      try { await datePack.save(); } catch { /* ignore */ }
+
       return { datePack, albumsCreated: createdAlbumsList.length, tracksCreated, bytesUploaded };
     };
 
@@ -861,12 +914,44 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
       for (let i = 0; i < innerZipEntries.length; i++) {
         const innerZipName = innerZipEntries[i];
         const baseName = path.basename(innerZipName, '.zip');
+
+        // Create the DatePack card immediately so the UI has something to show
+        const now = new Date();
+        const dateMatch = baseName?.match(/(\d{2})[._-](\d{2})[._-](\d{2,4})/);
+        let packDate = now;
+        if (dateMatch) {
+          const [, day, month, year] = dateMatch;
+          const fullYear = year.length === 2 ? 2000 + parseInt(year) : parseInt(year);
+          packDate = new Date(fullYear, parseInt(month) - 1, parseInt(day));
+        }
+
+        const existingPack = await DatePack.findOne({ collectionId: collection._id, name: baseName });
+        const datePackDoc = existingPack || await DatePack.create({
+          name: baseName,
+          collectionId: collection._id,
+          date: packDate,
+          status: 'processing',
+          sourceFolderName: baseName
+        });
+
+        extractedDatePacks.push(datePackDoc);
+        collection.totalDatePacks = extractedDatePacks.length;
+
+        const progressStart = Math.max(collection.processingProgress || 0, 5 + Math.round((i / innerZipEntries.length) * 90));
+        const progressEnd = Math.max(progressStart, 5 + Math.round(((i + 1) / innerZipEntries.length) * 90));
+        collection.processingProgress = progressStart;
+        await collection.save();
+
         const outPath = path.join(
           tempDir,
           `${Date.now()}-${Math.random().toString(16).slice(2)}-${path.basename(innerZipName)}`
         );
         await extractEntryToFileByName(zipFilePath, innerZipName, outPath);
-        const result = await processZipAsDatedPack(outPath, baseName);
+        const result = await processZipAsDatedPack(outPath, baseName, {
+          existingDatePack: datePackDoc,
+          progressStart,
+          progressEnd
+        });
         if (result.datePack) extractedDatePacks.push(result.datePack);
         totalAlbumsNested += result.albumsCreated;
         totalTracksNested += result.tracksCreated;
