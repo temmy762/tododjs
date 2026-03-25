@@ -18,6 +18,8 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   const [collectionId, setCollectionId] = useState(null);
   const [showStructureGuide, setShowStructureGuide] = useState(false);
   const pollIntervalRef = useRef(null);
+  const xhrByItemIdRef = useRef(new Map());
+  const uploadRateByItemIdRef = useRef(new Map());
   
   // New state for 3-phase workflow
   const [uploadPhase, setUploadPhase] = useState('upload'); // 'upload' | 'cards'
@@ -55,6 +57,184 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
 
   const updateItem = (index, patch) => {
     setUploadItems(prev => prev.map((it, idx) => (idx === index ? { ...it, ...patch } : it)));
+  };
+
+  const formatBytes = (bytes) => {
+    if (!bytes || Number.isNaN(bytes)) return '0 B';
+    const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const k = 1024;
+    let i = 0;
+    let v = bytes;
+    while (v >= k && i < units.length - 1) {
+      v /= k;
+      i++;
+    }
+    const fixed = i === 0 ? 0 : (i >= 2 ? 1 : 0);
+    return `${v.toFixed(fixed)} ${units[i]}`;
+  };
+
+  const formatEta = (seconds) => {
+    if (!seconds || !Number.isFinite(seconds) || seconds < 0) return '--';
+    const s = Math.round(seconds);
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    if (m <= 0) return `${r}s`;
+    return `${m}m ${String(r).padStart(2, '0')}s`;
+  };
+
+  const computeStageLabel = (it) => {
+    if (!it) return '';
+    if (it.uploadStatus === 'idle') return 'Queued';
+    if (it.uploadStatus === 'uploading') return 'Uploading to server';
+    if (it.uploadStatus === 'processing') {
+      const p = it.processingProgress ?? 0;
+      if (p <= 5) return 'Uploading ZIP to Wasabi';
+      if (p <= 20) return 'Extracting ZIPs';
+      if (p <= 95) return 'Uploading tracks';
+      return 'Finalizing';
+    }
+    if (it.uploadStatus === 'completed') return 'Completed';
+    if (it.uploadStatus === 'failed') return 'Failed';
+    return it.uploadStatus;
+  };
+
+  const stageBadgeClass = (it) => {
+    if (!it) return 'bg-white/10 text-brand-text-tertiary border-white/10';
+    if (it.uploadStatus === 'failed') return 'bg-red-500/10 text-red-300 border-red-500/20';
+    if (it.uploadStatus === 'completed') return 'bg-green-500/10 text-green-300 border-green-500/20';
+    if (it.uploadStatus === 'uploading') return 'bg-blue-500/10 text-blue-300 border-blue-500/20';
+    if (it.uploadStatus === 'processing') return 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20';
+    return 'bg-white/10 text-brand-text-tertiary border-white/10';
+  };
+
+  const getItemProgressPercent = (it) => {
+    if (!it) return 0;
+    if (it.uploadStatus === 'uploading') return it.uploadProgress ?? 0;
+    if (it.uploadStatus === 'processing') return it.processingProgress ?? 0;
+    if (it.uploadStatus === 'completed') return 100;
+    return 0;
+  };
+
+  const cancelItem = async (idx) => {
+    const it = uploadItems[idx];
+    if (!it) return;
+
+    if (it.uploadStatus === 'uploading') {
+      const xhr = xhrByItemIdRef.current.get(it.id);
+      try { xhr?.abort(); } catch { /* ignore */ }
+      updateItem(idx, {
+        uploadStatus: 'failed',
+        uploadError: 'Upload cancelled by user.'
+      });
+      return;
+    }
+
+    if (it.uploadStatus === 'processing' && it.collectionId) {
+      updateItem(idx, {
+        uploadError: ''
+      });
+      try {
+        const token = localStorage.getItem('token');
+        await fetch(api(`/collections/${it.collectionId}/cancel`), {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: token ? `Bearer ${token}` : ''
+          }
+        });
+      } catch {
+        // ignore
+      }
+      updateItem(idx, {
+        uploadStatus: 'failed',
+        uploadError: 'Processing cancelled by user.'
+      });
+    }
+  };
+
+  const retryItem = async (idx) => {
+    const it = uploadItems[idx];
+    if (!it) return;
+    if (uploading) return;
+    if (it.scanStatus !== 'scanned') return;
+
+    setUploading(true);
+    setActiveItemIndex(idx);
+    setUploadProgress(0);
+    updateItem(idx, {
+      uploadStatus: 'uploading',
+      uploadError: '',
+      collectionId: null,
+      processingProgress: 0,
+      uploadProgress: 0,
+      uploadLoaded: 0,
+      uploadTotal: 0,
+      uploadSpeedBps: 0,
+      uploadEtaSec: null
+    });
+
+    try {
+      const response = await uploadSingleItem(it, idx);
+      const newCollectionId = response.data?.collection?._id;
+      if (newCollectionId) startPolling(newCollectionId);
+
+      updateItem(idx, {
+        uploadStatus: 'processing',
+        uploadError: '',
+        collectionId: newCollectionId,
+        created: response.data,
+        processingProgress: 0
+      });
+
+      await new Promise((resolve) => {
+        const interval = setInterval(async () => {
+          try {
+            const token = localStorage.getItem('token');
+            const statusResp = await fetch(api(`/collections/${newCollectionId}/status`), {
+              headers: {
+                Authorization: token ? `Bearer ${token}` : ''
+              }
+            });
+
+            if (statusResp.status === 401 || statusResp.status === 403) {
+              clearInterval(interval);
+              updateItem(idx, {
+                uploadStatus: 'failed',
+                uploadError: 'Unauthorized. Please log in as admin to track upload progress.'
+              });
+              resolve();
+              return;
+            }
+
+            const statusJson = await statusResp.json();
+            if (statusJson?.success) {
+              const { status, processingProgress } = statusJson.data;
+              updateItem(idx, {
+                processingProgress: processingProgress ?? 0,
+                uploadStatus: status === 'completed'
+                  ? 'completed'
+                  : status === 'failed'
+                    ? 'failed'
+                    : 'processing'
+              });
+              if (status === 'completed' || status === 'failed') {
+                clearInterval(interval);
+                resolve();
+              }
+            }
+          } catch {
+            // ignore transient
+          }
+        }, 3000);
+      });
+    } catch (e) {
+      updateItem(idx, {
+        uploadStatus: 'failed',
+        uploadError: e?.message || 'Upload failed. Please try again.'
+      });
+    } finally {
+      setUploading(false);
+    }
   };
 
   const api = (path) => {
@@ -282,7 +462,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     });
   };
 
-  const uploadSingleItem = (item) => {
+  const uploadSingleItem = (item, idx) => {
     return new Promise((resolve, reject) => {
       const formData = new FormData();
       formData.append('zipFile', item.file);
@@ -306,14 +486,45 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
 
       const xhr = new XMLHttpRequest();
 
+      xhrByItemIdRef.current.set(item.id, xhr);
+      uploadRateByItemIdRef.current.set(item.id, {
+        lastTs: Date.now(),
+        lastLoaded: 0
+      });
+
       xhr.upload.addEventListener('progress', (event) => {
         if (event.lengthComputable) {
           const percentComplete = Math.round((event.loaded / event.total) * 100);
           setUploadProgress(percentComplete);
+
+          if (typeof idx === 'number') {
+            const key = item.id;
+            const snap = uploadRateByItemIdRef.current.get(key) || { lastTs: Date.now(), lastLoaded: 0 };
+            const now = Date.now();
+            const dtMs = Math.max(1, now - snap.lastTs);
+            const dLoaded = Math.max(0, event.loaded - snap.lastLoaded);
+            const speedBps = (dLoaded / dtMs) * 1000;
+            const etaSec = speedBps > 0 ? (event.total - event.loaded) / speedBps : null;
+
+            uploadRateByItemIdRef.current.set(key, {
+              lastTs: now,
+              lastLoaded: event.loaded
+            });
+
+            updateItem(idx, {
+              uploadProgress: percentComplete,
+              uploadLoaded: event.loaded,
+              uploadTotal: event.total,
+              uploadSpeedBps: speedBps,
+              uploadEtaSec: etaSec
+            });
+          }
         }
       });
 
       xhr.addEventListener('load', () => {
+        xhrByItemIdRef.current.delete(item.id);
+        uploadRateByItemIdRef.current.delete(item.id);
         if (xhr.status === 200 || xhr.status === 201) {
           let response;
           try {
@@ -332,7 +543,15 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
       });
 
       xhr.addEventListener('error', () => {
+        xhrByItemIdRef.current.delete(item.id);
+        uploadRateByItemIdRef.current.delete(item.id);
         reject(new Error('Network error. Please check your connection.'));
+      });
+
+      xhr.addEventListener('abort', () => {
+        xhrByItemIdRef.current.delete(item.id);
+        uploadRateByItemIdRef.current.delete(item.id);
+        reject(new Error('Upload cancelled.'));
       });
 
       const token = localStorage.getItem('token');
@@ -367,7 +586,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
       setUploadItems(prev => prev.map((p, pIdx) => (pIdx === idx ? { ...p, uploadStatus: 'uploading' } : p)));
 
       try {
-        const response = await uploadSingleItem(item);
+        const response = await uploadSingleItem(item, idx);
         const newCollectionId = response.data?.collection?._id;
         setCollectionId(newCollectionId);
         if (newCollectionId) startPolling(newCollectionId);
@@ -412,13 +631,14 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
               }
               const statusJson = await statusResp.json();
               if (statusJson?.success) {
-                const { status, processingProgress } = statusJson.data;
+                const { status, processingProgress, uploadStats } = statusJson.data;
                 setUploadProgress(processingProgress);
 
                 setUploadItems(prev => prev.map((p, pIdx) => (
                   pIdx === idx
                     ? {
                       ...p,
+                      uploadStats: uploadStats,
                       processingProgress: processingProgress ?? p.processingProgress ?? 0,
                       uploadStatus: status === 'completed'
                         ? 'completed'
@@ -532,11 +752,9 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                     : null;
 
                   const genres = [];
-                  const statusLabel = it.uploadStatus === 'uploading'
-                    ? 'uploading'
-                    : it.uploadStatus === 'processing'
-                      ? `${it.processingProgress ?? 0}%`
-                      : it.uploadStatus;
+                  const stageLabel = computeStageLabel(it);
+                  const pct = getItemProgressPercent(it);
+                  const showUploadStats = it.uploadStatus === 'uploading' && it.uploadTotal;
 
                   return (
                     <div
@@ -573,15 +791,68 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                           ) : null}
                         </div>
 
-                        <div className="text-xs text-brand-text-tertiary whitespace-nowrap">
-                          {it.scanStatus !== 'scanned' ? 'not scanned' : null}
-                          {it.uploadStatus === 'idle' ? 'queued' : null}
-                          {it.uploadStatus === 'uploading' ? 'uploading' : null}
-                          {it.uploadStatus === 'processing' ? `processing ${it.processingProgress ?? 0}%` : null}
-                          {it.uploadStatus === 'completed' ? 'completed' : null}
-                          {it.uploadStatus === 'failed' ? 'failed' : null}
+                        <div className="flex flex-col items-end gap-2">
+                          <div className={`text-[11px] px-2 py-1 rounded-full border ${stageBadgeClass(it)}`}>
+                            <div className="flex items-center gap-2">
+                              {(it.uploadStatus === 'uploading' || it.uploadStatus === 'processing') ? (
+                                <Loader className="w-3 h-3 animate-spin" />
+                              ) : null}
+                              <span className="whitespace-nowrap">{stageLabel}{(it.uploadStatus === 'processing' || it.uploadStatus === 'uploading') ? ` · ${pct}%` : ''}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            {(it.uploadStatus === 'uploading' || it.uploadStatus === 'processing') ? (
+                              <button
+                                type="button"
+                                disabled={uploading && idx !== activeItemIndex}
+                                onClick={() => cancelItem(idx)}
+                                className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-200 text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Cancel"
+                              >
+                                <Ban className="w-3.5 h-3.5" />
+                                Cancel
+                              </button>
+                            ) : null}
+
+                            {it.uploadStatus === 'failed' ? (
+                              <button
+                                type="button"
+                                disabled={uploading}
+                                onClick={() => retryItem(idx)}
+                                className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Retry"
+                              >
+                                <RotateCcw className="w-3.5 h-3.5" />
+                                Retry
+                              </button>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
+
+                      {(it.uploadStatus === 'uploading' || it.uploadStatus === 'processing') ? (
+                        <div className="mt-3">
+                          <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden border border-white/10">
+                            <div
+                              className={`h-full ${it.uploadStatus === 'uploading' ? 'bg-blue-500/70' : 'bg-yellow-500/70'}`}
+                              style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
+                            />
+                          </div>
+
+                          {showUploadStats ? (
+                            <div className="mt-2 flex items-center justify-between text-[11px] text-brand-text-tertiary">
+                              <div className="whitespace-nowrap">
+                                {formatBytes(it.uploadLoaded || 0)} / {formatBytes(it.uploadTotal || 0)}
+                              </div>
+                              <div className="flex items-center gap-3 whitespace-nowrap">
+                                <span>{formatBytes(it.uploadSpeedBps || 0)}/s</span>
+                                <span>ETA {formatEta(it.uploadEtaSec)}</span>
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      ) : null}
 
                       {it.collectionId && (
                         <div className="mt-3 flex justify-end">
