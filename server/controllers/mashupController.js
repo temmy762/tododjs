@@ -34,6 +34,45 @@ export const getMashupSettings = async (req, res) => {
     if (!settings) {
       settings = await MashupSettings.create({});
     }
+    const data = settings.toObject ? settings.toObject() : settings;
+
+    if (data.bannerImageKey) {
+      try {
+        data.bannerImageUrl = await getSignedDownloadUrl(data.bannerImageKey);
+      } catch {
+        // ignore
+      }
+    }
+    res.status(200).json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const uploadMashupBanner = async (req, res) => {
+  try {
+    const bannerFile = req.files?.banner?.[0];
+    if (!bannerFile) {
+      return res.status(400).json({ success: false, message: 'Please upload a banner image' });
+    }
+
+    let settings = await MashupSettings.findOne();
+    if (!settings) {
+      settings = await MashupSettings.create({});
+    }
+
+    if (settings.bannerImageKey) {
+      try { await deleteFromWasabi(settings.bannerImageKey); } catch {}
+    }
+
+    const ext = (bannerFile.originalname.split('.').pop() || 'jpg').toLowerCase();
+    const key = `site/banners/mashups-${Date.now()}.${ext}`;
+    const upload = await uploadToWasabi(bannerFile.buffer, key, bannerFile.mimetype);
+
+    settings.bannerImageUrl = upload.location || upload.Location;
+    settings.bannerImageKey = key;
+    await settings.save();
+
     res.status(200).json({ success: true, data: settings });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -45,13 +84,14 @@ export const getMashupSettings = async (req, res) => {
 // @access  Private/Admin
 export const updateMashupSettings = async (req, res) => {
   try {
-    const { videoUrl, pageTitle, pageDescription } = req.body;
+    const { videoUrl, pageTitle, pageDescription, bannerImageUrl } = req.body;
     let settings = await MashupSettings.findOne();
     if (!settings) {
       settings = await MashupSettings.create({});
     }
 
     if (videoUrl !== undefined) settings.videoUrl = videoUrl;
+    if (bannerImageUrl !== undefined) settings.bannerImageUrl = bannerImageUrl;
     if (pageTitle !== undefined) settings.pageTitle = pageTitle;
     if (pageDescription !== undefined) settings.pageDescription = pageDescription;
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Music, Upload, Trash2, Edit3, Save, X, Link, Eye, EyeOff,
-  Loader, CheckCircle, AlertCircle, Youtube, FileAudio,
+  Music, Upload, Trash2, Edit3, Save, X, Eye, EyeOff,
+  Loader, CheckCircle, AlertCircle, FileAudio,
   Image, Sparkles, FileUp, RotateCcw, Check, AlertTriangle
 } from 'lucide-react';
 import GenericCoverArt from '../GenericCoverArt';
@@ -11,7 +11,7 @@ const API = API_URL;
 
 export default function AdminMashups() {
   const [mashups, setMashups] = useState([]);
-  const [settings, setSettings] = useState({ videoUrl: '', pageTitle: 'Mash Ups', pageDescription: '' });
+  const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Mash Ups', pageDescription: '' });
   const [loading, setLoading] = useState(true);
   const [uploadState, setUploadState] = useState({
     status: 'idle', // idle, uploading, processing, success, error
@@ -28,6 +28,8 @@ export default function AdminMashups() {
   const [isMinimized, setIsMinimized] = useState(false);
   const audioRef = useRef(null);
   const coverRef = useRef(null);
+  const bannerRef = useRef(null);
+  const [bannerUploading, setBannerUploading] = useState(false);
 
   // Upload form
   const [uploadForm, setUploadForm] = useState({
@@ -267,6 +269,45 @@ export default function AdminMashups() {
     setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
+  const handleBannerChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setMessage({ type: 'error', text: 'Banner must be under 10MB' });
+      return;
+    }
+
+    setBannerUploading(true);
+    setMessage({ type: '', text: '' });
+
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('banner', file);
+
+      const res = await fetch(`${API}/mashups/settings/banner`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+
+      const json = await res.json();
+      if (json.success) {
+        setSettings(json.data);
+        setMessage({ type: 'success', text: 'Banner updated!' });
+      } else {
+        setMessage({ type: 'error', text: json.message || 'Banner upload failed' });
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: err?.message || 'Banner upload failed' });
+    } finally {
+      setBannerUploading(false);
+      if (bannerRef.current) bannerRef.current.value = '';
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    }
+  };
+
   const extractYouTubeId = (url) => {
     if (!url) return null;
     const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?\s]+)/);
@@ -274,58 +315,41 @@ export default function AdminMashups() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-5xl">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl md:text-2xl font-bold text-white flex items-center gap-2">
-            <Music className="w-6 h-6 text-accent" />
-            Mashup Manager
-          </h2>
-          <p className="text-sm text-brand-text-tertiary mt-1">Upload and manage mashup tracks</p>
-        </div>
-        <span className="text-sm text-brand-text-tertiary">{mashups.length} mashups</span>
-      </div>
-
-      {/* Message */}
-      {message.text && (
-        <div className={`flex items-center gap-2 px-4 py-3 rounded-lg text-sm font-medium ${
-          message.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
-        }`}>
-          {message.type === 'success' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
-          {message.text}
-        </div>
-      )}
-
-      {/* ── Video Link Settings ── */}
+    <div className="flex flex-col gap-4">
       <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
         <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <Youtube className="w-4 h-4 text-red-400" />
-          Video & Page Settings
+          <Image className="w-4 h-4 text-accent" />
+          Banner & Page Settings
         </h3>
         <div className="space-y-3">
           <div>
-            <label className="block text-xs font-medium text-brand-text-secondary mb-1.5">YouTube Video URL</label>
-            <div className="relative">
-              <Link size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
-              <input
-                type="text"
-                value={settings.videoUrl}
-                onChange={(e) => setSettings({ ...settings, videoUrl: e.target.value })}
-                className="w-full pl-9 pr-4 py-2.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm"
-                placeholder="https://www.youtube.com/watch?v=..."
-              />
-            </div>
-            {extractYouTubeId(settings.videoUrl) && (
-              <div className="mt-3 rounded-lg overflow-hidden border border-white/10 aspect-video max-w-sm">
-                <iframe
-                  className="w-full h-full"
-                  src={`https://www.youtube.com/embed/${extractYouTubeId(settings.videoUrl)}`}
-                  title="Preview"
-                  frameBorder="0"
-                  allowFullScreen
+            <label className="block text-xs font-medium text-brand-text-secondary mb-1.5">Mashups Page Banner</label>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+              <label className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-accent/10 hover:bg-accent/20 border border-accent/30 text-accent text-sm font-semibold cursor-pointer transition-all duration-200">
+                <Upload className="w-4 h-4" />
+                {bannerUploading ? 'Uploading...' : 'Upload Banner'}
+                <input
+                  ref={bannerRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleBannerChange}
+                  disabled={bannerUploading}
+                  className="hidden"
                 />
+              </label>
+              <span className="text-xs text-brand-text-tertiary">Recommended: 1920x600 (max 10MB)</span>
+            </div>
+            {settings.bannerImageUrl ? (
+              <div className="mt-3 rounded-lg overflow-hidden border border-white/10 bg-black/20">
+                <div className="relative w-full aspect-[16/5]">
+                  <img
+                    src={settings.bannerImageUrl}
+                    alt="Mashups banner"
+                    className="absolute inset-0 w-full h-full object-cover"
+                  />
+                </div>
               </div>
-            )}
+            ) : null}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>

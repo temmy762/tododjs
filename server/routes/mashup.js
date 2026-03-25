@@ -4,6 +4,7 @@ import {
   getMashups,
   getMashupSettings,
   updateMashupSettings,
+  uploadMashupBanner,
   getAdminMashups,
   createMashup,
   updateMashup,
@@ -27,6 +28,19 @@ const mashupUpload = multer({
   }
 });
 
+const bannerUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    if (allowed.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'), false);
+    }
+  }
+});
+
 // Public routes
 router.get('/', getMashups);
 router.get('/settings', getMashupSettings);
@@ -35,6 +49,9 @@ router.get('/:id/playback', getMashupPlayback);
 // Admin routes
 router.get('/admin', protect, authorize('admin'), getAdminMashups);
 router.put('/settings', protect, authorize('admin'), updateMashupSettings);
+router.post('/settings/banner', protect, authorize('admin'), bannerUpload.fields([
+  { name: 'banner', maxCount: 1 }
+]), uploadMashupBanner);
 router.post('/', protect, authorize('admin'), mashupUpload.fields([
   { name: 'audio', maxCount: 1 },
   { name: 'coverArt', maxCount: 1 }

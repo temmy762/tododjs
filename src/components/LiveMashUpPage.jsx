@@ -10,7 +10,7 @@ import API_URL from '../config/api';
 export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
   const { t } = useTranslation();
   const [mashups, setMashups] = useState([]);
-  const [settings, setSettings] = useState({ videoUrl: '', pageTitle: 'Mash Ups', pageDescription: '' });
+  const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Mash Ups', pageDescription: '' });
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [viewMode, setViewMode] = useState('list');
@@ -45,11 +45,6 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
     } catch {}
   };
 
-  const extractYouTubeEmbedUrl = (url) => {
-    if (!url) return null;
-    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=))([^&?\s]+)/);
-    return match ? `https://www.youtube.com/embed/${match[1]}` : null;
-  };
 
   // Map mashups to track-like objects for TrackListView/TrackGridView
   const tracks = useMemo(() => {
@@ -148,28 +143,22 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
     return pageNumbers;
   };
 
-  const embedUrl = extractYouTubeEmbedUrl(settings.videoUrl);
-
   return (
     <div className="min-h-screen">
-      {/* Hero Video Section */}
-      {embedUrl && (
+      {settings.bannerImageUrl ? (
         <div className="relative w-full py-4 px-4 md:px-10 bg-gradient-to-b from-black/50 to-dark-bg">
-          <div className="max-w-4xl mx-auto">
-            <div className="relative w-full aspect-video max-h-[350px] rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-white/10">
-              <iframe 
-                className="absolute inset-0 w-full h-full"
-                src={embedUrl}
-                title="YouTube video player" 
-                frameBorder="0" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
-                referrerPolicy="strict-origin-when-cross-origin" 
-                allowFullScreen
+          <div className="max-w-6xl mx-auto">
+            <div className="relative w-full max-h-[350px] rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-white/10">
+              <img
+                src={settings.bannerImageUrl}
+                alt={settings.pageTitle || 'Mashups'}
+                className="w-full h-full object-cover"
+                loading="lazy"
               />
             </div>
           </div>
         </div>
-      )}
+      ) : null}
 
       {/* Sticky Header */}
       <div className="sticky top-14 md:top-16 z-20 bg-dark-bg/95 backdrop-blur-md border-b border-white/5 px-4 md:px-10 py-3 md:py-4">

@@ -5,6 +5,14 @@ const mashupSettingsSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  bannerImageUrl: {
+    type: String,
+    default: ''
+  },
+  bannerImageKey: {
+    type: String,
+    default: ''
+  },
   pageTitle: {
     type: String,
     default: 'Mash Ups'
