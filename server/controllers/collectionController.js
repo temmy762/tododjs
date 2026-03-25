@@ -599,7 +599,13 @@ export const uploadCollection = async (req, res) => {
     });
 
     // Background: process the ZIP file
-    processCollectionAsync(collection._id, zipFile.path, collection, createdDatePacks, createdAlbums);
+    console.log(`🧵 Queuing background processing for collection: ${collection._id}`);
+    setImmediate(() => {
+      processCollectionAsync(collection._id, zipFile.path, collection, createdDatePacks, createdAlbums)
+        .catch((e) => {
+          console.error(`❌ Unhandled processCollectionAsync rejection for ${collection._id}:`, e);
+        });
+    });
   } catch (error) {
     console.error('Collection upload error:', error);
     res.status(500).json({
