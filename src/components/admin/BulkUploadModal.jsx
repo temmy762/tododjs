@@ -1,5 +1,5 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
-import { X, Upload, Archive, AlertCircle, CheckCircle, Loader, FolderTree, Music, ChevronDown, ChevronUp, ChevronRight, RotateCcw, Ban, FolderOpen } from 'lucide-react';
+import { useState, useCallback, useEffect, useRef, Fragment } from 'react';
+import { X, Upload, Archive, AlertCircle, CheckCircle, Loader, FolderTree, Music, ChevronDown, ChevronUp, ChevronRight, RotateCcw, Ban, FolderOpen, Check } from 'lucide-react';
 import { API_URL } from '../../config/api';
 
 export default function BulkUploadModal({ onClose, onSuccess }) {
@@ -88,9 +88,8 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     if (it.uploadStatus === 'uploading') return 'Uploading to server';
     if (it.uploadStatus === 'processing') {
       const p = it.processingProgress ?? 0;
-      if (p <= 5) return 'Uploading ZIP to Wasabi';
-      if (p <= 20) return 'Extracting ZIPs';
-      if (p <= 95) return 'Uploading tracks';
+      if (p <= 5) return 'Backing up to cloud';
+      if (p <= 95) return 'Analyzing tracks';
       return 'Finalizing';
     }
     if (it.uploadStatus === 'completed') return 'Completed';
@@ -208,9 +207,12 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
 
             const statusJson = await statusResp.json();
             if (statusJson?.success) {
-              const { status, processingProgress } = statusJson.data;
+              const { status, processingProgress, processingDetail, tracksProcessed, totalTracksEstimate } = statusJson.data;
               updateItem(idx, {
                 processingProgress: processingProgress ?? 0,
+                processingDetail: processingDetail ?? '',
+                tracksProcessed: tracksProcessed ?? 0,
+                totalTracksEstimate: totalTracksEstimate ?? 0,
                 uploadStatus: status === 'completed'
                   ? 'completed'
                   : status === 'failed'
@@ -631,7 +633,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
               }
               const statusJson = await statusResp.json();
               if (statusJson?.success) {
-                const { status, processingProgress, uploadStats } = statusJson.data;
+                const { status, processingProgress, uploadStats, processingDetail, tracksProcessed, totalTracksEstimate } = statusJson.data;
                 setUploadProgress(processingProgress);
 
                 setUploadItems(prev => prev.map((p, pIdx) => (
@@ -640,6 +642,9 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                       ...p,
                       uploadStats: uploadStats,
                       processingProgress: processingProgress ?? p.processingProgress ?? 0,
+                      processingDetail: processingDetail ?? p.processingDetail ?? '',
+                      tracksProcessed: tracksProcessed ?? p.tracksProcessed ?? 0,
+                      totalTracksEstimate: totalTracksEstimate ?? p.totalTracksEstimate ?? 0,
                       uploadStatus: status === 'completed'
                         ? 'completed'
                         : status === 'failed'
@@ -832,24 +837,79 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                       </div>
 
                       {(it.uploadStatus === 'uploading' || it.uploadStatus === 'processing') ? (
-                        <div className="mt-3">
-                          <div className="w-full h-2 rounded-full bg-white/5 overflow-hidden border border-white/10">
+                        <div className="mt-3 space-y-2">
+                          {/* Stage pipeline */}
+                          <div className="flex items-center gap-1">
+                            {[
+                              { id: 'upload', label: 'Uploading', active: it.uploadStatus === 'uploading', done: it.uploadStatus === 'processing' || it.uploadStatus === 'completed' },
+                              { id: 'backup', label: 'Cloud Backup', active: it.uploadStatus === 'processing' && (it.processingProgress ?? 0) <= 5, done: (it.uploadStatus === 'processing' && (it.processingProgress ?? 0) > 5) || it.uploadStatus === 'completed' },
+                              { id: 'analyze', label: 'Analyzing', active: it.uploadStatus === 'processing' && (it.processingProgress ?? 0) > 5 && (it.processingProgress ?? 0) < 98, done: it.uploadStatus === 'completed' },
+                            ].map((stage, si, sarr) => (
+                              <Fragment key={stage.id}>
+                                <div className={`flex items-center gap-1 text-[9px] font-medium ${
+                                  stage.active ? 'text-yellow-300' : stage.done ? 'text-green-400' : 'text-white/30'
+                                }`}>
+                                  {stage.done
+                                    ? <Check className="w-2.5 h-2.5 flex-shrink-0" />
+                                    : stage.active
+                                      ? <Loader className="w-2.5 h-2.5 flex-shrink-0 animate-spin" />
+                                      : <div className="w-2 h-2 rounded-full border border-current flex-shrink-0 opacity-50" />
+                                  }
+                                  <span>{stage.label}</span>
+                                </div>
+                                {si < sarr.length - 1 && (
+                                  <div className={`flex-1 h-px mx-1 ${stage.done ? 'bg-green-500/40' : 'bg-white/10'}`} />
+                                )}
+                              </Fragment>
+                            ))}
+                          </div>
+
+                          {/* Progress bar */}
+                          <div className="w-full h-1.5 rounded-full bg-white/5 overflow-hidden">
                             <div
-                              className={`h-full ${it.uploadStatus === 'uploading' ? 'bg-blue-500/70' : 'bg-yellow-500/70'}`}
+                              className={`h-full transition-all duration-700 ease-out ${
+                                it.uploadStatus === 'uploading'
+                                  ? 'bg-blue-500'
+                                  : 'bg-gradient-to-r from-violet-500 via-purple-400 to-violet-300'
+                              }`}
                               style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
                             />
                           </div>
 
+                          {/* Detail row */}
                           {showUploadStats ? (
-                            <div className="mt-2 flex items-center justify-between text-[11px] text-brand-text-tertiary">
-                              <div className="whitespace-nowrap">
-                                {formatBytes(it.uploadLoaded || 0)} / {formatBytes(it.uploadTotal || 0)}
-                              </div>
-                              <div className="flex items-center gap-3 whitespace-nowrap">
-                                <span>{formatBytes(it.uploadSpeedBps || 0)}/s</span>
-                                <span>ETA {formatEta(it.uploadEtaSec)}</span>
-                              </div>
+                            <div className="flex items-center justify-between text-[10px] text-brand-text-tertiary">
+                              <span>{formatBytes(it.uploadLoaded || 0)} / {formatBytes(it.uploadTotal || 0)}</span>
+                              <span>{formatBytes(it.uploadSpeedBps || 0)}/s · ETA {formatEta(it.uploadEtaSec)}</span>
                             </div>
+                          ) : it.uploadStatus === 'processing' && (it.processingProgress ?? 0) > 5 ? (
+                            <div className="space-y-1.5">
+                              {(it.tracksProcessed > 0 || it.totalTracksEstimate > 0) && (
+                                <div className="flex items-center justify-between text-[10px]">
+                                  <span className="text-yellow-400/80 font-medium">AI Analysis</span>
+                                  {it.totalTracksEstimate > 0 && (
+                                    <span className="text-brand-text-tertiary font-mono">
+                                      {it.tracksProcessed || 0} / {it.totalTracksEstimate} tracks
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {it.processingDetail && (
+                                <div className="text-[11px] text-white/70 truncate bg-black/20 rounded px-2 py-1 border border-white/5">
+                                  🎵 {it.processingDetail}
+                                </div>
+                              )}
+                              {it.tracksProcessed > 0 && it.totalTracksEstimate > 0 && (
+                                <div className="w-full h-0.5 rounded-full bg-white/5">
+                                  <div
+                                    className="h-full rounded-full bg-yellow-400/60 transition-all duration-500"
+                                    style={{ width: `${Math.min(100, Math.round((it.tracksProcessed / it.totalTracksEstimate) * 100))}%` }}
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          ) : it.uploadStatus === 'processing' ? (
+                            <div className="text-[10px] text-brand-text-tertiary">Backing up to Wasabi cloud storage...</div>
                           ) : null}
                         </div>
                       ) : null}

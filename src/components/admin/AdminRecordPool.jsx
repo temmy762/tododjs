@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star } from 'lucide-react';
+import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star, Maximize2, Minimize2 } from 'lucide-react';
 import ManageAlbumModal from './ManageAlbumModal';
 import BulkUploadModal from './BulkUploadModal';
 import CollectionCard from './CollectionCard';
@@ -186,7 +186,7 @@ export default function AdminRecordPool() {
                     key={c._id}
                     collection={c}
                     onView={(col) => navigateToCollection(col)}
-                    onEdit={() => {}}
+                    onEdit={(col) => { setEditItem(col); setModal('editCollection'); }}
                     onDelete={(col) => handleDeleteCollection(col)}
                   />
                 ))}
@@ -264,6 +264,23 @@ export default function AdminRecordPool() {
             dateCardName={selectedDateCard.name}
             onClose={() => setModal(null)}
             onSuccess={() => { setModal(null); fetchAlbums(selectedDateCard._id); }}
+          />
+        )}
+
+        {modal === 'editDateCard' && editItem && (
+          <DateCardModal
+            sourceId={selectedCollection?._id}
+            dateCard={editItem}
+            onClose={() => { setModal(null); setEditItem(null); }}
+            onSuccess={() => { setModal(null); setEditItem(null); if (selectedCollection) fetchDateCards(selectedCollection._id); }}
+          />
+        )}
+
+        {modal === 'editCollection' && editItem && (
+          <CollectionEditModal
+            collection={editItem}
+            onClose={() => { setModal(null); setEditItem(null); }}
+            onSuccess={() => { setModal(null); setEditItem(null); fetchCollections(); }}
           />
         )}
 
@@ -527,6 +544,72 @@ function ThumbnailField({ file, setFile, url, setUrl, error, setError }) {
         <input type="url" value={url} onChange={e => setUrl(e.target.value)} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent" placeholder="https://example.com/image.jpg" />
       )}
       {previewSrc && <img src={previewSrc} alt="Preview" className="mt-3 w-full h-32 object-cover rounded-lg border border-white/10" onError={() => mode === 'url' && setError('Invalid image URL')} />}
+    </div>
+  );
+}
+
+// Collection Edit Modal
+function CollectionEditModal({ collection, onClose, onSuccess }) {
+  const [name, setName] = useState(collection?.name || '');
+  const [year, setYear] = useState(collection?.year || new Date().getFullYear());
+  const [platform, setPlatform] = useState(collection?.platform || '');
+  const [thumbnail, setThumbnail] = useState(collection?.thumbnail || '');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const res = await fetch(`${API}/collections/${collection._id}`, {
+        method: 'PUT',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, year, platform, thumbnail })
+      });
+      const data = await res.json();
+      if (data.success) { onSuccess(); }
+      else { setError(data.message || 'Failed to update'); }
+    } catch (err) { setError(err.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-dark-elevated rounded-xl max-w-md w-full p-6 my-8">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-xl font-bold">Edit Collection</h2>
+          <button onClick={onClose} className="text-brand-text-tertiary hover:text-white"><X size={22} /></button>
+        </div>
+        {error && <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg flex items-center gap-2 text-red-400 text-sm"><AlertCircle size={16} />{error}</div>}
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Name *</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} required className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">Year</label>
+              <input type="number" value={year} onChange={e => setYear(parseInt(e.target.value))} min="2000" max="2100" className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Platform</label>
+              <input type="text" value={platform} onChange={e => setPlatform(e.target.value)} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent" placeholder="e.g., PlayList Pro" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Thumbnail URL</label>
+            <input type="url" value={thumbnail} onChange={e => setThumbnail(e.target.value)} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent" placeholder="https://..." />
+            {thumbnail && <img src={thumbnail} alt="Preview" className="mt-2 w-full h-24 object-cover rounded-lg border border-white/10" onError={e => e.target.style.display='none'} />}
+          </div>
+          <div className="flex gap-3 pt-2">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-lg font-medium transition-colors">Cancel</button>
+            <button type="submit" disabled={loading} className="flex-1 px-4 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+              {loading && <Loader size={16} className="animate-spin" />}Save
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

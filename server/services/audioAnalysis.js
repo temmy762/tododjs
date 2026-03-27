@@ -11,6 +11,20 @@ async function getEssentia() {
   return essentiaInstance;
 }
 
+function getEssentiaMaxBytes() {
+  const raw = process.env.ESSENTIA_MAX_BYTES;
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  if (!Number.isFinite(parsed) || parsed <= 0) return 5 * 1024 * 1024;
+  return parsed;
+}
+
+function limitAnalysisBuffer(mp3Buffer) {
+  const maxBytes = getEssentiaMaxBytes();
+  if (!Buffer.isBuffer(mp3Buffer)) return mp3Buffer;
+  if (mp3Buffer.length <= maxBytes) return mp3Buffer;
+  return mp3Buffer.subarray(0, maxBytes);
+}
+
 const CAMELOT_MAP = {
   'C major': '8B', 'A minor': '8A',
   'Db major': '3B', 'Bb minor': '3A',
@@ -39,12 +53,20 @@ function toCamelot(key, scale) {
  * @returns {Promise<{key: string, scale: string, camelot: string, bpm: number, confidence: number}>}
  */
 export async function analyzeAudio(mp3Buffer) {
+  if (process.env.ESSENTIA_ENABLED === 'false') {
+    return { key: null, scale: null, camelot: null, bpm: null, confidence: 0 };
+  }
+
   const essentia = await getEssentia();
+
+  if (typeof essentia.KeyExtractor !== 'function') {
+    return { key: null, scale: null, camelot: null, bpm: null, confidence: 0 };
+  }
 
   // Decode MP3 to PCM float32
   let audioBuffer;
   try {
-    audioBuffer = await decode(mp3Buffer);
+    audioBuffer = await decode(limitAnalysisBuffer(mp3Buffer));
   } catch (err) {
     console.error('Audio decode error:', err.message);
     return { key: null, scale: null, camelot: null, bpm: null, confidence: 0 };
@@ -117,12 +139,20 @@ export async function analyzeAudio(mp3Buffer) {
  * @returns {Promise<{genre: string, confidence: number, features: object}>}
  */
 export async function analyzeGenre(mp3Buffer) {
+  if (process.env.ESSENTIA_ENABLED === 'false') {
+    return { genre: null, confidence: 0, features: null };
+  }
+
   const essentia = await getEssentia();
+
+  if (typeof essentia.SpectralRollOff !== 'function') {
+    return { genre: null, confidence: 0, features: null };
+  }
 
   // Decode MP3 to PCM float32
   let audioBuffer;
   try {
-    audioBuffer = await decode(mp3Buffer);
+    audioBuffer = await decode(limitAnalysisBuffer(mp3Buffer));
   } catch (err) {
     console.error('Audio decode error:', err.message);
     return { genre: null, confidence: 0, features: null };

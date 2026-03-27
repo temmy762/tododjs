@@ -73,6 +73,18 @@ const collectionSchema = new mongoose.Schema({
   errorMessage: {
     type: String
   },
+  processingDetail: {
+    type: String,
+    default: ''
+  },
+  tracksProcessed: {
+    type: Number,
+    default: 0
+  },
+  totalTracksEstimate: {
+    type: Number,
+    default: 0
+  },
   // New fields for scan-first workflow
   scanResult: {
     motherFolderName: { type: String },

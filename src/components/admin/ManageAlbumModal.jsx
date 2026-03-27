@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import GenericCoverArt from '../GenericCoverArt';
 import { X, Music, Download, Edit2, Trash2, Save, Play, Pause, Volume2 } from 'lucide-react';
 import SearchBar from './SearchBar';
 import AdvancedFilterPanel from './AdvancedFilterPanel';
@@ -9,6 +10,7 @@ export default function ManageAlbumModal({ album, onClose, onUpdate }) {
   const [filteredTracks, setFilteredTracks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [coverArtError, setCoverArtError] = useState(false);
   const [editingTrack, setEditingTrack] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [playingTrack, setPlayingTrack] = useState(null);
@@ -226,11 +228,16 @@ export default function ManageAlbumModal({ album, onClose, onUpdate }) {
         {/* Header */}
         <div className="p-6 border-b border-white/10">
           <div className="flex items-center gap-4 mb-4">
-            <img
-              src={album.coverArt}
-              alt={album.name}
-              className="w-20 h-20 rounded-lg object-cover"
-            />
+            {!coverArtError && album.coverArt ? (
+              <img
+                src={album.coverArt}
+                alt={album.name}
+                className="w-20 h-20 rounded-lg object-cover"
+                onError={() => setCoverArtError(true)}
+              />
+            ) : (
+              <GenericCoverArt title={album.name} size="lg" className="flex-shrink-0" />
+            )}
             <div className="flex-1">
               <h2 className="text-2xl font-bold mb-1">{album.name}</h2>
               <p className="text-brand-text-tertiary">

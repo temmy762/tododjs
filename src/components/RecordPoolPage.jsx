@@ -6,28 +6,28 @@ import API_URL from '../config/api';
 
 export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackInteraction }) {
   const { t } = useTranslation();
-  const [view, setView] = useState('sources'); // sources | source | dateCard
-  const [sources, setSources] = useState([]);
+  const [view, setView] = useState('collections'); // collections | collection | dateCard
+  const [collections, setCollections] = useState([]);
   const [dateCards, setDateCards] = useState([]);
   const [albums, setAlbums] = useState([]);
-  const [selectedSource, setSelectedSource] = useState(null);
+  const [selectedCollection, setSelectedCollection] = useState(null);
   const [selectedDateCard, setSelectedDateCard] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchSources = useCallback(async () => {
+  const fetchCollections = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/sources`);
+      const res = await fetch(`${API_URL}/collections`);
       const data = await res.json();
-      if (data.success) setSources(data.data);
-    } catch (err) { console.error('Error fetching sources:', err); }
+      if (data.success) setCollections((data.data || []).filter(c => c.status === 'completed'));
+    } catch (err) { console.error('Error fetching collections:', err); }
     finally { setLoading(false); }
   }, []);
 
-  const fetchDateCards = useCallback(async (sourceId) => {
+  const fetchDateCards = useCallback(async (collectionId) => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/date-packs/source/${sourceId}`);
+      const res = await fetch(`${API_URL}/collections/${collectionId}/date-packs`);
       const data = await res.json();
       if (data.success) setDateCards(data.data);
     } catch (err) { console.error('Error fetching date cards:', err); }
@@ -44,13 +44,13 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchSources(); }, [fetchSources]);
+  useEffect(() => { fetchCollections(); }, [fetchCollections]);
 
-  const openSource = (source) => {
-    setSelectedSource(source);
+  const openCollection = (collection) => {
+    setSelectedCollection(collection);
     setSelectedDateCard(null);
-    setView('source');
-    fetchDateCards(source._id);
+    setView('collection');
+    fetchDateCards(collection._id);
   };
 
   const openDateCard = (dc) => {
@@ -61,11 +61,11 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
 
   const goBack = () => {
     if (view === 'dateCard') {
-      setView('source');
+      setView('collection');
       setSelectedDateCard(null);
-    } else if (view === 'source') {
-      setView('sources');
-      setSelectedSource(null);
+    } else if (view === 'collection') {
+      setView('collections');
+      setSelectedCollection(null);
     }
   };
 
@@ -73,48 +73,48 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
     <div className="px-4 sm:px-6 md:px-10 py-4 md:py-6">
       {/* Header */}
       <div className="mb-8">
-        {view !== 'sources' && (
+        {view !== 'collections' && (
           <button onClick={goBack} className="flex items-center gap-1.5 text-brand-text-tertiary hover:text-white transition-colors mb-4 text-sm">
             <ArrowLeft size={16} /> Back
           </button>
         )}
 
-        {view === 'sources' && (
+        {view === 'collections' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">Records Pools</h1>
             <p className="text-brand-text-tertiary">Accede a todas tus record pools y packs Premium en un único lugar.</p>
           </div>
         )}
 
-        {view === 'source' && selectedSource && (
-          <SourceHeader source={selectedSource} />
+        {view === 'collection' && selectedCollection && (
+          <CollectionHeader collection={selectedCollection} />
         )}
 
-        {view === 'dateCard' && selectedDateCard && selectedSource && (
-          <DateCardHeader dateCard={selectedDateCard} source={selectedSource} />
+        {view === 'dateCard' && selectedDateCard && selectedCollection && (
+          <DateCardHeader dateCard={selectedDateCard} collection={selectedCollection} />
         )}
       </div>
 
-      {/* Sources Grid */}
-      {view === 'sources' && (
+      {/* Collections Grid */}
+      {view === 'collections' && (
         loading ? <LoadingState /> : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {sources.map((source, i) => (
-              <SourceCard key={source._id} source={source} index={i} onClick={() => openSource(source)} />
+            {collections.map((col, i) => (
+              <CollectionCard key={col._id} collection={col} index={i} onClick={() => openCollection(col)} />
             ))}
-            {sources.length === 0 && <EmptyState icon={Disc} text="No sources available yet" />}
+            {collections.length === 0 && <EmptyState icon={Disc} text="No record pools available yet" />}
           </div>
         )
       )}
 
-      {/* Source Detail — Date Cards */}
-      {view === 'source' && selectedSource && (
+      {/* Collection Detail — Date Cards */}
+      {view === 'collection' && selectedCollection && (
         loading ? <LoadingState /> : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {dateCards.map((dc, i) => (
               <DateCard key={dc._id} dateCard={dc} index={i} onClick={() => openDateCard(dc)} />
             ))}
-            {dateCards.length === 0 && <EmptyState icon={Calendar} text="No date cards in this source yet" />}
+            {dateCards.length === 0 && <EmptyState icon={Calendar} text="No date cards in this collection yet" />}
           </div>
         )
       )}
@@ -141,23 +141,25 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
   );
 }
 
-// Source Header (shown when viewing a source's date cards)
-function SourceHeader({ source }) {
+// Collection Header
+function CollectionHeader({ collection }) {
   return (
     <div className="flex items-center gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-xl shadow-black/30 flex-shrink-0">
-        <img src={source.thumbnail} alt={source.name} className="w-full h-full object-cover" />
+      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-xl shadow-black/30 flex-shrink-0 bg-dark-surface flex items-center justify-center">
+        {collection.thumbnail
+          ? <img src={collection.thumbnail} alt={collection.name} className="w-full h-full object-cover" />
+          : <Disc size={36} className="text-accent" />}
       </div>
       <div>
-        <p className="text-xs text-accent font-semibold uppercase tracking-wider mb-1">Source</p>
-        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">{source.name}</h1>
+        <p className="text-xs text-accent font-semibold uppercase tracking-wider mb-1">Record Pool</p>
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">{collection.name}</h1>
         <div className="flex items-center gap-3 text-sm text-brand-text-tertiary">
-          <span>{source.year}</span>
-          {source.platform && <><span className="text-white/20">|</span><span>{source.platform}</span></>}
+          <span>{collection.year}</span>
+          {collection.platform && <><span className="text-white/20">|</span><span>{collection.platform}</span></>}
           <span className="text-white/20">|</span>
-          <span>{source.totalAlbums || 0} albums</span>
+          <span>{collection.totalDatePacks || 0} date packs</span>
           <span className="text-white/20">|</span>
-          <span>{source.totalTracks || 0} tracks</span>
+          <span>{collection.totalTracks || 0} tracks</span>
         </div>
       </div>
     </div>
@@ -165,18 +167,20 @@ function SourceHeader({ source }) {
 }
 
 // Date Card Header
-function DateCardHeader({ dateCard, source }) {
+function DateCardHeader({ dateCard, collection }) {
   const dateStr = new Date(dateCard.date).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
   return (
     <div className="flex items-center gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-xl shadow-black/30 flex-shrink-0">
-        <img src={dateCard.thumbnail} alt={dateCard.name} className="w-full h-full object-cover" />
+      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-xl shadow-black/30 flex-shrink-0 bg-dark-surface flex items-center justify-center">
+        {dateCard.thumbnail
+          ? <img src={dateCard.thumbnail} alt={dateCard.name} className="w-full h-full object-cover" />
+          : <Calendar size={36} className="text-accent" />}
       </div>
       <div>
         <div className="flex items-center gap-2 text-xs text-brand-text-tertiary mb-1">
-          <span className="text-accent font-semibold uppercase tracking-wider">Date Card</span>
+          <span className="text-accent font-semibold uppercase tracking-wider">Date Pack</span>
           <ChevronRight size={12} />
-          <span>{source.name}</span>
+          <span>{collection.name}</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">{dateCard.name}</h1>
         <div className="flex items-center gap-3 text-sm text-brand-text-tertiary">
@@ -192,8 +196,8 @@ function DateCardHeader({ dateCard, source }) {
   );
 }
 
-// Source Card with hover animation
-function SourceCard({ source, index, onClick }) {
+// Collection Card with hover animation
+function CollectionCard({ collection, index, onClick }) {
   return (
     <div
       onClick={onClick}
@@ -201,10 +205,10 @@ function SourceCard({ source, index, onClick }) {
       style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'both' }}
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-dark-surface">
-        {source.thumbnail ? (
+        {collection.thumbnail ? (
           <img
-            src={source.thumbnail}
-            alt={source.name}
+            src={collection.thumbnail}
+            alt={collection.name}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
         ) : (
@@ -212,16 +216,15 @@ function SourceCard({ source, index, onClick }) {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 p-5">
-          <h3 className="text-xl font-bold text-white mb-1 drop-shadow-lg">{source.name}</h3>
-          <p className="text-white/60 text-sm">{source.year} {source.platform && `• ${source.platform}`}</p>
+          <h3 className="text-xl font-bold text-white mb-1 drop-shadow-lg">{collection.name}</h3>
+          <p className="text-white/60 text-sm">{collection.year} {collection.platform && `• ${collection.platform}`}</p>
         </div>
-        {/* Accent glow on hover */}
         <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       </div>
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-4 text-sm">
-          <span className="text-brand-text-tertiary"><Disc size={14} className="inline mr-1 text-accent" />{source.totalAlbums || 0} albums</span>
-          <span className="text-brand-text-tertiary"><Music size={14} className="inline mr-1 text-accent" />{source.totalTracks || 0} tracks</span>
+          <span className="text-brand-text-tertiary"><Disc size={14} className="inline mr-1 text-accent" />{collection.totalDatePacks || 0} packs</span>
+          <span className="text-brand-text-tertiary"><Music size={14} className="inline mr-1 text-accent" />{collection.totalTracks || 0} tracks</span>
         </div>
         <ChevronRight size={18} className="text-brand-text-tertiary group-hover:text-accent group-hover:translate-x-1 transition-all duration-300" />
       </div>

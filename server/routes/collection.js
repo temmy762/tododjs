@@ -21,7 +21,8 @@ import {
   getCollectionStats,
   getCollectionStatus,
   cancelCollectionProcessing,
-  retryFailedTracks
+  retryFailedTracks,
+  reprocessCollection
 } from '../controllers/collectionController.js';
 import { getDatePacksByCollection } from '../controllers/datePackController.js';
 import { protect, authorize } from '../middleware/auth.js';
@@ -68,6 +69,9 @@ router.route('/:id/cancel')
 
 router.route('/:id/retry-failed')
   .post(protect, authorize('admin'), retryFailedTracks);
+
+router.route('/:id/reprocess')
+  .post(protect, authorize('admin'), reprocessCollection);
 
 router.route('/:collectionId/date-packs')
   .get(getDatePacksByCollection);

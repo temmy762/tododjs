@@ -3,8 +3,16 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+function getOpenAITimeoutMs() {
+  const raw = process.env.OPENAI_TIMEOUT_MS;
+  const parsed = raw ? parseInt(raw, 10) : NaN;
+  if (!Number.isFinite(parsed) || parsed <= 0) return 25000;
+  return parsed;
+}
+
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
+  timeout: getOpenAITimeoutMs()
 });
 
 export async function detectTonalityWithAI(trackTitle, artist, album = null) {
@@ -31,22 +39,26 @@ Confidence levels: "high", "medium", "low", "unknown"
 If you don't know the key, return: {"key": null, "scale": null, "camelot": null, "confidence": "unknown"}`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a music theory expert specializing in key detection for DJ mixing. Provide accurate musical key information in Camelot notation. Always respond with valid JSON.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.1,
-      max_tokens: 100,
-      response_format: { type: "json_object" }
-    });
+    const timeoutMs = getOpenAITimeoutMs();
+    const response = await openai.chat.completions.create(
+      {
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a music theory expert specializing in key detection for DJ mixing. Provide accurate musical key information in Camelot notation. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 100,
+        response_format: { type: "json_object" }
+      },
+      { timeout: timeoutMs }
+    );
 
     const result = JSON.parse(response.choices[0].message.content);
     
@@ -98,22 +110,26 @@ Confidence levels: "high", "medium", "low"
 If you don't know the genre, return: {"genre": "Electronic", "confidence": "low"}`;
 
   try {
-    const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a music genre classification expert for DJ record pools. Provide accurate genre information. Always respond with valid JSON.'
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      temperature: 0.1,
-      max_tokens: 50,
-      response_format: { type: "json_object" }
-    });
+    const timeoutMs = getOpenAITimeoutMs();
+    const response = await openai.chat.completions.create(
+      {
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a music genre classification expert for DJ record pools. Provide accurate genre information. Always respond with valid JSON.'
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        temperature: 0.1,
+        max_tokens: 50,
+        response_format: { type: "json_object" }
+      },
+      { timeout: timeoutMs }
+    );
 
     const result = JSON.parse(response.choices[0].message.content);
     

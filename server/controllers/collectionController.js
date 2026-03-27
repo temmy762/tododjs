@@ -3,16 +3,105 @@ import DatePack from '../models/DatePack.js';
 import Album from '../models/Album.js';
 import Track from '../models/Track.js';
 import Source from '../models/Source.js';
-import { uploadToWasabi, deleteFromWasabi } from '../config/wasabi.js';
+import s3Client, { uploadToWasabi, deleteFromWasabi } from '../config/wasabi.js';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
 import yauzl from 'yauzl';
 import AdmZip from 'adm-zip';
 import path from 'path';
 import fs from 'fs';
-import { pipeline } from 'stream';
+import { pipeline as pipelineCb } from 'stream';
+import { pipeline as pipelineAsync } from 'stream/promises';
 import { parseBuffer } from 'music-metadata';
 import { detectTonality } from '../services/tonalityDetection.js';
 import { detectGenre } from '../services/genreDetection.js';
 import { generateCollectionName, detectGenres, extractDateFromFolderName } from '../utils/collectionNameGenerator.js';
+
+function withTimeout(promise, timeoutMs, timeoutValue) {
+  let timer;
+  const timeoutPromise = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(timeoutValue), timeoutMs);
+  });
+
+  return Promise.race([promise, timeoutPromise]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+// @desc    Reprocess a collection from its stored Wasabi ZIP (useful after server restart)
+// @route   POST /api/collections/:id/reprocess
+// @access  Private/Admin
+export const reprocessCollection = async (req, res) => {
+  try {
+    const collection = await Collection.findById(req.params.id);
+    if (!collection) {
+      return res.status(404).json({ success: false, message: 'Collection not found' });
+    }
+
+    if (!collection.zipKey) {
+      return res.status(400).json({
+        success: false,
+        message: 'Collection has no stored ZIP key (zipKey). Re-upload the ZIP to start processing.'
+      });
+    }
+
+    const cleanup = String(req.query.cleanup || 'true').toLowerCase() !== 'false';
+    if (cleanup) {
+      await DatePack.deleteMany({ collectionId: collection._id });
+      await Album.deleteMany({ collectionId: collection._id });
+      await Track.deleteMany({ collectionId: collection._id });
+    }
+
+    collection.status = 'processing';
+    collection.processingProgress = 5;
+    collection.totalDatePacks = 0;
+    collection.totalAlbums = 0;
+    collection.totalTracks = 0;
+    collection.totalSize = 0;
+    collection.errorMessage = null;
+    await collection.save();
+
+    const tempDir = path.join(process.cwd(), 'uploads', 'temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const outPath = path.join(
+      tempDir,
+      `${Date.now()}-${Math.random().toString(16).slice(2)}-reprocess-${collection._id}.zip`
+    );
+
+    console.log(`☁️ Reprocess: downloading stored ZIP from Wasabi: ${collection.zipKey}`);
+    const command = new GetObjectCommand({
+      Bucket: process.env.WASABI_BUCKET_NAME,
+      Key: collection.zipKey
+    });
+    const s3Resp = await s3Client.send(command);
+    if (!s3Resp?.Body) {
+      return res.status(500).json({ success: false, message: 'Wasabi download failed (empty body)' });
+    }
+
+    await pipelineAsync(s3Resp.Body, fs.createWriteStream(outPath));
+    console.log(`✅ Reprocess: ZIP downloaded to temp file: ${outPath}`);
+
+    console.log(`🧵 Queuing reprocess background worker for collection: ${collection._id}`);
+    setImmediate(() => {
+      processCollectionAsync(collection._id, outPath, collection, [], [], { skipZipUpload: true })
+        .catch((e) => {
+          console.error(`❌ Unhandled processCollectionAsync rejection for reprocess ${collection._id}:`, e);
+        });
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: 'Collection reprocessing queued'
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
+  }
+};
 
 function buildPreviewFromZipFile(zipPathOrBuffer, originalName, fileSize, depth = 0) {
   const zipFileName = path.basename(originalName, '.zip');
@@ -317,16 +406,12 @@ function extractEntryToFileByName(zipPath, targetFileName, outputPath, timeoutMs
           }
 
           const writeStream = fs.createWriteStream(outputPath);
-          const onError = (e) => {
-            if (done) return;
-            done = true;
+          pipelineCb(readStream, writeStream, (err) => {
             cleanup();
-            try { zipfile.close(); } catch { /* ignore */ }
-            reject(e);
-          };
 
-          pipeline(readStream, writeStream, (pipeErr) => {
-            if (pipeErr) return onError(pipeErr);
+            if (err) {
+              return reject(err);
+            }
             if (done) return;
             done = true;
             cleanup();
@@ -341,8 +426,7 @@ function extractEntryToFileByName(zipPath, targetFileName, outputPath, timeoutMs
             resolve(outputPath);
           });
 
-          readStream.on('error', onError);
-          writeStream.on('error', onError);
+          // pipelineCb handles error propagation; no extra handlers needed
         });
       });
 
@@ -653,53 +737,43 @@ export const previewZipStructures = async (req, res) => {
   }
 };
 
-async function processCollectionAsync(collectionId, zipFilePath, collectionData, createdDatePacks, createdAlbums) {
+async function processCollectionAsync(collectionId, zipFilePath, collection, createdDatePacks, createdAlbums, opts = {}) {
   const tempDir = path.dirname(zipFilePath);
-  const extractedDatePacks = [];
-
+  const tempFilesToClean = [];
   try {
-    const collection = await Collection.findById(collectionId);
     console.log(`\n🚀 Starting collection processing: ${collection.name}`);
-    
-    // Upload original ZIP to Wasabi S3
-    const zipSizeGB = (fs.statSync(zipFilePath).size / 1024 / 1024 / 1024).toFixed(2);
-    console.log(`☁️ Uploading ${zipSizeGB} GB ZIP to Wasabi S3...`);
-    const zipStream = fs.createReadStream(zipFilePath);
-    const collectionKey = `collections/${collection.name}/original.zip`;
 
-    let lastWasabiProgressUpdateMs = 0;
-    const zipUpload = await uploadToWasabi(
-      zipStream,
-      collectionKey,
-      'application/zip',
-      async (progress) => {
-        console.log(`   ☁️ Wasabi upload: ${progress.toFixed(1)}%`);
-
-        const nowMs = Date.now();
-        if (nowMs - lastWasabiProgressUpdateMs < 1500) return;
-        lastWasabiProgressUpdateMs = nowMs;
-
-        const mapped = Math.max(0, Math.min(5, Math.round(progress * 0.05)));
-        if ((collection.processingProgress ?? 0) < mapped) {
-          collection.processingProgress = mapped;
-          try {
-            await collection.save();
-          } catch {
-            // ignore
+    if (!opts.skipZipUpload) {
+      const zipSizeGB = (fs.statSync(zipFilePath).size / (1024 * 1024 * 1024)).toFixed(2);
+      console.log(`☁️ Uploading ${zipSizeGB} GB ZIP to Wasabi...`);
+      const zipKey = `collections/${collection.name}/original/${Date.now()}-${path.basename(zipFilePath)}`;
+      let lastLoggedPct = 0;
+      const zipUpload = await uploadToWasabi(
+        fs.createReadStream(zipFilePath),
+        zipKey,
+        'application/zip',
+        (pct) => {
+          const rounded = Math.floor(pct / 10) * 10;
+          if (rounded > lastLoggedPct) {
+            lastLoggedPct = rounded;
+            console.log(`   ☁️ Wasabi ZIP upload: ${rounded}%`);
+          }
+          const progress = Math.min(4, Math.round((pct / 100) * 4));
+          if (progress > (collection.processingProgress || 0)) {
+            collection.processingProgress = progress;
+            Collection.findByIdAndUpdate(collectionId, { processingProgress: progress }).catch(() => {});
           }
         }
-      }
-    );
-    console.log('✅ ZIP uploaded to Wasabi S3');
-
-    collection.zipUrl = zipUpload.location;
-    collection.zipKey = zipUpload.key;
-    collection.processingProgress = 5;
-    await collection.save();
-
-    // Get existing date packs from database
-    const existingDatePacks = await DatePack.find({ collectionId: collection._id });
-    console.log(`📦 Found ${existingDatePacks.length} existing date pack cards`);
+      );
+      collection.zipUrl = zipUpload.location;
+      collection.zipKey = zipUpload.key;
+      collection.processingProgress = 5;
+      await collection.save();
+      console.log(`✅ ZIP uploaded to Wasabi: ${collection.zipKey}`);
+    } else {
+      collection.processingProgress = Math.max(collection.processingProgress || 0, 5);
+      await collection.save();
+    }
 
     // Open ZIP and find MP3 files
     const zipfile = await openZipFile(zipFilePath);
@@ -762,6 +836,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
       let tracksCreated = 0;
       let bytesUploaded = 0;
       const albumsCache = new Map();
+      const albumCoverUrls = new Map();
 
       const getOrCreateAlbum = async (albumName, trackCountHint) => {
         const key = albumName || datePackName;
@@ -815,9 +890,27 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
         // ignore
       }
 
+      collection.totalTracksEstimate = (collection.totalTracksEstimate || 0) + totalTracksHint;
+      Collection.findByIdAndUpdate(collection._id, { totalTracksEstimate: collection.totalTracksEstimate }).catch(() => {});
+
       const maybeUpdateCollectionProgress = async () => {
         if (totalTracksHint <= 0) return;
         const pct = progressStart + ((tracksCreated / totalTracksHint) * (progressEnd - progressStart));
+        const mapped = Math.max(collection.processingProgress || 0, Math.min(progressEnd, Math.round(pct)));
+        if ((collection.processingProgress ?? 0) >= mapped) return;
+        collection.processingProgress = mapped;
+        try { await collection.save(); } catch { /* ignore */ }
+      };
+
+      let lastProgressUpdateMs = 0;
+      const maybeUpdateCollectionProgressEffective = async (effectiveTracks) => {
+        if (totalTracksHint <= 0) return;
+        const nowMs = Date.now();
+        if (nowMs - lastProgressUpdateMs < 1200) return;
+        lastProgressUpdateMs = nowMs;
+
+        const safeEffective = Math.max(0, Math.min(totalTracksHint, effectiveTracks));
+        const pct = progressStart + ((safeEffective / totalTracksHint) * (progressEnd - progressStart));
         const mapped = Math.max(collection.processingProgress || 0, Math.min(progressEnd, Math.round(pct)));
         if ((collection.processingProgress ?? 0) >= mapped) return;
         collection.processingProgress = mapped;
@@ -848,6 +941,10 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
 
             const mp3Buffer = await extractEntryToBufferByName(zipPath, mp3FileName);
             const mp3Name = path.basename(mp3FileName);
+            collection.processingDetail = path.parse(mp3Name).name;
+
+            // Update progress early (analysis may take time)
+            await maybeUpdateCollectionProgressEffective(tracksCreated + 0.15);
 
             let metadata = {
               title: path.parse(mp3Name).name,
@@ -855,6 +952,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
               bpm: null,
               duration: 0
             };
+            let trackCoverArt = albumCoverUrls.get(album._id.toString()) || collection.thumbnail;
 
             try {
               const musicMetadata = await parseBuffer(mp3Buffer, { mimeType: 'audio/mpeg' });
@@ -864,12 +962,54 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
                 bpm: musicMetadata.common.bpm || null,
                 duration: musicMetadata.format.duration || 0
               };
+              if (!albumCoverUrls.has(album._id.toString()) && musicMetadata.common.picture?.length > 0) {
+                try {
+                  const pic = musicMetadata.common.picture[0];
+                  const mimeType = pic.format || 'image/jpeg';
+                  const ext = mimeType.split('/').pop() || 'jpg';
+                  const coverKey = `collections/${collection.name}/albums/${album.name}/cover.${ext}`;
+                  const coverUpload = await uploadToWasabi(Buffer.from(pic.data), coverKey, mimeType);
+                  trackCoverArt = coverUpload.location;
+                  albumCoverUrls.set(album._id.toString(), trackCoverArt);
+                  Album.findByIdAndUpdate(album._id, { coverArt: trackCoverArt }).catch(() => {});
+                } catch {
+                  // ignore, fall back to collection thumbnail
+                }
+              } else if (albumCoverUrls.has(album._id.toString())) {
+                trackCoverArt = albumCoverUrls.get(album._id.toString());
+              }
             } catch (error) {
               // ignore
             }
 
-            const tonality = await detectTonality(mp3Buffer, metadata);
-            const genreResult = await detectGenre(mp3Buffer, metadata);
+            const tonalityResult = await withTimeout(
+              detectTonality(mp3Buffer, metadata),
+              45000,
+              { tonality: null, detectedBpm: null }
+            );
+
+            const tonality = tonalityResult?.tonality || {
+              key: null,
+              scale: null,
+              camelot: null,
+              source: 'timeout',
+              confidence: 0,
+              needsManualReview: true
+            };
+
+            if (!metadata.bpm && tonalityResult?.detectedBpm) {
+              metadata.bpm = tonalityResult.detectedBpm;
+            }
+
+            await maybeUpdateCollectionProgressEffective(tracksCreated + 0.35);
+
+            const genreResult = await withTimeout(
+              detectGenre(mp3Buffer, metadata),
+              45000,
+              { genre: null, confidence: 0, source: 'timeout', needsManualReview: true }
+            );
+
+            await maybeUpdateCollectionProgressEffective(tracksCreated + 0.55);
 
             const trackKey = `collections/${collection.name}/albums/${album.name}/${mp3Name}`;
             const trackUpload = await uploadToWasabi(mp3Buffer, trackKey, 'audio/mpeg');
@@ -887,7 +1027,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
               bpm: metadata.bpm || 128,
               tonality: tonality,
               pool: collection.platform,
-              coverArt: collection.thumbnail,
+              coverArt: trackCoverArt,
               audioFile: {
                 url: trackUpload.location,
                 key: trackUpload.key,
@@ -902,6 +1042,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
 
             bytesUploaded += mp3Buffer.length;
             tracksCreated++;
+            collection.tracksProcessed = (collection.tracksProcessed || 0) + 1;
             await maybeUpdateCollectionProgress();
           }
         }
@@ -968,8 +1109,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
           sourceFolderName: baseName
         });
 
-        extractedDatePacks.push(datePackDoc);
-        collection.totalDatePacks = extractedDatePacks.length;
+        collection.totalDatePacks = (i + 1);
 
         const progressStart = Math.max(collection.processingProgress || 0, 5 + Math.round((i / innerZipEntries.length) * 90));
         const progressEnd = Math.max(progressStart, 5 + Math.round(((i + 1) / innerZipEntries.length) * 90));
@@ -986,7 +1126,6 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
           progressStart,
           progressEnd
         });
-        if (result.datePack) extractedDatePacks.push(result.datePack);
         totalAlbumsNested += result.albumsCreated;
         totalTracksNested += result.tracksCreated;
         totalBytesNested += result.bytesUploaded;
@@ -999,12 +1138,12 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
         await collection.save();
       }
 
-      collection.totalDatePacks = extractedDatePacks.length;
+      collection.totalDatePacks = innerZipEntries.length;
       collection.totalAlbums = totalAlbumsNested;
       collection.totalTracks = totalTracksNested;
       collection.totalSize = totalBytesNested;
 
-      if (totalTracksNested === 0 || extractedDatePacks.length === 0) {
+      if (totalTracksNested === 0 || innerZipEntries.length === 0) {
         collection.status = 'failed';
         collection.processingProgress = 0;
         await collection.save();
@@ -1059,7 +1198,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
       return (bestCount / total) >= 0.7 ? best : null;
     };
 
-    const motherFolderName = collectionData?.scanResult?.motherFolderName || guessMotherFolderName(entries);
+    const motherFolderName = collection?.scanResult?.motherFolderName || guessMotherFolderName(entries);
 
     // Detect ambiguous 2-level layout for this ZIP (see buildPreviewFromZipFile)
     let twoLevelFolderCount = 0;
@@ -1264,16 +1403,20 @@ async function processCollectionAsync(collectionId, zipFilePath, collectionData,
     }
   } catch (error) {
     console.error('Collection processing error:', error);
-    for (const tempFile of extractedDatePacks) {
-      if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+    for (const tempFile of tempFilesToClean) {
+      try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch { /* ignore */ }
     }
-    if (fs.existsSync(zipFilePath)) fs.unlinkSync(zipFilePath);
+    try { if (fs.existsSync(zipFilePath)) fs.unlinkSync(zipFilePath); } catch { /* ignore */ }
 
-    const collection = await Collection.findById(collectionId);
-    if (collection) {
-      collection.status = 'failed';
-      collection.errorMessage = error.message;
-      await collection.save();
+    try {
+      const failedCollection = await Collection.findById(collectionId);
+      if (failedCollection) {
+        failedCollection.status = 'failed';
+        failedCollection.errorMessage = error.message;
+        await failedCollection.save();
+      }
+    } catch (saveErr) {
+      console.error('Could not mark collection as failed:', saveErr.message);
     }
   }
 }
@@ -1365,9 +1508,30 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
           metadata.bpm = extractBPMFromFilename(mp3Name);
         }
         
-        // Detect tonality and genre
-        const tonality = await detectTonality(mp3Buffer, metadata);
-        const genreResult = await detectGenre(mp3Buffer, metadata);
+        // Detect tonality and genre (time bounded)
+        const tonalityResult = await withTimeout(
+          detectTonality(mp3Buffer, metadata),
+          45000,
+          { tonality: null, detectedBpm: null }
+        );
+        const tonality = tonalityResult?.tonality || {
+          key: null,
+          scale: null,
+          camelot: null,
+          source: 'timeout',
+          confidence: 0,
+          needsManualReview: true
+        };
+
+        if (!metadata.bpm && tonalityResult?.detectedBpm) {
+          metadata.bpm = tonalityResult.detectedBpm;
+        }
+
+        const genreResult = await withTimeout(
+          detectGenre(mp3Buffer, metadata),
+          45000,
+          { genre: null, confidence: 0, source: 'timeout', needsManualReview: true }
+        );
         
         // Upload track to Wasabi
         const trackKey = `collections/${collection.name}/date-packs/${datePack.name}/albums/${albumName}/${mp3Name}`;
@@ -1399,6 +1563,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
             size: trackSize,
             duration: metadata.duration
           },
+          uploadedBy: collection.uploadedBy,
           status: 'published'
         });
         
@@ -1564,8 +1729,29 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
         metadata.bpm = extractBPMFromFilename(mp3Name);
       }
 
-      const tonality = await detectTonality(mp3Buffer, metadata);
-      const genreResult = await detectGenre(mp3Buffer, metadata);
+      const tonalityResult = await withTimeout(
+        detectTonality(mp3Buffer, metadata),
+        45000,
+        { tonality: null, detectedBpm: null }
+      );
+      const tonality = tonalityResult?.tonality || {
+        key: null,
+        scale: null,
+        camelot: null,
+        source: 'timeout',
+        confidence: 0,
+        needsManualReview: true
+      };
+
+      if (!metadata.bpm && tonalityResult?.detectedBpm) {
+        metadata.bpm = tonalityResult.detectedBpm;
+      }
+
+      const genreResult = await withTimeout(
+        detectGenre(mp3Buffer, metadata),
+        45000,
+        { genre: null, confidence: 0, source: 'timeout', needsManualReview: true }
+      );
 
       const trackKey = `collections/${collection.name}/albums/${albumName}/${mp3Name}`;
       const trackUpload = await uploadToWasabi(
@@ -1842,7 +2028,10 @@ export const getCollectionStatus = async (req, res) => {
         totalAlbums: albums,
         totalTracks: tracks,
         totalSize: collection.totalSize,
-        updatedAt: collection.updatedAt
+        updatedAt: collection.updatedAt,
+        processingDetail: collection.processingDetail || '',
+        tracksProcessed: collection.tracksProcessed || 0,
+        totalTracksEstimate: collection.totalTracksEstimate || 0
       }
     });
   } catch (error) {
