@@ -174,19 +174,6 @@ export default function AdminRecordPool() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold">Collections</h2>
               <div className="flex gap-3">
-                <button
-                  onClick={async () => {
-                    try {
-                      const res = await fetch(`${API}/collections/cleanup-names`, { method: 'POST', headers: authHeaders() });
-                      const d = await res.json();
-                      if (d.success) { alert(`Fixed ${d.updated} date pack name(s)`); if (selectedCollection) fetchDateCards(selectedCollection._id); }
-                    } catch { /* ignore */ }
-                  }}
-                  className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg font-medium transition-colors text-sm text-brand-text-tertiary hover:text-white"
-                  title="Strip timestamp suffixes from date pack names"
-                >
-                  <Edit2 size={14} /> Fix Names
-                </button>
                 <button onClick={() => { setModal('bulkUpload'); }} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors">
                   <Upload size={18} /> Bulk Upload ZIP
                 </button>
