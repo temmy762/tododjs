@@ -10,15 +10,18 @@ const getToken = () => localStorage.getItem('token');
 const authHeaders = () => ({ 'Authorization': `Bearer ${getToken()}` });
 
 export default function AdminRecordPool() {
-  const [view, setView] = useState('collections'); // collections | dateCards | albums
+  const [section, setSection] = useState('collections'); // 'collections' | 'sources'
+  const [view, setView] = useState('list'); // list | dateCards | albums
   const [collections, setCollections] = useState([]);
+  const [sources, setSources] = useState([]);
   const [dateCards, setDateCards] = useState([]);
   const [albums, setAlbums] = useState([]);
   const [selectedCollection, setSelectedCollection] = useState(null);
+  const [selectedSource, setSelectedSource] = useState(null);
   const [selectedDateCard, setSelectedDateCard] = useState(null);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [modal, setModal] = useState(null); // 'createSource' | 'editSource' | 'createDateCard' | 'editDateCard' | 'uploadAlbum' | 'bulkUpload'
+  const [modal, setModal] = useState(null);
   const [editItem, setEditItem] = useState(null);
 
   const fetchCollections = useCallback(async () => {
@@ -31,10 +34,23 @@ export default function AdminRecordPool() {
     finally { setLoading(false); }
   }, []);
 
-  const fetchDateCards = useCallback(async (collectionId) => {
+  const fetchSources = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API}/collections/${collectionId}/date-packs`);
+      const res = await fetch(`${API}/sources`, { headers: authHeaders() });
+      const data = await res.json();
+      if (data.success) setSources(data.data);
+    } catch (err) { console.error('Error fetching sources:', err); }
+    finally { setLoading(false); }
+  }, []);
+
+  const fetchDateCards = useCallback(async (parentId, parentType) => {
+    try {
+      setLoading(true);
+      const url = parentType === 'source'
+        ? `${API}/date-packs/source/${parentId}`
+        : `${API}/collections/${parentId}/date-packs`;
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success) setDateCards(data.data);
     } catch (err) { console.error('Error fetching date cards:', err); }
@@ -50,6 +66,15 @@ export default function AdminRecordPool() {
     } catch (err) { console.error('Error fetching albums:', err); }
     finally { setLoading(false); }
   }, []);
+
+  useEffect(() => {
+    if (section === 'collections') fetchCollections();
+    else fetchSources();
+    setView('list');
+    setSelectedCollection(null);
+    setSelectedSource(null);
+    setSelectedDateCard(null);
+  }, [section]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { fetchCollections(); }, [fetchCollections]);
 
@@ -76,7 +101,14 @@ export default function AdminRecordPool() {
     setSelectedCollection(collection);
     setSelectedDateCard(null);
     setView('dateCards');
-    fetchDateCards(collection._id);
+    fetchDateCards(collection._id, 'collection');
+  };
+
+  const navigateToSource = (source) => {
+    setSelectedSource(source);
+    setSelectedDateCard(null);
+    setView('dateCards');
+    fetchDateCards(source._id, 'source');
   };
 
   const navigateToDateCard = (dc) => {
@@ -86,37 +118,42 @@ export default function AdminRecordPool() {
   };
 
   const navigateBack = (target) => {
-    if (target === 'collections') {
-      setView('collections');
+    if (target === 'list') {
+      setView('list');
       setSelectedCollection(null);
+      setSelectedSource(null);
       setSelectedDateCard(null);
-      fetchCollections();
+      if (section === 'collections') fetchCollections(); else fetchSources();
     } else if (target === 'dateCards') {
       setView('dateCards');
       setSelectedDateCard(null);
-      if (selectedCollection) fetchDateCards(selectedCollection._id);
+      if (section === 'sources' && selectedSource) fetchDateCards(selectedSource._id, 'source');
+      else if (selectedCollection) fetchDateCards(selectedCollection._id, 'collection');
     }
   };
 
   const handleDeleteCollection = async (collection) => {
     if (!confirm(`Delete "${collection.name}"? This will delete all date packs, albums, and tracks under it.`)) return;
     try {
-      const res = await fetch(`${API}/collections/${collection._id}`, {
-        method: 'DELETE',
-        headers: authHeaders()
-      });
+      const res = await fetch(`${API}/collections/${collection._id}`, { method: 'DELETE', headers: authHeaders() });
       const data = await res.json();
       if (data.success) {
-        if (selectedCollection?._id === collection._id) {
-          setSelectedCollection(null);
-          setSelectedDateCard(null);
-          setView('collections');
-        }
+        if (selectedCollection?._id === collection._id) { setSelectedCollection(null); setSelectedDateCard(null); setView('list'); }
         fetchCollections();
       }
-    } catch (err) {
-      console.error('Error deleting collection:', err);
-    }
+    } catch (err) { console.error('Error deleting collection:', err); }
+  };
+
+  const handleDeleteSource = async (source) => {
+    if (!confirm(`Delete "${source.name}"? This will delete all date cards, albums, and tracks under it.`)) return;
+    try {
+      const res = await fetch(`${API}/sources/${source._id}`, { method: 'DELETE', headers: authHeaders() });
+      const data = await res.json();
+      if (data.success) {
+        if (selectedSource?._id === source._id) { setSelectedSource(null); setSelectedDateCard(null); setView('list'); }
+        fetchSources();
+      }
+    } catch (err) { console.error('Error deleting source:', err); }
   };
 
   const handleDeleteDateCard = async (dc) => {
@@ -124,7 +161,10 @@ export default function AdminRecordPool() {
     try {
       const res = await fetch(`${API}/date-packs/${dc._id}`, { method: 'DELETE', headers: authHeaders() });
       const data = await res.json();
-      if (data.success && selectedCollection) fetchDateCards(selectedCollection._id);
+      if (data.success) {
+        if (section === 'sources' && selectedSource) fetchDateCards(selectedSource._id, 'source');
+        else if (selectedCollection) fetchDateCards(selectedCollection._id, 'collection');
+      }
     } catch (err) { console.error('Error deleting date card:', err); }
   };
 
@@ -143,20 +183,40 @@ export default function AdminRecordPool() {
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold mb-1">Record Pool Management</h1>
-            <p className="text-brand-text-tertiary text-sm">Manage collections, date cards, and albums</p>
+            <p className="text-brand-text-tertiary text-sm">Manage collections, sources, date cards, and albums</p>
           </div>
+        </div>
+
+        {/* Section Tabs */}
+        <div className="flex gap-1 p-1 bg-white/5 rounded-xl mb-6 w-fit">
+          <button
+            onClick={() => setSection('collections')}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+              section === 'collections' ? 'bg-accent text-white' : 'text-brand-text-tertiary hover:text-white'
+            }`}
+          >
+            <FolderOpen size={14} className="inline mr-1.5" />Collections
+          </button>
+          <button
+            onClick={() => setSection('sources')}
+            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
+              section === 'sources' ? 'bg-accent text-white' : 'text-brand-text-tertiary hover:text-white'
+            }`}
+          >
+            <Disc size={14} className="inline mr-1.5" />Sources
+          </button>
         </div>
 
         {/* Breadcrumbs */}
         <div className="flex items-center gap-2 mb-6 text-sm">
-          <button onClick={() => navigateBack('collections')} className={`flex items-center gap-1 transition-colors ${view === 'collections' ? 'text-white font-semibold' : 'text-brand-text-tertiary hover:text-accent'}`}>
-            <Home size={14} /> Collections
+          <button onClick={() => navigateBack('list')} className={`flex items-center gap-1 transition-colors ${view === 'list' ? 'text-white font-semibold' : 'text-brand-text-tertiary hover:text-accent'}`}>
+            <Home size={14} /> {section === 'sources' ? 'Sources' : 'Collections'}
           </button>
-          {selectedCollection && (
+          {(selectedCollection || selectedSource) && (
             <>
               <ChevronRight size={14} className="text-brand-text-tertiary" />
               <button onClick={() => navigateBack('dateCards')} className={`transition-colors ${view === 'dateCards' ? 'text-white font-semibold' : 'text-brand-text-tertiary hover:text-accent'}`}>
-                {selectedCollection.name}
+                {section === 'sources' ? selectedSource?.name : selectedCollection?.name}
               </button>
             </>
           )}
@@ -168,23 +228,19 @@ export default function AdminRecordPool() {
           )}
         </div>
 
-        {/* Collections View */}
-        {view === 'collections' && (
+        {/* Collections List View */}
+        {view === 'list' && section === 'collections' && (
           <div>
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold">Collections</h2>
-              <div className="flex gap-3">
-                <button onClick={() => { setModal('bulkUpload'); }} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors">
-                  <Upload size={18} /> Bulk Upload ZIP
-                </button>
-              </div>
+              <button onClick={() => setModal('bulkUpload')} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors">
+                <Upload size={18} /> Bulk Upload ZIP
+              </button>
             </div>
             {loading ? <LoadingSpinner /> : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {collections.map(c => (
-                  <CollectionCard
-                    key={c._id}
-                    collection={c}
+                  <CollectionCard key={c._id} collection={c}
                     onView={(col) => navigateToCollection(col)}
                     onEdit={(col) => { setEditItem(col); setModal('editCollection'); }}
                     onDelete={(col) => handleDeleteCollection(col)}
@@ -201,11 +257,45 @@ export default function AdminRecordPool() {
           </div>
         )}
 
-        {/* Date Cards View */}
-        {view === 'dateCards' && selectedCollection && (
+        {/* Sources List View */}
+        {view === 'list' && section === 'sources' && (
           <div>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold">Date Cards — {selectedCollection.name}</h2>
+              <h2 className="text-2xl font-bold">Sources</h2>
+              <button onClick={() => setModal('createSource')} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
+                <Plus size={18} /> New Source
+              </button>
+            </div>
+            {loading ? <LoadingSpinner /> : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {sources.map(s => (
+                  <SourceCard key={s._id} source={s}
+                    onView={navigateToSource}
+                    onEdit={(src) => { setEditItem(src); setModal('editSource'); }}
+                    onDelete={handleDeleteSource}
+                  />
+                ))}
+                {sources.length === 0 && (
+                  <div className="col-span-full text-center py-16">
+                    <Disc size={48} className="mx-auto mb-4 text-brand-text-tertiary opacity-50" />
+                    <p className="text-brand-text-tertiary">No sources yet. Create one to start adding date cards and albums.</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Date Cards View */}
+        {view === 'dateCards' && (selectedCollection || selectedSource) && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-2xl font-bold">Date Cards — {section === 'sources' ? selectedSource?.name : selectedCollection?.name}</h2>
+              {section === 'sources' && (
+                <button onClick={() => setModal('createDateCard')} className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors text-sm">
+                  <Plus size={16} /> New Date Card
+                </button>
+              )}
             </div>
             {loading ? <LoadingSpinner /> : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -256,23 +346,50 @@ export default function AdminRecordPool() {
           />
         )}
 
-        {modal === 'uploadAlbum' && selectedCollection && selectedDateCard && (
+        {modal === 'uploadAlbum' && selectedDateCard && (selectedSource || selectedCollection) && (
           <AlbumUploadModal
-            sourceId={selectedCollection._id}
+            sourceId={(section === 'sources' ? selectedSource?._id : selectedCollection?._id)}
             datePackId={selectedDateCard._id}
-            sourceName={selectedCollection.name}
+            sourceName={section === 'sources' ? selectedSource?.name : selectedCollection?.name}
             dateCardName={selectedDateCard.name}
             onClose={() => setModal(null)}
             onSuccess={() => { setModal(null); fetchAlbums(selectedDateCard._id); }}
           />
         )}
 
+        {modal === 'createDateCard' && selectedSource && (
+          <DateCardModal
+            sourceId={selectedSource._id}
+            onClose={() => setModal(null)}
+            onSuccess={() => { setModal(null); fetchDateCards(selectedSource._id, 'source'); }}
+          />
+        )}
+
         {modal === 'editDateCard' && editItem && (
           <DateCardModal
-            sourceId={selectedCollection?._id}
+            sourceId={section === 'sources' ? selectedSource?._id : selectedCollection?._id}
             dateCard={editItem}
             onClose={() => { setModal(null); setEditItem(null); }}
-            onSuccess={() => { setModal(null); setEditItem(null); if (selectedCollection) fetchDateCards(selectedCollection._id); }}
+            onSuccess={() => {
+              setModal(null); setEditItem(null);
+              if (section === 'sources' && selectedSource) fetchDateCards(selectedSource._id, 'source');
+              else if (selectedCollection) fetchDateCards(selectedCollection._id, 'collection');
+            }}
+          />
+        )}
+
+        {modal === 'createSource' && (
+          <SourceModal
+            onClose={() => setModal(null)}
+            onSuccess={() => { setModal(null); fetchSources(); }}
+          />
+        )}
+
+        {modal === 'editSource' && editItem && (
+          <SourceModal
+            source={editItem}
+            onClose={() => { setModal(null); setEditItem(null); }}
+            onSuccess={() => { setModal(null); setEditItem(null); fetchSources(); }}
           />
         )}
 
