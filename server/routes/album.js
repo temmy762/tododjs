@@ -9,7 +9,8 @@ import {
   getAlbumStatus,
   deleteAlbum,
   toggleFeatured,
-  getFeaturedAlbums
+  getFeaturedAlbums,
+  updateAlbum
 } from '../controllers/albumController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -19,6 +20,12 @@ const router = express.Router();
 const albumUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 2 * 1024 * 1024 * 1024 } // 2GB
+});
+
+// Multer for cover art image only
+const coverUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
 });
 
 // Multer for single MP3 track upload
@@ -47,6 +54,7 @@ router.route('/featured')
 
 router.route('/:id')
   .get(getAlbum)
+  .put(protect, authorize('admin'), coverUpload.single('coverArt'), updateAlbum)
   .delete(protect, authorize('admin'), deleteAlbum);
 
 router.route('/:id/featured')

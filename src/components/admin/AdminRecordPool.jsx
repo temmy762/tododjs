@@ -174,6 +174,19 @@ export default function AdminRecordPool() {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold">Collections</h2>
               <div className="flex gap-3">
+                <button
+                  onClick={async () => {
+                    try {
+                      const res = await fetch(`${API}/collections/cleanup-names`, { method: 'POST', headers: authHeaders() });
+                      const d = await res.json();
+                      if (d.success) { alert(`Fixed ${d.updated} date pack name(s)`); if (selectedCollection) fetchDateCards(selectedCollection._id); }
+                    } catch { /* ignore */ }
+                  }}
+                  className="flex items-center gap-2 px-3 py-2 bg-white/5 hover:bg-white/10 rounded-lg font-medium transition-colors text-sm text-brand-text-tertiary hover:text-white"
+                  title="Strip timestamp suffixes from date pack names"
+                >
+                  <Edit2 size={14} /> Fix Names
+                </button>
                 <button onClick={() => { setModal('bulkUpload'); }} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors">
                   <Upload size={18} /> Bulk Upload ZIP
                 </button>
@@ -553,7 +566,8 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
   const [name, setName] = useState(collection?.name || '');
   const [year, setYear] = useState(collection?.year || new Date().getFullYear());
   const [platform, setPlatform] = useState(collection?.platform || '');
-  const [thumbnail, setThumbnail] = useState(collection?.thumbnail || '');
+  const [thumbFile, setThumbFile] = useState(null);
+  const [thumbUrl, setThumbUrl] = useState(collection?.thumbnail || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -562,10 +576,16 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
     setError('');
     setLoading(true);
     try {
+      const fd = new FormData();
+      fd.append('name', name);
+      fd.append('year', year);
+      fd.append('platform', platform);
+      if (thumbFile) fd.append('thumbnailFile', thumbFile);
+      else if (thumbUrl) fd.append('thumbnail', thumbUrl);
       const res = await fetch(`${API}/collections/${collection._id}`, {
         method: 'PUT',
-        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, year, platform, thumbnail })
+        headers: authHeaders(),
+        body: fd
       });
       const data = await res.json();
       if (data.success) { onSuccess(); }
@@ -576,7 +596,7 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-dark-elevated rounded-xl max-w-md w-full p-6 my-8">
+      <div className="bg-dark-elevated rounded-xl max-w-md w-full p-6 my-8 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-xl font-bold">Edit Collection</h2>
           <button onClick={onClose} className="text-brand-text-tertiary hover:text-white"><X size={22} /></button>
@@ -597,11 +617,7 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
               <input type="text" value={platform} onChange={e => setPlatform(e.target.value)} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent" placeholder="e.g., PlayList Pro" />
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Thumbnail URL</label>
-            <input type="url" value={thumbnail} onChange={e => setThumbnail(e.target.value)} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent" placeholder="https://..." />
-            {thumbnail && <img src={thumbnail} alt="Preview" className="mt-2 w-full h-24 object-cover rounded-lg border border-white/10" onError={e => e.target.style.display='none'} />}
-          </div>
+          <ThumbnailField file={thumbFile} setFile={setThumbFile} url={thumbUrl} setUrl={setThumbUrl} error={error} setError={setError} />
           <div className="flex gap-3 pt-2">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-lg font-medium transition-colors">Cancel</button>
             <button type="submit" disabled={loading} className="flex-1 px-4 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2">

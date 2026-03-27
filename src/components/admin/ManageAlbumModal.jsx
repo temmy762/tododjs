@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import GenericCoverArt from '../GenericCoverArt';
-import { X, Music, Download, Edit2, Trash2, Save, Play, Pause, Volume2 } from 'lucide-react';
+import { X, Music, Download, Edit2, Trash2, Save, Play, Pause, Volume2, Camera, Loader } from 'lucide-react';
 import SearchBar from './SearchBar';
 import AdvancedFilterPanel from './AdvancedFilterPanel';
 import API_URL from '../../config/api';
@@ -11,7 +11,33 @@ export default function ManageAlbumModal({ album, onClose, onUpdate }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [coverArtError, setCoverArtError] = useState(false);
+  const [updatingCover, setUpdatingCover] = useState(false);
+  const [localCoverArt, setLocalCoverArt] = useState(album.coverArt || null);
+  const coverInputRef = useRef(null);
   const [editingTrack, setEditingTrack] = useState(null);
+
+  const handleCoverUpload = async (file) => {
+    if (!file) return;
+    setUpdatingCover(true);
+    try {
+      const fd = new FormData();
+      fd.append('coverArt', file);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/albums/${album._id}`, {
+        method: 'PUT',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd
+      });
+      const data = await res.json();
+      if (data.success) {
+        setLocalCoverArt(data.data.coverArt);
+        setCoverArtError(false);
+      }
+    } catch (err) {
+      console.error('Cover upload error:', err);
+    }
+    setUpdatingCover(false);
+  };
   const [editForm, setEditForm] = useState({});
   const [playingTrack, setPlayingTrack] = useState(null);
   const [currentTime, setCurrentTime] = useState(0);
@@ -228,16 +254,34 @@ export default function ManageAlbumModal({ album, onClose, onUpdate }) {
         {/* Header */}
         <div className="p-6 border-b border-white/10">
           <div className="flex items-center gap-4 mb-4">
-            {!coverArtError && album.coverArt ? (
-              <img
-                src={album.coverArt}
-                alt={album.name}
-                className="w-20 h-20 rounded-lg object-cover"
-                onError={() => setCoverArtError(true)}
-              />
-            ) : (
-              <GenericCoverArt title={album.name} size="lg" className="flex-shrink-0" />
-            )}
+            <div className="relative group flex-shrink-0">
+              {!coverArtError && localCoverArt ? (
+                <img
+                  src={localCoverArt}
+                  alt={album.name}
+                  className="w-20 h-20 rounded-lg object-cover"
+                  onError={() => setCoverArtError(true)}
+                />
+              ) : (
+                <GenericCoverArt title={album.name} size="lg" />
+              )}
+              <button
+                onClick={() => coverInputRef.current?.click()}
+                disabled={updatingCover}
+                className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg flex items-center justify-center"
+              >
+                {updatingCover
+                  ? <Loader size={16} className="text-white animate-spin" />
+                  : <Camera size={16} className="text-white" />}
+              </button>
+            </div>
+            <input
+              ref={coverInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={e => { handleCoverUpload(e.target.files[0]); e.target.value = ''; }}
+            />
             <div className="flex-1">
               <h2 className="text-2xl font-bold mb-1">{album.name}</h2>
               <p className="text-brand-text-tertiary">

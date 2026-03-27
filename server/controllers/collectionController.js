@@ -16,6 +16,12 @@ import { detectTonality } from '../services/tonalityDetection.js';
 import { detectGenre } from '../services/genreDetection.js';
 import { generateCollectionName, detectGenres, extractDateFromFolderName } from '../utils/collectionNameGenerator.js';
 
+// Strip cloud-storage timestamp suffix from folder names e.g. -20260324T054836Z-1-002
+function cleanDatePackName(name) {
+  if (!name) return name;
+  return name.replace(/-\d{8}T\d{6}Z-\d+-\d+$/, '').trim();
+}
+
 function withTimeout(promise, timeoutMs, timeoutValue) {
   let timer;
   const timeoutPromise = new Promise((resolve) => {
@@ -616,7 +622,7 @@ export const uploadCollection = async (req, res) => {
         }
 
         const datePack = await DatePack.create({
-          name: dp.name,
+          name: cleanDatePackName(dp.name),
           collectionId: collection._id,
           date: packDate,
           status: 'pending',
@@ -820,7 +826,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       }
 
       const datePack = existingDatePack || await DatePack.create({
-        name: datePackName,
+        name: cleanDatePackName(datePackName),
         collectionId: collection._id,
         date: packDate,
         status: 'pending',
@@ -952,7 +958,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
               bpm: null,
               duration: 0
             };
-            let trackCoverArt = albumCoverUrls.get(album._id.toString()) || collection.thumbnail;
+            let trackCoverArt = albumCoverUrls.get(album._id.toString())?.url || collection.thumbnail;
+            let trackCoverArtKey = albumCoverUrls.get(album._id.toString())?.key || null;
 
             try {
               const musicMetadata = await parseBuffer(mp3Buffer, { mimeType: 'audio/mpeg' });
@@ -970,13 +977,15 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
                   const coverKey = `collections/${collection.name}/albums/${album.name}/cover.${ext}`;
                   const coverUpload = await uploadToWasabi(Buffer.from(pic.data), coverKey, mimeType);
                   trackCoverArt = coverUpload.location;
-                  albumCoverUrls.set(album._id.toString(), trackCoverArt);
-                  Album.findByIdAndUpdate(album._id, { coverArt: trackCoverArt }).catch(() => {});
+                  trackCoverArtKey = coverKey;
+                  albumCoverUrls.set(album._id.toString(), { url: trackCoverArt, key: coverKey });
+                  Album.findByIdAndUpdate(album._id, { coverArt: trackCoverArt, coverArtKey: coverKey }).catch(() => {});
                 } catch {
                   // ignore, fall back to collection thumbnail
                 }
               } else if (albumCoverUrls.has(album._id.toString())) {
-                trackCoverArt = albumCoverUrls.get(album._id.toString());
+                trackCoverArt = albumCoverUrls.get(album._id.toString()).url;
+                trackCoverArtKey = albumCoverUrls.get(album._id.toString()).key;
               }
             } catch (error) {
               // ignore
@@ -1028,6 +1037,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
               tonality: tonality,
               pool: collection.platform,
               coverArt: trackCoverArt,
+              coverArtKey: trackCoverArtKey,
               audioFile: {
                 url: trackUpload.location,
                 key: trackUpload.key,
@@ -1100,9 +1110,10 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
           packDate = new Date(fullYear, parseInt(month) - 1, parseInt(day));
         }
 
-        const existingPack = await DatePack.findOne({ collectionId: collection._id, name: baseName });
+        const cleanedBaseName = cleanDatePackName(baseName);
+        const existingPack = await DatePack.findOne({ collectionId: collection._id, name: cleanedBaseName });
         const datePackDoc = existingPack || await DatePack.create({
-          name: baseName,
+          name: cleanedBaseName,
           collectionId: collection._id,
           date: packDate,
           status: 'processing',
@@ -1879,7 +1890,15 @@ export const updateCollection = async (req, res) => {
     if (name) collection.name = name;
     if (year) collection.year = year;
     if (month !== undefined) collection.month = month;
-    if (thumbnail) collection.thumbnail = thumbnail;
+    if (req.body.platform !== undefined) collection.platform = req.body.platform;
+    if (req.file) {
+      const ext = path.extname(req.file.originalname) || '.jpg';
+      const thumbKey = `collections/${collection._id}/thumbnail${ext}`;
+      const thumbUpload = await uploadToWasabi(req.file.buffer, thumbKey, req.file.mimetype);
+      collection.thumbnail = thumbUpload.location;
+    } else if (thumbnail) {
+      collection.thumbnail = thumbnail;
+    }
 
     await collection.save();
 
@@ -1892,6 +1911,27 @@ export const updateCollection = async (req, res) => {
       success: false,
       message: error.message
     });
+  }
+};
+
+// @desc    Cleanup DatePack names (strip cloud-storage timestamp suffixes)
+// @route   POST /api/collections/cleanup-names
+// @access  Private/Admin
+export const cleanupDatePackNames = async (req, res) => {
+  try {
+    const datePacks = await DatePack.find({});
+    const regex = /-\d{8}T\d{6}Z-\d+-\d+$/;
+    let updated = 0;
+    for (const dp of datePacks) {
+      const cleaned = dp.name.replace(regex, '').trim();
+      if (cleaned !== dp.name) {
+        await DatePack.findByIdAndUpdate(dp._id, { name: cleaned });
+        updated++;
+      }
+    }
+    res.json({ success: true, updated, message: `Updated ${updated} date pack name(s)` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 

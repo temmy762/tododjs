@@ -22,7 +22,8 @@ import {
   getCollectionStatus,
   cancelCollectionProcessing,
   retryFailedTracks,
-  reprocessCollection
+  reprocessCollection,
+  cleanupDatePackNames
 } from '../controllers/collectionController.js';
 import { getDatePacksByCollection } from '../controllers/datePackController.js';
 import { protect, authorize } from '../middleware/auth.js';
@@ -46,6 +47,11 @@ const upload = multer({
   }
 });
 
+const thumbnailUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 } // 10MB
+});
+
 router.route('/')
   .get(getCollections)
   .post(protect, authorize('admin'), upload.fields([
@@ -53,9 +59,12 @@ router.route('/')
     { name: 'thumbnailFile', maxCount: 1 }
   ]), uploadCollection);
 
+router.route('/cleanup-names')
+  .post(protect, authorize('admin'), cleanupDatePackNames);
+
 router.route('/:id')
   .get(getCollection)
-  .put(protect, authorize('admin'), updateCollection)
+  .put(protect, authorize('admin'), thumbnailUpload.single('thumbnailFile'), updateCollection)
   .delete(protect, authorize('admin'), deleteCollection);
 
 router.route('/:id/stats')

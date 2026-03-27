@@ -388,18 +388,49 @@ export const getAlbumTracks = async (req, res) => {
   try {
     const tracks = await Track.find({ albumId: req.params.id })
       .sort({ trackNumber: 1 })
-      .select('-fileKey'); // Don't send file keys to frontend
+      .select('-fileKey');
+
+    const tracksWithUrls = await resolveSignedUrls(tracks, ['coverArt']);
 
     res.status(200).json({
       success: true,
-      count: tracks.length,
-      data: tracks
+      count: tracksWithUrls.length,
+      data: tracksWithUrls
     });
   } catch (error) {
     res.status(500).json({
       success: false,
       message: error.message
     });
+  }
+};
+
+// @desc    Update album (name, genre, cover art)
+// @route   PUT /api/albums/:id
+// @access  Private/Admin
+export const updateAlbum = async (req, res) => {
+  try {
+    const album = await Album.findById(req.params.id);
+    if (!album) return res.status(404).json({ success: false, message: 'Album not found' });
+
+    const { name, genre, year } = req.body;
+    if (name) album.name = name;
+    if (genre) album.genre = genre;
+    if (year) album.year = parseInt(year);
+
+    if (req.file) {
+      const ext = path.extname(req.file.originalname) || '.jpg';
+      const coverKey = `albums/${album._id}/cover${ext}`;
+      const coverUpload = await uploadToWasabi(req.file.buffer, coverKey, req.file.mimetype);
+      album.coverArt = coverUpload.location;
+      album.coverArtKey = coverKey;
+    }
+
+    await album.save();
+    const albumWithUrl = await resolveSignedUrl(album, ['coverArt']);
+    res.status(200).json({ success: true, data: albumWithUrl });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
