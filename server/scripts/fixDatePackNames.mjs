@@ -9,7 +9,7 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 const DatePackSchema = new mongoose.Schema({ name: String }, { strict: false });
 const DatePack = mongoose.models.DatePack || mongoose.model('DatePack', DatePackSchema, 'datepacks');
 
-await mongoose.connect(process.env.MONGO_URI);
+await mongoose.connect(process.env.MONGODB_URI);
 
 const all = await DatePack.find({});
 let fixed = 0;
