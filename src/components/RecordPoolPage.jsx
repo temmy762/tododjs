@@ -6,28 +6,36 @@ import API_URL from '../config/api';
 
 export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackInteraction }) {
   const { t } = useTranslation();
-  const [view, setView] = useState('collections'); // collections | collection | dateCard
+  const [view, setView] = useState('list'); // list | dateCards | albums
   const [collections, setCollections] = useState([]);
+  const [sources, setSources] = useState([]);
   const [dateCards, setDateCards] = useState([]);
   const [albums, setAlbums] = useState([]);
-  const [selectedCollection, setSelectedCollection] = useState(null);
+  const [selectedParent, setSelectedParent] = useState(null); // { ...item, _type: 'collection'|'source' }
   const [selectedDateCard, setSelectedDateCard] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchCollections = useCallback(async () => {
+  const fetchAll = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/collections`);
-      const data = await res.json();
-      if (data.success) setCollections((data.data || []).filter(c => c.status === 'completed'));
-    } catch (err) { console.error('Error fetching collections:', err); }
+      const [colRes, srcRes] = await Promise.all([
+        fetch(`${API_URL}/collections`),
+        fetch(`${API_URL}/sources`)
+      ]);
+      const [colData, srcData] = await Promise.all([colRes.json(), srcRes.json()]);
+      if (colData.success) setCollections((colData.data || []).filter(c => c.status === 'completed'));
+      if (srcData.success) setSources(srcData.data || []);
+    } catch (err) { console.error('Error fetching record pool:', err); }
     finally { setLoading(false); }
   }, []);
 
-  const fetchDateCards = useCallback(async (collectionId) => {
+  const fetchDateCards = useCallback(async (parent) => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/collections/${collectionId}/date-packs`);
+      const url = parent._type === 'source'
+        ? `${API_URL}/date-packs/source/${parent._id}`
+        : `${API_URL}/collections/${parent._id}/date-packs`;
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success) setDateCards(data.data);
     } catch (err) { console.error('Error fetching date cards:', err); }
@@ -44,83 +52,88 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchCollections(); }, [fetchCollections]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const openCollection = (collection) => {
-    setSelectedCollection(collection);
+  const openParent = (item) => {
+    setSelectedParent(item);
     setSelectedDateCard(null);
-    setView('collection');
-    fetchDateCards(collection._id);
+    setView('dateCards');
+    fetchDateCards(item);
   };
 
   const openDateCard = (dc) => {
     setSelectedDateCard(dc);
-    setView('dateCard');
+    setView('albums');
     fetchAlbums(dc._id);
   };
 
   const goBack = () => {
-    if (view === 'dateCard') {
-      setView('collection');
+    if (view === 'albums') {
+      setView('dateCards');
       setSelectedDateCard(null);
-    } else if (view === 'collection') {
-      setView('collections');
-      setSelectedCollection(null);
+    } else if (view === 'dateCards') {
+      setView('list');
+      setSelectedParent(null);
     }
   };
+
+  const allItems = [
+    ...collections.map(c => ({ ...c, _type: 'collection' })),
+    ...sources.map(s => ({ ...s, _type: 'source' }))
+  ];
 
   return (
     <div className="px-4 sm:px-6 md:px-10 py-4 md:py-6">
       {/* Header */}
       <div className="mb-8">
-        {view !== 'collections' && (
+        {view !== 'list' && (
           <button onClick={goBack} className="flex items-center gap-1.5 text-brand-text-tertiary hover:text-white transition-colors mb-4 text-sm">
             <ArrowLeft size={16} /> Back
           </button>
         )}
 
-        {view === 'collections' && (
+        {view === 'list' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">Records Pools</h1>
             <p className="text-brand-text-tertiary">Accede a todas tus record pools y packs Premium en un único lugar.</p>
           </div>
         )}
 
-        {view === 'collection' && selectedCollection && (
-          <CollectionHeader collection={selectedCollection} />
+        {view === 'dateCards' && selectedParent && (
+          <ParentHeader parent={selectedParent} />
         )}
 
-        {view === 'dateCard' && selectedDateCard && selectedCollection && (
-          <DateCardHeader dateCard={selectedDateCard} collection={selectedCollection} />
+        {view === 'albums' && selectedDateCard && selectedParent && (
+          <DateCardHeader dateCard={selectedDateCard} parent={selectedParent} />
         )}
       </div>
 
-      {/* Collections Grid */}
-      {view === 'collections' && (
+      {/* Unified List Grid */}
+      {view === 'list' && (
         loading ? <LoadingState /> : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {collections.map((col, i) => (
-              <CollectionCard key={col._id} collection={col} index={i} onClick={() => openCollection(col)} />
+            {allItems.map((item, i) => (
+              <PoolCard key={`${item._type}-${item._id}`} item={item} index={i} onClick={() => openParent(item)} />
             ))}
-            {collections.length === 0 && <EmptyState icon={Disc} text="No record pools available yet" />}
+            {allItems.length === 0 && <EmptyState icon={Disc} text="No record pools available yet" />}
           </div>
         )
       )}
 
-      {/* Collection Detail — Date Cards */}
-      {view === 'collection' && selectedCollection && (
+      {/* Date Cards */}
+      {view === 'dateCards' && selectedParent && (
         loading ? <LoadingState /> : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {dateCards.map((dc, i) => (
               <DateCard key={dc._id} dateCard={dc} index={i} onClick={() => openDateCard(dc)} />
             ))}
-            {dateCards.length === 0 && <EmptyState icon={Calendar} text="No date cards in this collection yet" />}
+            {dateCards.length === 0 && <EmptyState icon={Calendar} text="No date cards yet" />}
           </div>
         )
       )}
 
-      {/* Date Card Detail — Albums */}
-      {view === 'dateCard' && selectedDateCard && (
+      {/* Albums */}
+      {view === 'albums' && selectedDateCard && (
         loading ? <LoadingState /> : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {albums.map((album, i) => (
@@ -133,7 +146,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
                 onDownload={() => onAlbumDownload?.(album)}
               />
             ))}
-            {albums.length === 0 && <EmptyState icon={Music} text="No albums in this date card yet" />}
+            {albums.length === 0 && <EmptyState icon={Music} text="No albums in this date pack yet" />}
           </div>
         )
       )}
@@ -141,25 +154,24 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
   );
 }
 
-// Collection Header
-function CollectionHeader({ collection }) {
+// Parent Header (Collection or Source)
+function ParentHeader({ parent }) {
   return (
     <div className="flex items-center gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-xl shadow-black/30 flex-shrink-0 bg-dark-surface flex items-center justify-center">
-        {collection.thumbnail
-          ? <img src={collection.thumbnail} alt={collection.name} className="w-full h-full object-cover" />
+        {parent.thumbnail
+          ? <img src={parent.thumbnail} alt={parent.name} className="w-full h-full object-cover" />
           : <Disc size={36} className="text-accent" />}
       </div>
       <div>
         <p className="text-xs text-accent font-semibold uppercase tracking-wider mb-1">Record Pool</p>
-        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">{collection.name}</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">{parent.name}</h1>
         <div className="flex items-center gap-3 text-sm text-brand-text-tertiary">
-          <span>{collection.year}</span>
-          {collection.platform && <><span className="text-white/20">|</span><span>{collection.platform}</span></>}
+          {parent.year && <span>{parent.year}</span>}
+          {parent.platform && <><span className="text-white/20">|</span><span>{parent.platform}</span></>}
+          {parent._type === 'collection' && <><span className="text-white/20">|</span><span>{parent.totalDatePacks || 0} date packs</span></>}
           <span className="text-white/20">|</span>
-          <span>{collection.totalDatePacks || 0} date packs</span>
-          <span className="text-white/20">|</span>
-          <span>{collection.totalTracks || 0} tracks</span>
+          <span>{parent.totalTracks || 0} tracks</span>
         </div>
       </div>
     </div>
@@ -167,7 +179,7 @@ function CollectionHeader({ collection }) {
 }
 
 // Date Card Header
-function DateCardHeader({ dateCard, collection }) {
+function DateCardHeader({ dateCard, parent }) {
   const dateStr = new Date(dateCard.date).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
   return (
     <div className="flex items-center gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -180,7 +192,7 @@ function DateCardHeader({ dateCard, collection }) {
         <div className="flex items-center gap-2 text-xs text-brand-text-tertiary mb-1">
           <span className="text-accent font-semibold uppercase tracking-wider">Date Pack</span>
           <ChevronRight size={12} />
-          <span>{collection.name}</span>
+          <span>{parent.name}</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">{dateCard.name}</h1>
         <div className="flex items-center gap-3 text-sm text-brand-text-tertiary">
@@ -196,8 +208,8 @@ function DateCardHeader({ dateCard, collection }) {
   );
 }
 
-// Collection Card with hover animation
-function CollectionCard({ collection, index, onClick }) {
+// Unified Pool Card (Collection or Source)
+function PoolCard({ item, index, onClick }) {
   return (
     <div
       onClick={onClick}
@@ -205,10 +217,10 @@ function CollectionCard({ collection, index, onClick }) {
       style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'both' }}
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-dark-surface">
-        {collection.thumbnail ? (
+        {item.thumbnail ? (
           <img
-            src={collection.thumbnail}
-            alt={collection.name}
+            src={item.thumbnail}
+            alt={item.name}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
         ) : (
@@ -216,15 +228,18 @@ function CollectionCard({ collection, index, onClick }) {
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 p-5">
-          <h3 className="text-xl font-bold text-white mb-1 drop-shadow-lg">{collection.name}</h3>
-          <p className="text-white/60 text-sm">{collection.year} {collection.platform && `• ${collection.platform}`}</p>
+          <h3 className="text-xl font-bold text-white mb-1 drop-shadow-lg">{item.name}</h3>
+          <p className="text-white/60 text-sm">{item.year}{item.platform && ` • ${item.platform}`}</p>
         </div>
         <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       </div>
       <div className="p-4 flex items-center justify-between">
         <div className="flex items-center gap-4 text-sm">
-          <span className="text-brand-text-tertiary"><Disc size={14} className="inline mr-1 text-accent" />{collection.totalDatePacks || 0} packs</span>
-          <span className="text-brand-text-tertiary"><Music size={14} className="inline mr-1 text-accent" />{collection.totalTracks || 0} tracks</span>
+          {item._type === 'collection'
+            ? <span className="text-brand-text-tertiary"><Disc size={14} className="inline mr-1 text-accent" />{item.totalDatePacks || 0} packs</span>
+            : <span className="text-brand-text-tertiary"><Disc size={14} className="inline mr-1 text-accent" />{item.totalAlbums || 0} albums</span>
+          }
+          <span className="text-brand-text-tertiary"><Music size={14} className="inline mr-1 text-accent" />{item.totalTracks || 0} tracks</span>
         </div>
         <ChevronRight size={18} className="text-brand-text-tertiary group-hover:text-accent group-hover:translate-x-1 transition-all duration-300" />
       </div>
