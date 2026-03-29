@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star, Maximize2, Minimize2, Camera } from 'lucide-react';
+import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star, Maximize2, Minimize2, Camera, Download } from 'lucide-react';
 import ManageAlbumModal from './ManageAlbumModal';
 import BulkUploadModal from './BulkUploadModal';
 import CollectionCard from './CollectionCard';
@@ -141,7 +141,7 @@ export default function AdminRecordPool() {
       const data = await res.json();
       if (data.success) {
         if (selectedSource?._id === source._id) { setSelectedSource(null); setSelectedDateCard(null); setView('list'); }
-        fetchSources();
+        fetchAll();
       }
     } catch (err) { console.error('Error deleting source:', err); }
   };
