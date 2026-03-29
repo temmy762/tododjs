@@ -153,15 +153,15 @@
     "startingFrom": "Desde",
     "createFreeAccount": "Crea tu cuenta gratuita",
     "signupDescription": "Suscríbete para guardar música y probar la plataforma. Hazte Premium para desbloquear todo el contenido y descargar sin límites.",
-    "unlockFullAccess": "Unlock Full Access",
-    "upgradeDescription": "Upgrade to Premium to download tracks, listen to full songs, and get unlimited access to the entire catalog.",
+    "unlockFullAccess": "Desbloquear Acceso Completo",
+    "upgradeDescription": "Mejora a Premium para descargar pistas, escuchar canciones completas y obtener acceso ilimitado a todo el catálogo.",
     "fullStreamingPlayback": "Reproducción completa en streaming",
     "unlimitedHighQualityDownloads": "Descargas ilimitadas en alta calidad",
     "recordPoolsAccess": "Acceso a Records Pools y Packs Premium",
     "createAccountFree": "Crea Tu Cuenta Gratis",
     "maybeLater": "Quizás Más Tarde",
-    "subscribeNow": "Suscribete.",
-    "continueWithPreview": "Continue with preview"
+    "subscribeNow": "Suscríbete",
+    "continueWithPreview": "Continuar con vista previa"
   },
   "whatsapp": {
     "chatWithUs": "Chatea con nosotros",
@@ -273,7 +273,10 @@
     "stripeRedirect": "Serás redirigido a la página segura de pago de Stripe para completar tu suscripción.",
     "securePayment": "Pago 100% seguro a través de Stripe",
     "requireSubscription": "Esta función requiere una suscripción",
-    "networkError": "Error de red. Por favor intenta de nuevo."
+    "networkError": "Error de red. Por favor intenta de nuevo.",
+    "updateDetails": "Actualizar Detalles",
+    "changePassword": "Cambiar Contraseña",
+    "preferences": "Preferencias"
   },
   "profile": {
     "title": "Perfil",

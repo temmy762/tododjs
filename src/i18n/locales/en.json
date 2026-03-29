@@ -265,6 +265,17 @@
     "securePayment": "100% secure payment powered by Stripe",
     "updateDetails": "Update Details",
     "changePassword": "Change Password",
+    "preferences": "Preferences",
+    "networkError": "Network error. Please try again.",
+    "requireSubscription": "This feature requires a subscription"
+  },
+  "profile": {
+    "title": "Profile",
+    "myProfile": "My Profile",
+    "editProfile": "Edit Profile",
+    "accountDetails": "Account Details",
+    "updateDetails": "Update Details",
+    "changePassword": "Change Password",
     "preferences": "Preferences"
   }
 }

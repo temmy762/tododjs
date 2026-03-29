@@ -387,34 +387,76 @@ function LoadingSpinner() {
   );
 }
 
-// Source Card
+// Source Card — matches CollectionCard UI style
 function SourceCard({ source, onView, onEdit, onDelete }) {
   return (
-    <div className="bg-dark-elevated rounded-xl border border-white/10 overflow-hidden hover:border-accent/40 transition-all duration-300 group">
-      <div className="relative aspect-[16/9] overflow-hidden">
-        <img src={source.thumbnail} alt={source.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
-        <div className="absolute bottom-3 left-3 right-3">
-          <h3 className="font-bold text-lg text-white truncate">{source.name}</h3>
-          <p className="text-white/70 text-sm">{source.year} {source.platform && `• ${source.platform}`}</p>
+    <div className="bg-white/5 rounded-lg border border-white/10 overflow-hidden hover:border-accent/50 transition-all group">
+      <div
+        onClick={() => onView(source)}
+        className="relative aspect-video bg-gradient-to-br from-accent/20 to-purple-500/20 cursor-pointer"
+      >
+        {source.thumbnail ? (
+          <img src={source.thumbnail} alt={source.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            <Disc size={64} className="text-white/20" />
+          </div>
+        )}
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute bottom-0 left-0 right-0 p-4 flex gap-2">
+            <button
+              onClick={(e) => { e.stopPropagation(); onView(source); }}
+              className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors text-sm"
+            >
+              <FolderOpen size={16} /> View Date Packs
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(source); }}
+              className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors"
+            >
+              <Edit2 size={16} />
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(source); }}
+              className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500 rounded-lg transition-colors"
+            >
+              <Trash2 size={16} />
+            </button>
+          </div>
         </div>
       </div>
+
       <div className="p-4">
-        <div className="grid grid-cols-3 gap-3 mb-4 text-center">
-          <div><div className="text-xl font-bold text-accent">{source.totalAlbums || 0}</div><div className="text-xs text-brand-text-tertiary">Albums</div></div>
-          <div><div className="text-xl font-bold text-accent">{source.totalTracks || 0}</div><div className="text-xs text-brand-text-tertiary">Tracks</div></div>
-          <div><div className="text-xl font-bold text-accent">{source.totalDownloads || 0}</div><div className="text-xs text-brand-text-tertiary">Downloads</div></div>
+        <div className="flex items-start justify-between mb-2">
+          <div className="flex-1">
+            <h3 className="font-bold text-lg mb-1 truncate">{source.name}</h3>
+            <div className="flex items-center gap-2 text-sm text-brand-text-tertiary">
+              <Calendar size={14} />
+              <span>{source.platform || ''} {source.year}</span>
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => onView(source)} className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-accent hover:bg-accent-hover rounded-lg font-medium text-sm transition-colors">
-            <Eye size={15} /> View
-          </button>
-          <button onClick={() => onEdit(source)} className="px-3 py-2 bg-white/10 hover:bg-white/20 rounded-lg transition-colors">
-            <Edit2 size={15} />
-          </button>
-          <button onClick={() => onDelete(source)} className="px-3 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/50 rounded-lg transition-colors">
-            <Trash2 size={15} />
-          </button>
+
+        <div className="grid grid-cols-2 gap-3 mt-4">
+          <div className="flex items-center gap-2 text-sm">
+            <Music size={14} className="text-accent" />
+            <span className="font-semibold text-accent">{source.totalAlbums || 0}</span>
+            <span className="text-brand-text-tertiary">albums</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm">
+            <Music size={14} className="text-accent" />
+            <span className="font-semibold text-accent">{source.totalTracks || 0}</span>
+            <span className="text-brand-text-tertiary">tracks</span>
+          </div>
+        </div>
+
+        <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between text-xs">
+          <div className="flex items-center gap-1 text-brand-text-tertiary">
+            <Download size={12} />
+            <span>{source.totalDownloads || 0} downloads</span>
+          </div>
+          <span className="text-brand-text-tertiary capitalize">source</span>
         </div>
       </div>
     </div>
