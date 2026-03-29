@@ -2,7 +2,7 @@ import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { getSignedDownloadUrl } from '../config/wasabi.js';
-import { sendWelcomeEmail, sendPasswordResetEmail, notifyAdminNewSignup } from '../services/emailService.js';
+import { sendEmail, sendWelcomeEmail, sendPasswordResetEmail, notifyAdminNewSignup } from '../services/emailService.js';
 
 // Sign avatar URL if it's stored in Wasabi
 const signAvatarUrl = async (user) => {
@@ -37,8 +37,6 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
     sameSite: 'lax'
   };
 
-  let deviceReplaced = null;
-
   // Register or update device using consolidated subscription.devices
   if (deviceId) {
     const { parseDeviceInfo } = await import('../utils/deviceParser.js');
@@ -69,46 +67,41 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
         // Don't register device for free users
         console.log('Free user - no device registration');
       } else if (user.subscription.devices.length >= maxDevices) {
-        // Device limit reached - check if user confirmed replacement
-        const confirmReplacement = req.body.confirmDeviceReplacement;
-        
-        if (!confirmReplacement) {
-          // Return error asking for confirmation
-          user.subscription.devices.sort((a, b) => new Date(a.lastActive) - new Date(b.lastActive));
-          const oldestDevice = user.subscription.devices[0];
-          
-          return res.status(403).json({
-            success: false,
-            deviceLimitReached: true,
-            maxDevices: maxDevices,
-            message: `You already have ${maxDevices} active device${maxDevices > 1 ? 's' : ''}. Sign out from another device to continue.`,
-            oldestDevice: {
-              deviceName: oldestDevice.deviceName || `${oldestDevice.browser} on ${oldestDevice.os}`,
-              lastActive: oldestDevice.lastActive
-            }
+        // Device limit reached — BLOCK the new device and notify the account owner
+        const ipAddress = req?.ip || req?.connection?.remoteAddress || 'unknown';
+        const deviceInfo = parseDeviceInfo(userAgent);
+
+        // Email the account owner with details of the blocked attempt
+        try {
+          await sendEmail({
+            to: user.email,
+            subject: '⚠️ New Device Blocked — Device Limit Reached',
+            html: `
+              <h2>Unrecognized Device Blocked</h2>
+              <p>Hi ${user.name},</p>
+              <p>Someone tried to log into your <strong>TodoDJS</strong> account from a new device, but your plan only allows <strong>${maxDevices} device${maxDevices > 1 ? 's' : ''}</strong>.</p>
+              <h3>Blocked Device Details</h3>
+              <ul>
+                <li><strong>Device:</strong> ${deviceInfo.deviceName}</li>
+                <li><strong>Browser:</strong> ${deviceInfo.browser}</li>
+                <li><strong>OS:</strong> ${deviceInfo.os}</li>
+                <li><strong>IP Address:</strong> ${ipAddress}</li>
+                <li><strong>Time:</strong> ${new Date().toLocaleString()}</li>
+              </ul>
+              <p>If this was you, sign in to your account and remove one of your existing devices to free up a slot.</p>
+              <p>If this was <strong>not you</strong>, your account is secure — the login was blocked. Consider changing your password immediately.</p>
+              <p><a href="https://tododjs.com" style="color:#7C3AED">Manage Your Devices →</a></p>
+            `
           });
+        } catch (emailError) {
+          console.error('Failed to send device block email:', emailError);
         }
-        
-        // User confirmed - replace oldest device
-        user.subscription.devices.sort((a, b) => new Date(a.lastActive) - new Date(b.lastActive));
-        const oldestDevice = user.subscription.devices[0];
-        deviceReplaced = {
-          deviceName: oldestDevice.deviceName || `${oldestDevice.browser} on ${oldestDevice.os}`,
-          lastActive: oldestDevice.lastActive
-        };
-        user.subscription.devices.shift();
-        
-        // Add new device
-        user.subscription.devices.push({
-          deviceId,
-          deviceName: deviceInfo.deviceName,
-          deviceType: deviceInfo.deviceType,
-          browser: deviceInfo.browser,
-          os: deviceInfo.os,
-          deviceInfo,
-          ipAddress,
-          lastActive: new Date(),
-          addedAt: new Date()
+
+        return res.status(403).json({
+          success: false,
+          deviceLimitReached: true,
+          maxDevices,
+          message: `This account has reached its device limit (${maxDevices} device${maxDevices > 1 ? 's' : ''}). The account owner has been notified by email. Please ask the account owner to remove a device from their settings.`
         });
       } else {
         // Under limit - add new device
@@ -144,12 +137,6 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
       avatar
     }
   };
-
-  // Add device replacement notification if applicable
-  if (deviceReplaced) {
-    response.deviceReplaced = deviceReplaced;
-    response.message = `Previous device (${deviceReplaced.deviceName}) was signed out to allow this login.`;
-  }
 
   res.status(statusCode)
     .cookie('token', token, options)

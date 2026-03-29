@@ -3,7 +3,6 @@ import { X, Mail, Lock, User, Eye, EyeOff, AlertCircle, Phone, Globe } from 'luc
 import { useTranslation } from 'react-i18next';
 import API_URL from '../../config/api';
 import ForgotPasswordModal from '../ForgotPasswordModal';
-import { verifyUserForAction } from '../../services/passkeyService';
 
 function getDeviceId() {
   let deviceId = localStorage.getItem('deviceId');
@@ -83,41 +82,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
           if (rememberMe) localStorage.setItem('rememberMe', 'true');
           onSuccess(data.user);
         } else if (data.deviceLimitReached) {
-          try {
-            const verified = await verifyUserForAction('replace your oldest device and continue');
-            if (verified) {
-              setLoading(true);
-              try {
-                const retryResponse = await fetch(`${API_URL}/auth/login`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  credentials: 'include',
-                  body: JSON.stringify({
-                    email: formData.email,
-                    password: formData.password,
-                    deviceId: getDeviceId(),
-                    confirmDeviceReplacement: true
-                  })
-                });
-                const retryData = await retryResponse.json();
-                if (retryData.success) {
-                  localStorage.setItem('token', retryData.token);
-                  if (rememberMe) localStorage.setItem('rememberMe', 'true');
-                  onSuccess(retryData.user);
-                } else {
-                  setError(retryData.message || t('auth.invalidCredentials'));
-                }
-              } catch {
-                setError(t('messages.networkError'));
-              } finally {
-                setLoading(false);
-              }
-            } else {
-              setError('Device replacement cancelled. Please sign out from another device to continue.');
-            }
-          } catch (biometricError) {
-            setError(biometricError.message || 'Biometric authentication is required to replace devices.');
-          }
+          setError(`Device limit reached for this account (${data.maxDevices} device${data.maxDevices > 1 ? 's' : ''} allowed). The account owner has been notified by email. If you are the account owner, please sign in on one of your registered devices and remove it from Settings → Devices to free up a slot.`);
           return;
         } else {
           setError(data.message || t('auth.invalidCredentials'));

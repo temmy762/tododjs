@@ -104,43 +104,50 @@ export const checkDeviceLimit = async (req, res, next) => {
 
     // Check if device limit reached (after cleanup)
     if (user.subscription.devices.length >= plan.features.maxDevices) {
-      // Auto-replace strategy: Remove oldest device and continue
-      // Sort by lastActive (oldest first)
-      user.subscription.devices.sort((a, b) => new Date(a.lastActive) - new Date(b.lastActive));
-      
-      // Get the device that will be replaced
-      const replacedDevice = user.subscription.devices[0];
-      
-      // Remove the oldest device
-      user.subscription.devices.shift();
-      
-      console.log(`   🔄 Device limit reached. Replacing oldest device: ${replacedDevice.deviceName || replacedDevice.deviceId}`);
-      
-      // Send email notification about device replacement
+      console.log(`   ❌ Device limit reached for user ${user.email}. Blocking unrecognized device.`);
+
+      // Notify account owner
+      const ipAddress = req.ip || req.connection.remoteAddress;
+      const userAgent = req.headers['user-agent'] || 'Unknown Device';
+      const { parseDeviceInfo } = await import('../utils/deviceParser.js');
+      const deviceInfo = parseDeviceInfo(userAgent);
+
       try {
         await sendEmail({
           to: user.email,
-          subject: 'Device Replaced on Your Account',
+          subject: '⚠️ Access Blocked — Device Limit Reached',
           html: `
-            <h2>Device Automatically Replaced</h2>
+            <h2>Unrecognized Device Blocked</h2>
             <p>Hi ${user.name},</p>
-            <p>You've reached your device limit (${plan.features.maxDevices} device${plan.features.maxDevices > 1 ? 's' : ''}).</p>
-            <p><strong>Replaced device:</strong> ${replacedDevice.deviceName || `${replacedDevice.browser} on ${replacedDevice.os}`}</p>
-            <p>This device has been automatically signed out to allow your new login.</p>
-            <p>If this wasn't you, please secure your account immediately.</p>
+            <p>An unrecognized device tried to access your <strong>TodoDJS</strong> account, but your plan only allows <strong>${plan.features.maxDevices} device${plan.features.maxDevices > 1 ? 's' : ''}</strong>.</p>
+            <h3>Blocked Device Details</h3>
+            <ul>
+              <li><strong>Device:</strong> ${deviceInfo.deviceName}</li>
+              <li><strong>Browser:</strong> ${deviceInfo.browser}</li>
+              <li><strong>OS:</strong> ${deviceInfo.os}</li>
+              <li><strong>IP Address:</strong> ${ipAddress}</li>
+              <li><strong>Time:</strong> ${new Date().toLocaleString()}</li>
+            </ul>
+            <p>To allow a new device, sign in and remove one of your existing devices from your account settings.</p>
+            <p>If this was <strong>not you</strong>, your account is secure — the access was blocked.</p>
+            <p><a href="https://tododjs.com" style="color:#7C3AED">Manage Your Devices →</a></p>
           `
         });
       } catch (emailError) {
-        console.error('Failed to send device replacement email:', emailError);
+        console.error('Failed to send device block email:', emailError);
       }
-      
-      // Continue to register the new device below
+
+      return res.status(403).json({
+        success: false,
+        deviceLimitReached: true,
+        message: `Device limit reached (${plan.features.maxDevices} device${plan.features.maxDevices > 1 ? 's' : ''} allowed). The account owner has been notified. Please ask the account owner to remove a device from their settings.`
+      });
     }
 
-    // Parse device information
-    const userAgent = req.headers['user-agent'] || 'Unknown Device';
-    const ipAddress = req.ip || req.connection.remoteAddress;
-    const deviceInfo = parseDeviceInfo(userAgent);
+    // Parse device information for new device registration
+    const userAgent2 = req.headers['user-agent'] || 'Unknown Device';
+    const ipAddress2 = req.ip || req.connection.remoteAddress;
+    const deviceInfo = parseDeviceInfo(userAgent2);
 
     // Auto-register device if under limit
     const newDevice = {
@@ -150,7 +157,7 @@ export const checkDeviceLimit = async (req, res, next) => {
       browser: deviceInfo.browser,
       os: deviceInfo.os,
       deviceInfo: deviceInfo.deviceInfo,
-      ipAddress,
+      ipAddress: ipAddress2,
       lastActive: new Date(),
       addedAt: new Date()
     };
