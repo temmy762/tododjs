@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star, Maximize2, Minimize2 } from 'lucide-react';
+import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star, Maximize2, Minimize2, Camera } from 'lucide-react';
 import ManageAlbumModal from './ManageAlbumModal';
 import BulkUploadModal from './BulkUploadModal';
 import CollectionCard from './CollectionCard';
@@ -10,7 +10,6 @@ const getToken = () => localStorage.getItem('token');
 const authHeaders = () => ({ 'Authorization': `Bearer ${getToken()}` });
 
 export default function AdminRecordPool() {
-  const [section, setSection] = useState('collections'); // 'collections' | 'sources'
   const [view, setView] = useState('list'); // list | dateCards | albums
   const [collections, setCollections] = useState([]);
   const [sources, setSources] = useState([]);
@@ -24,25 +23,25 @@ export default function AdminRecordPool() {
   const [modal, setModal] = useState(null);
   const [editItem, setEditItem] = useState(null);
 
-  const fetchCollections = useCallback(async () => {
+  // Derived: which parent type is currently active when drilling down
+  const activeParentType = selectedSource ? 'source' : 'collection';
+
+  const fetchAll = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await fetch(`${API}/collections`);
-      const data = await res.json();
-      if (data.success) setCollections(data.data);
-    } catch (err) { console.error('Error fetching collections:', err); }
+      const [colRes, srcRes] = await Promise.all([
+        fetch(`${API}/collections`),
+        fetch(`${API}/sources`, { headers: authHeaders() })
+      ]);
+      const [colData, srcData] = await Promise.all([colRes.json(), srcRes.json()]);
+      if (colData.success) setCollections(colData.data);
+      if (srcData.success) setSources(srcData.data);
+    } catch (err) { console.error('Error fetching record pool:', err); }
     finally { setLoading(false); }
   }, []);
 
-  const fetchSources = useCallback(async () => {
-    try {
-      setLoading(true);
-      const res = await fetch(`${API}/sources`, { headers: authHeaders() });
-      const data = await res.json();
-      if (data.success) setSources(data.data);
-    } catch (err) { console.error('Error fetching sources:', err); }
-    finally { setLoading(false); }
-  }, []);
+  // Keep legacy alias for the localStorage openCollectionId effect
+  const fetchCollections = fetchAll;
 
   const fetchDateCards = useCallback(async (parentId, parentType) => {
     try {
@@ -67,16 +66,7 @@ export default function AdminRecordPool() {
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => {
-    if (section === 'collections') fetchCollections();
-    else fetchSources();
-    setView('list');
-    setSelectedCollection(null);
-    setSelectedSource(null);
-    setSelectedDateCard(null);
-  }, [section]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => { fetchCollections(); }, [fetchCollections]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   useEffect(() => {
     if (!collections || collections.length === 0) return;
@@ -123,11 +113,11 @@ export default function AdminRecordPool() {
       setSelectedCollection(null);
       setSelectedSource(null);
       setSelectedDateCard(null);
-      if (section === 'collections') fetchCollections(); else fetchSources();
+      fetchAll();
     } else if (target === 'dateCards') {
       setView('dateCards');
       setSelectedDateCard(null);
-      if (section === 'sources' && selectedSource) fetchDateCards(selectedSource._id, 'source');
+      if (selectedSource) fetchDateCards(selectedSource._id, 'source');
       else if (selectedCollection) fetchDateCards(selectedCollection._id, 'collection');
     }
   };
@@ -162,7 +152,7 @@ export default function AdminRecordPool() {
       const res = await fetch(`${API}/date-packs/${dc._id}`, { method: 'DELETE', headers: authHeaders() });
       const data = await res.json();
       if (data.success) {
-        if (section === 'sources' && selectedSource) fetchDateCards(selectedSource._id, 'source');
+        if (selectedSource) fetchDateCards(selectedSource._id, 'source');
         else if (selectedCollection) fetchDateCards(selectedCollection._id, 'collection');
       }
     } catch (err) { console.error('Error deleting date card:', err); }
@@ -187,36 +177,16 @@ export default function AdminRecordPool() {
           </div>
         </div>
 
-        {/* Section Tabs */}
-        <div className="flex gap-1 p-1 bg-white/5 rounded-xl mb-6 w-fit">
-          <button
-            onClick={() => setSection('collections')}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
-              section === 'collections' ? 'bg-accent text-white' : 'text-brand-text-tertiary hover:text-white'
-            }`}
-          >
-            <FolderOpen size={14} className="inline mr-1.5" />Collections
-          </button>
-          <button
-            onClick={() => setSection('sources')}
-            className={`px-5 py-2 rounded-lg text-sm font-medium transition-colors ${
-              section === 'sources' ? 'bg-accent text-white' : 'text-brand-text-tertiary hover:text-white'
-            }`}
-          >
-            <Disc size={14} className="inline mr-1.5" />Sources
-          </button>
-        </div>
-
         {/* Breadcrumbs */}
         <div className="flex items-center gap-2 mb-6 text-sm">
           <button onClick={() => navigateBack('list')} className={`flex items-center gap-1 transition-colors ${view === 'list' ? 'text-white font-semibold' : 'text-brand-text-tertiary hover:text-accent'}`}>
-            <Home size={14} /> {section === 'sources' ? 'Sources' : 'Collections'}
+            <Home size={14} /> Record Pool
           </button>
           {(selectedCollection || selectedSource) && (
             <>
               <ChevronRight size={14} className="text-brand-text-tertiary" />
               <button onClick={() => navigateBack('dateCards')} className={`transition-colors ${view === 'dateCards' ? 'text-white font-semibold' : 'text-brand-text-tertiary hover:text-accent'}`}>
-                {section === 'sources' ? selectedSource?.name : selectedCollection?.name}
+                {selectedSource?.name ?? selectedCollection?.name}
               </button>
             </>
           )}
@@ -228,70 +198,60 @@ export default function AdminRecordPool() {
           )}
         </div>
 
-        {/* Collections List View */}
-        {view === 'list' && section === 'collections' && (
-          <div>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold">Collections</h2>
-              <button onClick={() => setModal('bulkUpload')} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors">
-                <Upload size={18} /> Bulk Upload ZIP
-              </button>
-            </div>
-            {loading ? <LoadingSpinner /> : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {collections.map(c => (
-                  <CollectionCard key={c._id} collection={c}
-                    onView={(col) => navigateToCollection(col)}
-                    onEdit={(col) => { setEditItem(col); setModal('editCollection'); }}
-                    onDelete={(col) => handleDeleteCollection(col)}
-                  />
-                ))}
-                {collections.length === 0 && (
-                  <div className="col-span-full text-center py-16">
-                    <FolderOpen size={48} className="mx-auto mb-4 text-brand-text-tertiary opacity-50" />
-                    <p className="text-brand-text-tertiary">No collections yet. Bulk upload a ZIP to create one.</p>
-                  </div>
-                )}
+        {/* Unified List View */}
+        {view === 'list' && (() => {
+          const missingThumb = [...collections, ...sources].filter(i => !i.thumbnail);
+          return (
+            <div>
+              {missingThumb.length > 0 && (
+                <div className="mb-5 flex items-start gap-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                  <AlertCircle size={18} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-yellow-300 text-sm">
+                    <span className="font-semibold">{missingThumb.length} card{missingThumb.length > 1 ? 's are' : ' is'} missing a thumbnail.</span>{' '}
+                    Use the edit button on each card to upload one.
+                  </p>
+                </div>
+              )}
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold">Record Pool</h2>
+                <button onClick={() => setModal('bulkUpload')} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors">
+                  <Upload size={18} /> Bulk Upload ZIP
+                </button>
               </div>
-            )}
-          </div>
-        )}
-
-        {/* Sources List View */}
-        {view === 'list' && section === 'sources' && (
-          <div>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold">Sources</h2>
-              <button onClick={() => setModal('createSource')} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
-                <Plus size={18} /> New Source
-              </button>
+              {loading ? <LoadingSpinner /> : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {collections.map(c => (
+                    <CollectionCard key={`col-${c._id}`} collection={c}
+                      onView={(col) => navigateToCollection(col)}
+                      onEdit={(col) => { setEditItem(col); setModal('editCollection'); }}
+                      onDelete={(col) => handleDeleteCollection(col)}
+                    />
+                  ))}
+                  {sources.map(s => (
+                    <SourceCard key={`src-${s._id}`} source={s}
+                      onView={navigateToSource}
+                      onEdit={(src) => { setEditItem(src); setModal('editSource'); }}
+                      onDelete={handleDeleteSource}
+                    />
+                  ))}
+                  {collections.length === 0 && sources.length === 0 && (
+                    <div className="col-span-full text-center py-16">
+                      <FolderOpen size={48} className="mx-auto mb-4 text-brand-text-tertiary opacity-50" />
+                      <p className="text-brand-text-tertiary">No records yet. Bulk upload a ZIP to create a collection.</p>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-            {loading ? <LoadingSpinner /> : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {sources.map(s => (
-                  <SourceCard key={s._id} source={s}
-                    onView={navigateToSource}
-                    onEdit={(src) => { setEditItem(src); setModal('editSource'); }}
-                    onDelete={handleDeleteSource}
-                  />
-                ))}
-                {sources.length === 0 && (
-                  <div className="col-span-full text-center py-16">
-                    <Disc size={48} className="mx-auto mb-4 text-brand-text-tertiary opacity-50" />
-                    <p className="text-brand-text-tertiary">No sources yet. Create one to start adding date cards and albums.</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+          );
+        })()}
 
         {/* Date Cards View */}
         {view === 'dateCards' && (selectedCollection || selectedSource) && (
           <div>
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold">Date Cards — {section === 'sources' ? selectedSource?.name : selectedCollection?.name}</h2>
-              {section === 'sources' && (
+              <h2 className="text-2xl font-bold">Date Cards — {selectedSource?.name ?? selectedCollection?.name}</h2>
+              {activeParentType === 'source' && (
                 <button onClick={() => setModal('createDateCard')} className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors text-sm">
                   <Plus size={16} /> New Date Card
                 </button>
@@ -314,29 +274,41 @@ export default function AdminRecordPool() {
         )}
 
         {/* Albums View */}
-        {view === 'albums' && selectedDateCard && (
-          <div>
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold">Albums — {selectedDateCard.name}</h2>
-              <button onClick={() => setModal('uploadAlbum')} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
-                <Upload size={18} /> Upload Album
-              </button>
-            </div>
-            {loading ? <LoadingSpinner /> : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {albums.map(a => (
-                  <AlbumCard key={a._id} album={a} onView={() => setSelectedAlbum(a)} onDelete={handleDeleteAlbum} />
-                ))}
-                {albums.length === 0 && (
-                  <div className="col-span-full text-center py-16">
-                    <Disc size={48} className="mx-auto mb-4 text-brand-text-tertiary opacity-50" />
-                    <p className="text-brand-text-tertiary">No albums yet. Upload a ZIP of MP3s!</p>
-                  </div>
-                )}
+        {view === 'albums' && selectedDateCard && (() => {
+          const missingCover = albums.filter(a => !a.coverArt);
+          return (
+            <div>
+              {missingCover.length > 0 && (
+                <div className="mb-5 flex items-start gap-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
+                  <AlertCircle size={18} className="text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-yellow-300 text-sm">
+                    <span className="font-semibold">{missingCover.length} album{missingCover.length > 1 ? 's are' : ' is'} missing cover art.</span>{' '}
+                    Click the camera icon on each album card to upload one.
+                  </p>
+                </div>
+              )}
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold">Albums — {selectedDateCard.name}</h2>
+                <button onClick={() => setModal('uploadAlbum')} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
+                  <Upload size={18} /> Upload Album
+                </button>
               </div>
-            )}
-          </div>
-        )}
+              {loading ? <LoadingSpinner /> : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {albums.map(a => (
+                    <AlbumCard key={a._id} album={a} onView={() => setSelectedAlbum(a)} onDelete={handleDeleteAlbum} />
+                  ))}
+                  {albums.length === 0 && (
+                    <div className="col-span-full text-center py-16">
+                      <Disc size={48} className="mx-auto mb-4 text-brand-text-tertiary opacity-50" />
+                      <p className="text-brand-text-tertiary">No albums yet. Upload a ZIP of MP3s!</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Modals */}
         {modal === 'bulkUpload' && (
@@ -348,9 +320,9 @@ export default function AdminRecordPool() {
 
         {modal === 'uploadAlbum' && selectedDateCard && (selectedSource || selectedCollection) && (
           <AlbumUploadModal
-            sourceId={(section === 'sources' ? selectedSource?._id : selectedCollection?._id)}
+            sourceId={selectedSource?._id ?? selectedCollection?._id}
             datePackId={selectedDateCard._id}
-            sourceName={section === 'sources' ? selectedSource?.name : selectedCollection?.name}
+            sourceName={selectedSource?.name ?? selectedCollection?.name}
             dateCardName={selectedDateCard.name}
             onClose={() => setModal(null)}
             onSuccess={() => { setModal(null); fetchAlbums(selectedDateCard._id); }}
@@ -367,21 +339,14 @@ export default function AdminRecordPool() {
 
         {modal === 'editDateCard' && editItem && (
           <DateCardModal
-            sourceId={section === 'sources' ? selectedSource?._id : selectedCollection?._id}
+            sourceId={selectedSource?._id ?? selectedCollection?._id}
             dateCard={editItem}
             onClose={() => { setModal(null); setEditItem(null); }}
             onSuccess={() => {
               setModal(null); setEditItem(null);
-              if (section === 'sources' && selectedSource) fetchDateCards(selectedSource._id, 'source');
+              if (selectedSource) fetchDateCards(selectedSource._id, 'source');
               else if (selectedCollection) fetchDateCards(selectedCollection._id, 'collection');
             }}
-          />
-        )}
-
-        {modal === 'createSource' && (
-          <SourceModal
-            onClose={() => setModal(null)}
-            onSuccess={() => { setModal(null); fetchSources(); }}
           />
         )}
 
@@ -389,7 +354,7 @@ export default function AdminRecordPool() {
           <SourceModal
             source={editItem}
             onClose={() => { setModal(null); setEditItem(null); }}
-            onSuccess={() => { setModal(null); setEditItem(null); fetchSources(); }}
+            onSuccess={() => { setModal(null); setEditItem(null); fetchAll(); }}
           />
         )}
 
@@ -533,6 +498,28 @@ function AlbumCard({ album, onView, onDelete, onToggleFeatured }) {
   const [reanalyzeMsg, setReanalyzeMsg] = useState(null);
   const [featured, setFeatured] = useState(album.isFeatured || false);
   const [togglingFeatured, setTogglingFeatured] = useState(false);
+  const [localCoverArt, setLocalCoverArt] = useState(album.coverArt || null);
+  const [uploadingCover, setUploadingCover] = useState(false);
+  const coverInputRef = useRef(null);
+
+  const handleCoverUpload = async (e) => {
+    const file = e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingCover(true);
+    try {
+      const fd = new FormData();
+      fd.append('coverArt', file);
+      const res = await fetch(`${API}/albums/${album._id}`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: fd
+      });
+      const data = await res.json();
+      if (data.success) setLocalCoverArt(data.data.coverArt);
+    } catch (err) { console.error('Album cover upload error:', err); }
+    finally { setUploadingCover(false); }
+  };
 
   const handleToggleFeatured = async (e) => {
     e.stopPropagation();
@@ -576,11 +563,10 @@ function AlbumCard({ album, onView, onDelete, onToggleFeatured }) {
 
   return (
     <div className="bg-dark-elevated rounded-xl border border-white/10 overflow-hidden hover:border-accent/40 transition-all duration-300 group">
-      {/* Featured toggle above the card image */}
       <div className="relative aspect-square overflow-hidden">
         <div className="cursor-pointer w-full h-full" onClick={onView}>
-          {album.coverArt ? (
-            <img src={album.coverArt} alt={album.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+          {localCoverArt ? (
+            <img src={localCoverArt} alt={album.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" onError={() => setLocalCoverArt(null)} />
           ) : (
             <div className="w-full h-full bg-dark-surface flex items-center justify-center"><Disc size={48} className="text-white/10" /></div>
           )}
@@ -599,9 +585,19 @@ function AlbumCard({ album, onView, onDelete, onToggleFeatured }) {
         >
           {togglingFeatured ? <Loader size={14} className="animate-spin" /> : <Star size={14} className={featured ? 'fill-white' : ''} />}
         </button>
-        {/* Featured badge — top right */}
+        {/* Camera button — top right */}
+        <button
+          onClick={(e) => { e.stopPropagation(); coverInputRef.current?.click(); }}
+          disabled={uploadingCover}
+          className="absolute top-2 right-2 z-10 w-8 h-8 rounded-full flex items-center justify-center bg-black/50 text-white/60 hover:bg-black/70 hover:text-white hover:scale-110 transition-all duration-200 shadow-lg backdrop-blur-sm disabled:opacity-50"
+          title="Upload cover art"
+        >
+          {uploadingCover ? <Loader size={14} className="animate-spin" /> : <Camera size={14} />}
+        </button>
+        <input ref={coverInputRef} type="file" accept="image/*" className="hidden" onChange={handleCoverUpload} />
+        {/* Featured badge — bottom left when camera is at top-right */}
         {featured && (
-          <div className="absolute top-2 right-2 px-2 py-1 rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shadow-lg">
+          <div className="absolute bottom-3 left-3 px-2 py-1 rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1 shadow-lg">
             <Star size={10} className="fill-white" /> Featured
           </div>
         )}
