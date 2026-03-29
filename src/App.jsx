@@ -532,6 +532,7 @@ function App() {
         onTonalityChange={setActiveTonality}
         user={user}
         onNavigate={handleNavigate}
+        onLoginClick={handleOpenAuth}
         onSubscribe={() => {
           if (user) {
             handleNavigate('pricing');
