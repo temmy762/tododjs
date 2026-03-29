@@ -6,7 +6,7 @@ import API_URL from '../config/api';
 
 const tonalities = ['1A', '2A', '3A', '4A', '5A', '6A', '7A', '8A', '9A', '10A', '11A', '12A', '1B', '2B', '3B', '4B', '5B', '6B', '7B', '8B', '9B', '10B', '11B', '12B'];
 
-export default function TopBar({ onSearchFocus, onSearchChange, searchQuery, onSubscribe, showTonalityButton, activeTonality, onTonalityChange, user, onNavigate }) {
+export default function TopBar({ onSearchFocus, onSearchChange, searchQuery, onSubscribe, showTonalityButton, activeTonality, onTonalityChange, user, onNavigate, onLoginClick }) {
   const { t } = useTranslation();
   const [subscriptionStatus, setSubscriptionStatus] = useState(null);
   const [isFocused, setIsFocused] = useState(false);
@@ -101,7 +101,15 @@ export default function TopBar({ onSearchFocus, onSearchChange, searchQuery, onS
             </div>
           )}
           
-          {user && subscriptionStatus?.hasSubscription ? (
+          {!user ? (
+            <button
+              onClick={() => onLoginClick?.()}
+              className="flex items-center gap-1.5 md:gap-2 px-3 md:px-5 py-2 md:py-2.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 hover:border-white/40 transition-all duration-200 hover:scale-105 text-xs md:text-sm font-semibold text-white"
+            >
+              <User className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2} />
+              <span className="hidden sm:inline">{t('auth.login')}</span>
+            </button>
+          ) : user.role !== 'admin' && subscriptionStatus?.hasSubscription ? (
             <button
               onClick={() => onNavigate?.('subscription')}
               className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-full bg-gradient-to-r from-accent to-accent-hover border border-accent/20 transition-all duration-200 hover:scale-105 text-xs md:text-sm font-semibold text-white shadow-lg shadow-accent/30"
@@ -111,12 +119,12 @@ export default function TopBar({ onSearchFocus, onSearchChange, searchQuery, onS
               <span className="hidden sm:inline">{subscriptionStatus.plan?.type === 'shared' ? '👥' : '👤'}</span>
               <span className="hidden md:inline text-xs">{subscriptionStatus.daysRemaining}d</span>
             </button>
-          ) : user?.role !== 'admin' && (
+          ) : user.role !== 'admin' && (
             <button
               onClick={() => onNavigate?.('pricing')}
               className="flex items-center gap-1.5 md:gap-2 px-3 md:px-5 py-2 md:py-2.5 rounded-full bg-accent hover:bg-accent-hover transition-all duration-200 hover:scale-105 text-xs md:text-sm font-semibold text-white shadow-lg shadow-accent/30"
             >
-              <User className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2} />
+              <Crown className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2} />
               <span className="hidden sm:inline">{t('subscription.subscribe')}</span>
             </button>
           )}
