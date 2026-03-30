@@ -108,7 +108,7 @@ export default function AdminSubscriptions() {
     } finally {
       setCustomersLoading(false);
     }
-  }, [debouncedSearch, filterPlan, sortField, sortDir]);
+  }, [debouncedSearch, filterPlan, filterStatus, sortField, sortDir]);
 
   useEffect(() => {
     if (tab === 'customers') fetchCustomers(1);
@@ -462,7 +462,7 @@ export default function AdminSubscriptions() {
               <div className="flex items-center justify-between mb-3">
                 <Users className="w-8 h-8 text-accent" strokeWidth={2} />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-1">{stats.totalUsers.toLocaleString()}</h3>
+              <h3 className="text-2xl font-bold text-white mb-1">{(stats.totalUsers || 0).toLocaleString()}</h3>
               <p className="text-sm text-brand-text-tertiary">Total Members</p>
             </div>
             <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
@@ -476,7 +476,7 @@ export default function AdminSubscriptions() {
               <div className="flex items-center justify-between mb-3">
                 <CreditCard className="w-8 h-8 text-accent" strokeWidth={2} />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-1">{stats.newThisMonth.toLocaleString()}</h3>
+              <h3 className="text-2xl font-bold text-white mb-1">{(stats.newThisMonth || 0).toLocaleString()}</h3>
               <p className="text-sm text-brand-text-tertiary">New This Month</p>
             </div>
           </div>
