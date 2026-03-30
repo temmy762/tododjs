@@ -13,7 +13,7 @@ const mashupSchema = new mongoose.Schema({
   },
   genre: {
     type: String,
-    default: 'Mashup'
+    default: 'Others'
   },
   bpm: {
     type: Number,

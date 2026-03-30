@@ -1,5 +1,6 @@
 import Track from '../models/Track.js';
 import Album from '../models/Album.js';
+import { FIXED_GENRES } from '../services/genreDetection.js';
 import Collection from '../models/Collection.js';
 import DatePack from '../models/DatePack.js';
 import Mashup from '../models/Mashup.js';
@@ -110,8 +111,7 @@ export const getFilterOptions = async (req, res) => {
     if (datePackId) filter.datePackId = datePackId;
     if (albumId) filter.albumId = albumId;
 
-    const [genres, tonalityKeys, camelotKeys, pools] = await Promise.all([
-      Track.distinct('genre', filter),
+    const [tonalityKeys, camelotKeys, pools] = await Promise.all([
       Track.distinct('tonality.key', filter),
       Track.distinct('tonality.camelot', filter),
       Track.distinct('pool', filter)
@@ -132,7 +132,7 @@ export const getFilterOptions = async (req, res) => {
     res.json({
       success: true,
       data: {
-        genres: genres.filter(g => g).sort(),
+        genres: FIXED_GENRES,
         tonalityKeys: tonalityKeys.filter(k => k).sort(),
         camelotKeys: camelotKeys.filter(c => c).sort(),
         pools: pools.filter(p => p).sort(),

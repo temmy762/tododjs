@@ -35,7 +35,10 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
   const [filterGenre, setFilterGenre] = useState('all');
   const [filterTonality, setFilterTonality] = useState('all');
   const [tracksPerPage, setTracksPerPage] = useState(30);
-  const [genres, setGenres] = useState([]);
+  const FIXED_GENRES = [
+    'Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap',
+    'House', 'EDM', 'Afro House', 'Remember', 'International', 'Others'
+  ];
 
   const tonalitiesA = ['1A', '2A', '3A', '4A', '5A', '6A', '7A', '8A', '9A', '10A', '11A', '12A'];
   const tonalitiesB = ['1B', '2B', '3B', '4B', '5B', '6B', '7B', '8B', '9B', '10B', '11B', '12B'];
@@ -104,12 +107,6 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
     fetchTracks();
   }, [fetchTracks]);
 
-  useEffect(() => {
-    fetch(`${API_URL}/search/filters`)
-      .then(r => r.json())
-      .then(d => { if (d.success) setGenres(d.data.genres || []); })
-      .catch(() => {});
-  }, []);
 
   const handlePageChange = (pageNumber) => {
     setCurrentPage(pageNumber);
@@ -228,7 +225,7 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
               className="bg-dark-elevated text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80"
             >
               <option value="all">All Genres</option>
-              {genres.map(genre => (
+              {FIXED_GENRES.map(genre => (
                 <option key={genre} value={genre}>{genre}</option>
               ))}
             </select>

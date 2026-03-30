@@ -192,6 +192,12 @@ export const libraryTracks = async (req, res) => {
     if (genre) trackMatch.genre = genre;
     if (tonality) trackMatch['tonality.camelot'] = tonality;
 
+    // The 9 non-"Others" fixed genres — used for genre normalization in aggregation
+    const fixedGenresExcludingOthers = [
+      'Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap',
+      'House', 'EDM', 'Afro House', 'Remember', 'International'
+    ];
+
     // Mashup query (tonality stored as a flat string, not nested)
     const mashupMatch = { isPublished: true };
     if (search) {
@@ -200,10 +206,22 @@ export const libraryTracks = async (req, res) => {
         { artist: { $regex: search, $options: 'i' } }
       ];
     }
-    if (genre) mashupMatch.genre = genre;
+    if (genre) {
+      // Mashups that predate the fixed-genre system may have genre='Mashup'.
+      // When filtering 'Others', capture those non-fixed genres too.
+      if (genre === 'Others') {
+        mashupMatch.$or = [
+          { genre: 'Others' },
+          { genre: { $nin: [...fixedGenresExcludingOthers, 'Others'] } }
+        ];
+      } else {
+        mashupMatch.genre = genre;
+      }
+    }
     if (tonality) mashupMatch.tonality = tonality;
 
-    // Normalize mashup fields to match track shape
+    // Normalize mashup fields to match track shape.
+    // Genre: if stored value is not a fixed genre, remap to 'Others'.
     const mashupNorm = [
       { $match: mashupMatch },
       {
@@ -214,7 +232,14 @@ export const libraryTracks = async (req, res) => {
           collection: 'Mashup',
           isLocked: false,
           requiredPlan: null,
-          tonality: { camelot: '$tonality' }
+          tonality: { camelot: '$tonality' },
+          genre: {
+            $cond: {
+              if: { $in: ['$genre', [...fixedGenresExcludingOthers, 'Others']] },
+              then: '$genre',
+              else: 'Others'
+            }
+          }
         }
       }
     ];

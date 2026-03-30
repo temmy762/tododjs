@@ -13,7 +13,7 @@ import { pipeline as pipelineCb } from 'stream';
 import { pipeline as pipelineAsync } from 'stream/promises';
 import { parseBuffer } from 'music-metadata';
 import { detectTonality } from '../services/tonalityDetection.js';
-import { detectGenre } from '../services/genreDetection.js';
+import { detectGenre, mapToFixedGenre } from '../services/genreDetection.js';
 import { generateCollectionName, detectGenres, extractDateFromFolderName } from '../utils/collectionNameGenerator.js';
 
 // Strip cloud-storage timestamp suffix from folder names e.g. -20260324T054836Z-1-002
@@ -633,8 +633,8 @@ export const uploadCollection = async (req, res) => {
         // Create Album cards for this date pack
         if (dp.albums && dp.albums.length > 0) {
           for (const albumData of dp.albums) {
-            const genreMatch = albumData.name.match(/\((.*?)\)/);
-            const detectedGenre = genreMatch ? genreMatch[1] : null;
+            const genreMatch = albumData.name.match(/\((.*)\)/);
+            const detectedGenre = genreMatch ? mapToFixedGenre(genreMatch[1]) : null;
 
             const album = await Album.create({
               collectionId: collection._id,
@@ -658,7 +658,7 @@ export const uploadCollection = async (req, res) => {
           }
         }
       }
-      console.log(`✅ Created ${createdDatePacks.length} date packs and ${createdAlbums.length} albums`);
+      console.log(` Created ${createdDatePacks.length} date packs and ${createdAlbums.length} albums`);
     }
 
     // Update collection status to processing
@@ -689,11 +689,11 @@ export const uploadCollection = async (req, res) => {
     });
 
     // Background: process the ZIP file
-    console.log(`🧵 Queuing background processing for collection: ${collection._id}`);
+    console.log(` Queuing background processing for collection: ${collection._id}`);
     setImmediate(() => {
       processCollectionAsync(collection._id, zipFile.path, collection, createdDatePacks, createdAlbums)
         .catch((e) => {
-          console.error(`❌ Unhandled processCollectionAsync rejection for ${collection._id}:`, e);
+          console.error(` Unhandled processCollectionAsync rejection for ${collection._id}:`, e);
         });
     });
   } catch (error) {
@@ -747,11 +747,11 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
   const tempDir = path.dirname(zipFilePath);
   const tempFilesToClean = [];
   try {
-    console.log(`\n🚀 Starting collection processing: ${collection.name}`);
+    console.log(`\n Starting collection processing: ${collection.name}`);
 
     if (!opts.skipZipUpload) {
       const zipSizeGB = (fs.statSync(zipFilePath).size / (1024 * 1024 * 1024)).toFixed(2);
-      console.log(`☁️ Uploading ${zipSizeGB} GB ZIP to Wasabi...`);
+      console.log(` Uploading ${zipSizeGB} GB ZIP to Wasabi...`);
       const zipKey = `collections/${collection.name}/original/${Date.now()}-${path.basename(zipFilePath)}`;
       let lastLoggedPct = 0;
       const zipUpload = await uploadToWasabi(
@@ -762,7 +762,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
           const rounded = Math.floor(pct / 10) * 10;
           if (rounded > lastLoggedPct) {
             lastLoggedPct = rounded;
-            console.log(`   ☁️ Wasabi ZIP upload: ${rounded}%`);
+            console.log(`   Wasabi ZIP upload: ${rounded}%`);
           }
           const progress = Math.min(4, Math.round((pct / 100) * 4));
           if (progress > (collection.processingProgress || 0)) {
@@ -775,7 +775,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       collection.zipKey = zipUpload.key;
       collection.processingProgress = 5;
       await collection.save();
-      console.log(`✅ ZIP uploaded to Wasabi: ${collection.zipKey}`);
+      console.log(` ZIP uploaded to Wasabi: ${collection.zipKey}`);
     } else {
       collection.processingProgress = Math.max(collection.processingProgress || 0, 5);
       await collection.save();
@@ -784,7 +784,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
     // Open ZIP and find MP3 files
     const zipfile = await openZipFile(zipFilePath);
     const entries = await readAllEntries(zipfile);
-    console.log(`📋 Total entries in ZIP: ${entries.length}`);
+    console.log(` Total entries in ZIP: ${entries.length}`);
 
     const innerZipEntries = entries
       .filter(e =>
@@ -801,13 +801,13 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
     ).length;
 
     if (outerMp3Count === 0) {
-      console.log(`🎧 Outer ZIP MP3 count: 0`);
-      console.log(`🗜️ Inner ZIP entries detected: ${innerZipEntries.length}`);
+      console.log(` Outer ZIP MP3 count: 0`);
+      console.log(` Inner ZIP entries detected: ${innerZipEntries.length}`);
       const sample = entries
         .filter(e => !e.fileName.includes('__MACOSX'))
         .slice(0, 25)
         .map(e => e.fileName);
-      console.log(`📎 ZIP entry sample (first ${sample.length}):`, sample);
+      console.log(` ZIP entry sample (first ${sample.length}):`, sample);
     }
 
     const processZipAsDatedPack = async (datedZipPath, datePackName, opts = {}) => {
@@ -848,8 +848,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
         const key = albumName || datePackName;
         if (albumsCache.has(key)) return albumsCache.get(key);
 
-        const genreMatch = key.match(/\((.*?)\)/);
-        const genre = genreMatch ? genreMatch[1] : null;
+        const genreMatch = key.match(/\((.*)\)/);
+        const genre = genreMatch ? mapToFixedGenre(genreMatch[1]) : null;
 
         const album = await Album.create({
           collectionId: collection._id,
@@ -1010,15 +1010,13 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
               metadata.bpm = tonalityResult.detectedBpm;
             }
 
-            await maybeUpdateCollectionProgressEffective(tracksCreated + 0.35);
-
             const genreResult = await withTimeout(
               detectGenre(mp3Buffer, metadata),
               45000,
               { genre: null, confidence: 0, source: 'timeout', needsManualReview: true }
             );
 
-            await maybeUpdateCollectionProgressEffective(tracksCreated + 0.55);
+            await maybeUpdateCollectionProgressEffective(tracksCreated + 0.35);
 
             const trackKey = `collections/${collection.name}/albums/${album.name}/${mp3Name}`;
             const trackUpload = await uploadToWasabi(mp3Buffer, trackKey, 'audio/mpeg');
@@ -1029,7 +1027,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
               albumId: album._id,
               title: metadata.title,
               artist: metadata.artist,
-              genre: genreResult.genre || album.genre || 'House',
+              genre: genreResult.genre || album.genre || 'Others',
               genreConfidence: genreResult.confidence,
               genreSource: genreResult.source,
               genreNeedsReview: genreResult.needsManualReview,
@@ -1159,7 +1157,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
         collection.processingProgress = 0;
         await collection.save();
         try { zipfile.close(); } catch { /* ignore */ }
-        console.log('❌ Nested ZIP processing found no MP3 files. Marking collection as failed.');
+        console.log(' Nested ZIP processing found no MP3 files. Marking collection as failed.');
         return;
       }
 
@@ -1169,12 +1167,14 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
 
       try { zipfile.close(); } catch { /* ignore */ }
 
-      console.log(`\n✅ Collection processing completed!`);
+      console.log(`\n Collection processing completed!`);
       console.log(`   Albums: ${totalAlbumsNested}`);
       console.log(`   Tracks: ${totalTracksNested}`);
-      console.log('🧹 Cleaned up temp ZIP file');
 
-      if (fs.existsSync(zipFilePath)) fs.unlinkSync(zipFilePath);
+      if (fs.existsSync(zipFilePath)) {
+        fs.unlinkSync(zipFilePath);
+        console.log(' Cleaned up temp ZIP file');
+      }
       return;
     }
 
@@ -1275,7 +1275,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       const existing = await DatePack.find({ collectionId: collection._id });
       if (existing.length > 0) return existing;
 
-      console.log('🧱 No date pack cards found. Creating cards from ZIP contents...');
+      console.log(' No date pack cards found. Creating cards from ZIP contents...');
       const now = new Date();
       const created = [];
 
@@ -1305,8 +1305,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
         }
 
         for (const [albumName, albumMp3s] of mp3sByAlbum) {
-          const genreMatch = albumName.match(/\((.*?)\)/);
-          const detectedGenre = genreMatch ? genreMatch[1] : null;
+          const genreMatch = albumName.match(/\((.*)\)/);
+          const detectedGenre = genreMatch ? mapToFixedGenre(genreMatch[1]) : null;
           await Album.create({
             collectionId: collection._id,
             datePackId: datePack._id,
@@ -1325,7 +1325,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
 
       collection.totalDatePacks = created.length;
       await collection.save();
-      console.log(`✅ Created ${created.length} date packs from ZIP contents`);
+      console.log(` Created ${created.length} date packs from ZIP contents`);
       return created;
     };
 
@@ -1337,14 +1337,14 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       datePackMap.set(dp.name, dp._id.toString());
     }
 
-    console.log(`📂 Found MP3s in ${mp3FilesByDatePack.size} date packs`);
+    console.log(` Found MP3s in ${mp3FilesByDatePack.size} date packs`);
 
     if (mp3FilesByDatePack.size === 0) {
       collection.status = 'failed';
       collection.processingProgress = 0;
       await collection.save();
       try { zipfile.close(); } catch { /* ignore */ }
-      console.log('❌ No MP3 files found in ZIP. Marking collection as failed.');
+      console.log(' No MP3 files found in ZIP. Marking collection as failed.');
       return;
     }
 
@@ -1357,12 +1357,12 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
     for (const [datePackName, mp3Files] of mp3FilesByDatePack) {
       const datePackId = datePackMap.get(datePackName);
       if (!datePackId) {
-        console.log(`   ⚠ Date pack "${datePackName}" not found in existing cards, skipping`);
+        console.log(`   Date pack "${datePackName}" not found in existing cards, skipping`);
         continue;
       }
 
       const datePack = await DatePack.findById(datePackId);
-      console.log(`\n📅 Processing date pack: ${datePackName} (${mp3Files.length} MP3s)`);
+      console.log(`\n Processing date pack: ${datePackName} (${mp3Files.length} MP3s)`);
 
       // Update date pack status
       datePack.status = 'processing';
@@ -1392,7 +1392,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       const progress = 10 + (processedCount / mp3FilesByDatePack.size) * 85;
       collection.processingProgress = Math.round(progress);
       await collection.save();
-      console.log(`   ✅ Date pack complete. Progress: ${Math.round(progress)}%`);
+      console.log(`   Date pack complete. Progress: ${Math.round(progress)}%`);
     }
 
     collection.totalAlbums = totalAlbums;
@@ -1404,13 +1404,13 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
 
     try { zipfile.close(); } catch { /* ignore */ }
 
-    console.log(`\n✅ Collection processing completed!`);
+    console.log(`\n Collection processing completed!`);
     console.log(`   Albums: ${totalAlbums}`);
     console.log(`   Tracks: ${totalTracks}`);
 
     if (fs.existsSync(zipFilePath)) {
       fs.unlinkSync(zipFilePath);
-      console.log('🧹 Cleaned up temp ZIP file');
+      console.log(' Cleaned up temp ZIP file');
     }
   } catch (error) {
     console.error('Collection processing error:', error);
@@ -1433,11 +1433,11 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
 }
 
 async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collection) {
-  console.log(`   🎵 Processing ${mp3Files.length} tracks for date pack: ${datePack.name}`);
+  console.log(`   Processing ${mp3Files.length} tracks for date pack: ${datePack.name}`);
   
   // Get existing albums for this date pack
   const existingAlbums = await Album.find({ datePackId: datePack._id });
-  console.log(`      📀 Found ${existingAlbums.length} existing album cards`);
+  console.log(`      Found ${existingAlbums.length} existing album cards`);
   
   // Build map of album name to album ID
   const albumMap = new Map();
@@ -1455,7 +1455,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
     mp3sByAlbum.get(albumName).push(mp3);
   }
   
-  console.log(`      📂 Tracks grouped into ${mp3sByAlbum.size} albums`);
+  console.log(`      Tracks grouped into ${mp3sByAlbum.size} albums`);
   
   let totalTracks = 0;
   let totalSize = 0;
@@ -1468,12 +1468,12 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
   for (const [albumName, albumMp3s] of mp3sByAlbum) {
     const albumId = albumMap.get(albumName);
     if (!albumId) {
-      console.log(`      ⚠ Album "${albumName}" not found in existing cards, skipping ${albumMp3s.length} tracks`);
+      console.log(`      Album "${albumName}" not found in existing cards, skipping ${albumMp3s.length} tracks`);
       continue;
     }
     
     const album = await Album.findById(albumId);
-    console.log(`      💿 Processing album: ${albumName} (${albumMp3s.length} tracks)`);
+    console.log(`      Processing album: ${albumName} (${albumMp3s.length} tracks)`);
     
     // Update album status
     album.status = 'processing';
@@ -1488,7 +1488,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
         // Extract MP3 from ZIP
         const mp3Buffer = await extractFileFromZip(zipfile, mp3Info.fileName);
         if (!mp3Buffer) {
-          console.log(`      ⚠ Could not extract ${mp3Info.fileName}`);
+          console.log(`      Could not extract ${mp3Info.fileName}`);
           continue;
         }
         
@@ -1515,7 +1515,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
             duration: musicMetadata.format.duration || 0
           };
         } catch (error) {
-          console.log(`      ⚠ Metadata parsing failed for ${mp3Name}`);
+          console.log(`      Metadata parsing failed for ${mp3Name}`);
           metadata.bpm = extractBPMFromFilename(mp3Name);
         }
         
@@ -1559,7 +1559,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
           albumId: album._id,
           title: metadata.title,
           artist: metadata.artist,
-          genre: genreResult.genre || album.genre || 'House',
+          genre: genreResult.genre || album.genre || 'Others',
           genreConfidence: genreResult.confidence,
           genreSource: genreResult.source,
           genreNeedsReview: genreResult.needsManualReview,
@@ -1582,7 +1582,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
         totalTracks++;
         
       } catch (error) {
-        console.error(`      ❌ Error processing track ${mp3Info.fileName}:`, error.message);
+        console.error(`      Error processing track ${mp3Info.fileName}:`, error.message);
       }
     }
     
@@ -1593,7 +1593,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
     await album.save();
     
     processedAlbums++;
-    console.log(`      ✅ Album complete: ${albumTrackCount} tracks uploaded`);
+    console.log(`      Album complete: ${albumTrackCount} tracks uploaded`);
   }
   
   zipfile.close();
@@ -1653,17 +1653,17 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
     }
   }
 
-  console.log(`   📂 Found ${Object.keys(albumFolders).length} album folders`);
+  console.log(`   Found ${Object.keys(albumFolders).length} album folders`);
 
   let albumCount = 0;
   let trackCount = 0;
   let totalSize = 0;
 
   for (const [albumName, albumPath] of Object.entries(albumFolders)) {
-    console.log(`      🎵 Processing album: ${albumName}`);
+    console.log(`      Processing album: ${albumName}`);
 
-    const genreMatch = albumName.match(/\((.*?)\)/);
-    const genre = genreMatch ? genreMatch[1] : null;
+    const genreMatch = albumName.match(/\((.*)\)/);
+    const genre = genreMatch ? mapToFixedGenre(genreMatch[1]) : null;
 
     const albumEntries = entries.filter(e => 
       e.entryName.startsWith(albumPath + '/') && 
@@ -1777,7 +1777,7 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
         albumId: album._id,
         title: metadata.title,
         artist: metadata.artist,
-        genre: genreResult.genre || genre || 'House',
+        genre: genreResult.genre || genre || 'Others',
         genreConfidence: genreResult.confidence,
         genreSource: genreResult.source,
         genreNeedsReview: genreResult.needsManualReview,

@@ -91,23 +91,34 @@ export async function detectGenreWithAI(trackTitle, artist, album = null) {
     return null;
   }
 
-  const prompt = `Identify the music genre for this track:
+  const prompt = `Classify the music genre for this track using ONLY one of the 10 allowed genres listed below.
 
 Title: ${trackTitle}
 Artist: ${artist}
 ${album ? `Album: ${album}` : ''}
 
-Provide the most specific genre classification suitable for a DJ record pool.
-Format your response as JSON:
-{
-  "genre": "Tech House",
-  "confidence": "high"
-}
+You MUST pick exactly one genre from this closed list:
+1. Reggaeton
+2. Old School Reggaeton
+3. Dembow
+4. Trap
+5. House
+6. EDM
+7. Afro House
+8. Remember
+9. International
+10. Others
 
-Common DJ genres: House, Tech House, Deep House, Afro House, Techno, Melodic Techno, Progressive House, Trance, Hip-Hop, R&B, Reggaeton, Afrobeat, Amapiano, Drum & Bass, Dubstep, EDM, Pop, Latin, Funk, Soul
+Rules:
+- "Old School Reggaeton" = classic reggaeton from the early 2000s era (Daddy Yankee, Tego Calderón, Don Omar early works, etc.)
+- "Dembow" = Dominican dembow style
+- "Trap" = Latin trap / drill
+- "Remember" = throwback / retro / 80s-90s club classics
+- "International" = English-language pop, hip-hop, R&B, rock, or any non-Latin genre
+- "Others" = anything that does not fit the above categories
+- If unsure, choose "Others"
 
-Confidence levels: "high", "medium", "low"
-If you don't know the genre, return: {"genre": "Electronic", "confidence": "low"}`;
+Respond ONLY with valid JSON: {"genre": "<one of the 10 genres above>"}`;
 
   try {
     const timeoutMs = getOpenAITimeoutMs();
@@ -117,7 +128,7 @@ If you don't know the genre, return: {"genre": "Electronic", "confidence": "low"
         messages: [
           {
             role: 'system',
-            content: 'You are a music genre classification expert for DJ record pools. Provide accurate genre information. Always respond with valid JSON.'
+            content: 'You are a music genre classifier for a Latin DJ record pool. You MUST always respond with valid JSON and MUST pick exactly one genre from the provided closed list of 10 genres.'
           },
           {
             role: 'user',
@@ -125,15 +136,14 @@ If you don't know the genre, return: {"genre": "Electronic", "confidence": "low"
           }
         ],
         temperature: 0.1,
-        max_tokens: 50,
+        max_tokens: 30,
         response_format: { type: "json_object" }
       },
       { timeout: timeoutMs }
     );
 
     const result = JSON.parse(response.choices[0].message.content);
-    
-    return result.genre || 'Electronic';
+    return result.genre || null;
   } catch (error) {
     console.error('OpenAI genre detection error:', error.message);
     return null;
