@@ -1,4 +1,5 @@
 import Track from '../models/Track.js';
+import Mashup from '../models/Mashup.js';
 import Album from '../models/Album.js';
 import Source from '../models/Source.js';
 import DatePack from '../models/DatePack.js';
@@ -154,6 +155,125 @@ export const browseTracks = async (req, res) => {
         page: parseInt(page),
         limit: parseInt(limit),
         pages: Math.ceil(total / parseInt(limit))
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Browse all content (tracks + mashups) for the library
+// @route   GET /api/tracks/library
+// @access  Public
+export const libraryTracks = async (req, res) => {
+  try {
+    const {
+      search = '',
+      genre,
+      tonality,
+      sort = '-dateAdded',
+      page = 1,
+      limit = 30
+    } = req.query;
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = parseInt(limit);
+    const sortDir = sort.startsWith('-') ? -1 : 1;
+    const sortField = sort.replace(/^-/, '');
+
+    // Track query
+    const trackMatch = { status: 'published' };
+    if (search) {
+      trackMatch.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { artist: { $regex: search, $options: 'i' } }
+      ];
+    }
+    if (genre) trackMatch.genre = genre;
+    if (tonality) trackMatch['tonality.camelot'] = tonality;
+
+    // Mashup query (tonality stored as a flat string, not nested)
+    const mashupMatch = { isPublished: true };
+    if (search) {
+      mashupMatch.$or = [
+        { title: { $regex: search, $options: 'i' } },
+        { artist: { $regex: search, $options: 'i' } }
+      ];
+    }
+    if (genre) mashupMatch.genre = genre;
+    if (tonality) mashupMatch.tonality = tonality;
+
+    // Normalize mashup fields to match track shape
+    const mashupNorm = [
+      { $match: mashupMatch },
+      {
+        $addFields: {
+          source: 'mashup',
+          dateAdded: '$createdAt',
+          pool: 'mashup',
+          collection: 'Mashup',
+          isLocked: false,
+          requiredPlan: null,
+          tonality: { camelot: '$tonality' }
+        }
+      }
+    ];
+
+    // Base pipeline: tracks first, then union with mashups
+    const basePipeline = [
+      { $match: trackMatch },
+      {
+        $addFields: {
+          source: 'track',
+          dateAdded: { $ifNull: ['$dateAdded', '$createdAt'] }
+        }
+      },
+      { $unionWith: { coll: 'mashups', pipeline: mashupNorm } }
+    ];
+
+    // Total count
+    const countResult = await Track.aggregate([
+      ...basePipeline,
+      { $count: 'total' }
+    ]);
+    const total = countResult[0]?.total || 0;
+
+    // Paginated data
+    const combined = await Track.aggregate([
+      ...basePipeline,
+      { $sort: { [sortField]: sortDir } },
+      { $skip: skip },
+      { $limit: limitNum },
+      {
+        $project: {
+          title: 1, artist: 1, genre: 1, bpm: 1, tonality: 1,
+          pool: 1, collection: 1, coverArt: 1, coverArtKey: 1,
+          'audioFile.duration': 1, isLocked: 1, requiredPlan: 1,
+          dateAdded: 1, source: 1, albumId: 1
+        }
+      }
+    ]);
+
+    // Resolve cover art signed URLs
+    const mapped = await Promise.all(combined.map(async (t) => {
+      let cover = '';
+      if (t.coverArtKey) {
+        try { cover = await getSignedDownloadUrl(t.coverArtKey, 3600); }
+        catch { cover = t.coverArt || ''; }
+      }
+      if (!cover) cover = t.coverArt || '';
+      return { ...t, coverArt: cover, coverArtKey: undefined };
+    }));
+
+    res.set('Cache-Control', 'private, max-age=300');
+    res.status(200).json({
+      success: true,
+      data: mapped,
+      pagination: {
+        total,
+        page: parseInt(page),
+        limit: limitNum,
+        pages: Math.ceil(total / limitNum)
       }
     });
   } catch (error) {

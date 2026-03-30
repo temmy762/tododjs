@@ -3,6 +3,7 @@ import multer from 'multer';
 import {
   getAllTracks,
   browseTracks,
+  libraryTracks,
   updateTrack,
   deleteTrack,
   getTrack,
@@ -43,6 +44,7 @@ const trackFileUpload = multer({
 
 router.get('/', protect, authorize('admin'), getAllTracks);
 router.get('/browse', browseTracks);
+router.get('/library', libraryTracks);
 router.post('/upload', protect, authorize('admin'), trackFileUpload.single('file'), uploadTracks);
 router.post('/reanalyze/:albumId', protect, authorize('admin'), reanalyzeAlbumTracks);
 

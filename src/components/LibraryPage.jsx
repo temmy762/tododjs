@@ -20,6 +20,7 @@ const mapTrack = (t) => ({
   pool: t.pool || '',
   locked: t.isLocked || false,
   duration: t.audioFile?.duration || 0,
+  source: t.source || 'track',
 });
 
 export default function LibraryPage({ onTrackInteraction, userFavorites = new Set() }) {
@@ -84,7 +85,7 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
       if (filterGenre !== 'all') params.set('genre', filterGenre);
       if (filterTonality !== 'all') params.set('tonality', filterTonality);
 
-      const res = await fetch(`${API_URL}/tracks/browse?${params}`);
+      const res = await fetch(`${API_URL}/tracks/library?${params}`);
       if (!res.ok) { console.error('Library fetch error:', res.status); return; }
       const json = await res.json();
       if (json.success) {
