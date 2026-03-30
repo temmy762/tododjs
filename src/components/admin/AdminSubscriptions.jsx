@@ -68,7 +68,7 @@ export default function AdminSubscriptions() {
   const [tab, setTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [customersLoading, setCustomersLoading] = useState(false);
-  const [stats, setStats] = useState({ totalUsers: 0, premiumCount: 0, proCount: 0, freeCount: 0, newThisMonth: 0 });
+  const [stats, setStats] = useState({ totalUsers: 0, activeCount: 0, freeCount: 0, individualMonthlyCount: 0, individualQuarterlyCount: 0, sharedMonthlyCount: 0, sharedQuarterlyCount: 0, newThisMonth: 0, estimatedRevenue: 0 });
   const [editingPlan, setEditingPlan] = useState(null);
   const [plans, setPlans] = useState([]);
 
@@ -96,6 +96,7 @@ export default function AdminSubscriptions() {
       const params = new URLSearchParams({ page, limit: 25, sort: `${sortDir === 'desc' ? '-' : ''}${sortField}` });
       if (debouncedSearch) params.set('search', debouncedSearch);
       if (filterPlan) params.set('plan', filterPlan);
+      if (filterStatus) params.set('status', filterStatus);
       const res = await fetch(`${API}/users?${params}`, { headers: authHeaders() });
       const data = await res.json();
       if (data.success) {
@@ -153,11 +154,7 @@ export default function AdminSubscriptions() {
       if (statsRes.ok) {
         const statsData = await statsRes.json();
         if (statsData.success) {
-          const s = statsData.stats;
-          setStats({
-            ...s,
-            freeCount: s.totalUsers - s.premiumCount - s.proCount
-          });
+          setStats(statsData.stats);
         }
       }
 
@@ -176,9 +173,9 @@ export default function AdminSubscriptions() {
     }
   };
 
-  const estimatedRevenue = (stats.premiumCount * 9.99 + stats.proCount * 19.99).toFixed(0);
+  const estimatedRevenue = stats.estimatedRevenue || 0;
   const paidPercent = stats.totalUsers > 0
-    ? ((stats.premiumCount + stats.proCount) / stats.totalUsers * 100).toFixed(1)
+    ? ((stats.activeCount / stats.totalUsers) * 100).toFixed(1)
     : '0';
 
   return (
@@ -211,11 +208,22 @@ export default function AdminSubscriptions() {
                 className="w-full pl-9 pr-4 py-2.5 bg-dark-elevated border border-white/10 rounded-xl text-sm focus:outline-none focus:border-accent"
               />
             </div>
-            <select value={filterPlan} onChange={e => setFilterPlan(e.target.value)}
+            <select value={filterPlan} onChange={e => { setFilterPlan(e.target.value); }}
               className="px-3 py-2.5 bg-dark-elevated border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-accent">
               <option value="">All Plans</option>
-              <option value="premium">Premium</option>
-              <option value="pro">Pro</option>
+              <option value="individual-monthly">Individual Monthly</option>
+              <option value="individual-quarterly">Individual Quarterly</option>
+              <option value="shared-monthly">Shared Monthly</option>
+              <option value="shared-quarterly">Shared Quarterly</option>
+            </select>
+            <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+              className="px-3 py-2.5 bg-dark-elevated border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-accent">
+              <option value="">All Statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="expired">Expired</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="past_due">Past Due</option>
             </select>
             <button onClick={() => fetchCustomers(1)}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-dark-elevated border border-white/10 text-sm text-brand-text-secondary hover:text-white transition-colors">
@@ -447,7 +455,7 @@ export default function AdminSubscriptions() {
               <div className="flex items-center justify-between mb-3">
                 <DollarSign className="w-8 h-8 text-accent" strokeWidth={2} />
               </div>
-              <h3 className="text-2xl font-bold text-white mb-1">${Number(estimatedRevenue).toLocaleString()}</h3>
+              <h3 className="text-2xl font-bold text-white mb-1">€{Number(estimatedRevenue).toLocaleString()}</h3>
               <p className="text-sm text-brand-text-tertiary">Est. Monthly Revenue</p>
             </div>
             <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
@@ -476,37 +484,26 @@ export default function AdminSubscriptions() {
           {/* Subscription Usage Breakdown */}
           <div className="mb-8">
             <h3 className="text-xl font-bold text-white mb-6">Subscription Usage</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-sm font-semibold text-brand-text-tertiary uppercase tracking-wider">Free Users</h4>
-                  <div className="w-3 h-3 rounded-full bg-gray-500"></div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {[
+                { label: 'No Plan', count: stats.freeCount, color: 'bg-gray-500' },
+                { label: 'Active Subs', count: stats.activeCount, color: 'bg-green-500' },
+                { label: 'Indiv. Monthly', count: stats.individualMonthlyCount, color: 'bg-blue-500' },
+                { label: 'Indiv. Quarterly', count: stats.individualQuarterlyCount, color: 'bg-indigo-500' },
+                { label: 'Shared Monthly', count: stats.sharedMonthlyCount, color: 'bg-purple-500' },
+                { label: 'Shared Quarterly', count: stats.sharedQuarterlyCount, color: 'bg-pink-500' },
+              ].map(({ label, count, color }) => (
+                <div key={label} className="bg-dark-elevated rounded-xl p-5 border border-white/10">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{label}</h4>
+                    <div className={`w-2.5 h-2.5 rounded-full ${color}`}></div>
+                  </div>
+                  <div className="text-2xl font-bold text-white mb-1">{(count || 0).toLocaleString()}</div>
+                  <div className="text-xs text-brand-text-tertiary">
+                    {stats.totalUsers > 0 ? (((count || 0) / stats.totalUsers) * 100).toFixed(1) : '0'}% of members
+                  </div>
                 </div>
-                <div className="text-3xl font-bold text-white mb-2">{stats.freeCount.toLocaleString()}</div>
-                <div className="text-xs text-brand-text-tertiary">
-                  {stats.totalUsers > 0 ? ((stats.freeCount / stats.totalUsers) * 100).toFixed(1) : '0'}% of total users
-                </div>
-              </div>
-              <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-sm font-semibold text-brand-text-tertiary uppercase tracking-wider">Premium Users</h4>
-                  <div className="w-3 h-3 rounded-full bg-purple-500"></div>
-                </div>
-                <div className="text-3xl font-bold text-white mb-2">{stats.premiumCount.toLocaleString()}</div>
-                <div className="text-xs text-brand-text-tertiary">
-                  {stats.totalUsers > 0 ? ((stats.premiumCount / stats.totalUsers) * 100).toFixed(1) : '0'}% of total users
-                </div>
-              </div>
-              <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-                <div className="flex items-center justify-between mb-4">
-                  <h4 className="text-sm font-semibold text-brand-text-tertiary uppercase tracking-wider">Pro Users</h4>
-                  <div className="w-3 h-3 rounded-full bg-orange-500"></div>
-                </div>
-                <div className="text-3xl font-bold text-white mb-2">{stats.proCount.toLocaleString()}</div>
-                <div className="text-xs text-brand-text-tertiary">
-                  {stats.totalUsers > 0 ? ((stats.proCount / stats.totalUsers) * 100).toFixed(1) : '0'}% of total users
-                </div>
-              </div>
+              ))}
             </div>
           </div>
 

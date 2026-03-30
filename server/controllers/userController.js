@@ -10,6 +10,7 @@ export const getAllUsers = async (req, res) => {
       search = '',
       role,
       plan,
+      status,
       sort = '-createdAt',
       page = 1,
       limit = 25
@@ -25,7 +26,8 @@ export const getAllUsers = async (req, res) => {
     }
 
     if (role) query.role = role;
-    if (plan) query['subscription.plan'] = plan;
+    if (plan) query['subscription.planId'] = plan;
+    if (status) query['subscription.status'] = status;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const total = await User.countDocuments(query);
@@ -37,25 +39,50 @@ export const getAllUsers = async (req, res) => {
       .limit(parseInt(limit))
       .lean();
 
-    // Compute stats
+    // Compute stats using correct planId field
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [totalUsers, premiumCount, proCount, newThisMonth] = await Promise.all([
-      User.countDocuments(),
-      User.countDocuments({ 'subscription.plan': 'premium' }),
-      User.countDocuments({ 'subscription.plan': 'pro' }),
-      User.countDocuments({ createdAt: { $gte: startOfMonth } })
+    const [
+      totalUsers,
+      activeCount,
+      individualMonthlyCount,
+      individualQuarterlyCount,
+      sharedMonthlyCount,
+      sharedQuarterlyCount,
+      newThisMonth
+    ] = await Promise.all([
+      User.countDocuments({ role: { $ne: 'admin' } }),
+      User.countDocuments({ 'subscription.status': 'active' }),
+      User.countDocuments({ 'subscription.planId': 'individual-monthly', 'subscription.status': 'active' }),
+      User.countDocuments({ 'subscription.planId': 'individual-quarterly', 'subscription.status': 'active' }),
+      User.countDocuments({ 'subscription.planId': 'shared-monthly', 'subscription.status': 'active' }),
+      User.countDocuments({ 'subscription.planId': 'shared-quarterly', 'subscription.status': 'active' }),
+      User.countDocuments({ createdAt: { $gte: startOfMonth }, role: { $ne: 'admin' } })
     ]);
+
+    const freeCount = totalUsers - activeCount;
+
+    // Estimated monthly revenue based on actual plan prices
+    const estimatedRevenue =
+      (individualMonthlyCount * 19.99) +
+      (individualQuarterlyCount * (54.99 / 3)) +
+      (sharedMonthlyCount * 29.99) +
+      (sharedQuarterlyCount * (79.99 / 3));
 
     res.status(200).json({
       success: true,
       data: users,
       stats: {
         totalUsers,
-        premiumCount,
-        proCount,
-        newThisMonth
+        activeCount,
+        freeCount,
+        individualMonthlyCount,
+        individualQuarterlyCount,
+        sharedMonthlyCount,
+        sharedQuarterlyCount,
+        newThisMonth,
+        estimatedRevenue: Math.round(estimatedRevenue)
       },
       pagination: {
         total,
