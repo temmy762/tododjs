@@ -572,116 +572,92 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
       return;
     }
 
+    const totalBytes = ready.reduce((sum, i) => sum + (i.file?.size || 0), 0);
+    const MAX_TOTAL = 500 * 1024 * 1024 * 1024; // 500 GB combined cap
+    if (totalBytes > MAX_TOTAL) {
+      setError(`Total upload size (${formatBytes(totalBytes)}) exceeds the 500 GB combined limit. Please split into smaller batches.`);
+      return;
+    }
+
     setUploading(true);
-    setUploadProgress(0);
     setError('');
     setSuccess('');
     setUploadPhase('cards');
 
-    for (let idx = 0; idx < uploadItems.length; idx++) {
-      const item = uploadItems[idx];
-      if (item.scanStatus !== 'scanned') continue;
-
-      setActiveItemIndex(idx);
-      setUploadProgress(0);
-
-      setUploadItems(prev => prev.map((p, pIdx) => (pIdx === idx ? { ...p, uploadStatus: 'uploading' } : p)));
+    const processItem = async (item, idx) => {
+      updateItem(idx, { uploadStatus: 'uploading', uploadProgress: 0 });
 
       try {
         const response = await uploadSingleItem(item, idx);
         const newCollectionId = response.data?.collection?._id;
-        setCollectionId(newCollectionId);
-        if (newCollectionId) startPolling(newCollectionId);
+        if (newCollectionId) setCollectionId(newCollectionId);
 
-        setUploadItems(prev => prev.map((p, pIdx) => (
-          pIdx === idx
-            ? {
-              ...p,
-              uploadStatus: 'processing',
-              uploadError: '',
-              collectionId: newCollectionId,
-              created: response.data,
-              processingProgress: 0
-            }
-            : p
-        )));
+        updateItem(idx, {
+          uploadStatus: 'processing',
+          uploadError: '',
+          collectionId: newCollectionId,
+          created: response.data,
+          processingProgress: 0
+        });
         onSuccess?.(response.data);
 
-        // Wait for this collection to complete before moving to the next (sequential processing is safest)
+        if (!newCollectionId) return;
+
         await new Promise((resolve) => {
           const interval = setInterval(async () => {
             try {
               const token = localStorage.getItem('token');
               const statusResp = await fetch(api(`/collections/${newCollectionId}/status`), {
-                headers: {
-                  Authorization: token ? `Bearer ${token}` : ''
-                }
+                headers: { Authorization: token ? `Bearer ${token}` : '' }
               });
               if (statusResp.status === 401 || statusResp.status === 403) {
                 clearInterval(interval);
-                setUploadItems(prev => prev.map((p, pIdx) => (
-                  pIdx === idx
-                    ? {
-                      ...p,
-                      uploadStatus: 'failed',
-                      uploadError: 'Unauthorized. Please log in as admin to track upload progress.'
-                    }
-                    : p
-                )));
+                updateItem(idx, {
+                  uploadStatus: 'failed',
+                  uploadError: 'Unauthorized. Please log in as admin to track upload progress.'
+                });
                 resolve();
                 return;
               }
               const statusJson = await statusResp.json();
               if (statusJson?.success) {
                 const { status, processingProgress, uploadStats, processingDetail, tracksProcessed, totalTracksEstimate } = statusJson.data;
-                setUploadProgress(processingProgress);
-
-                setUploadItems(prev => prev.map((p, pIdx) => (
-                  pIdx === idx
-                    ? {
-                      ...p,
-                      uploadStats: uploadStats,
-                      processingProgress: processingProgress ?? p.processingProgress ?? 0,
-                      processingDetail: processingDetail ?? p.processingDetail ?? '',
-                      tracksProcessed: tracksProcessed ?? p.tracksProcessed ?? 0,
-                      totalTracksEstimate: totalTracksEstimate ?? p.totalTracksEstimate ?? 0,
-                      uploadStatus: status === 'completed'
-                        ? 'completed'
-                        : status === 'failed'
-                          ? 'failed'
-                          : 'processing'
-                    }
-                    : p
-                )));
-                if (status === 'completed') {
-                  clearInterval(interval);
-                  resolve();
-                }
-                if (status === 'failed') {
+                updateItem(idx, {
+                  uploadStats,
+                  processingProgress: processingProgress ?? 0,
+                  processingDetail: processingDetail ?? '',
+                  tracksProcessed: tracksProcessed ?? 0,
+                  totalTracksEstimate: totalTracksEstimate ?? 0,
+                  uploadStatus: status === 'completed' ? 'completed' : status === 'failed' ? 'failed' : 'processing'
+                });
+                if (status === 'completed' || status === 'failed') {
                   clearInterval(interval);
                   resolve();
                 }
               }
             } catch (e) {
-              // ignore transient
+              // ignore transient poll errors
             }
           }, 3000);
         });
       } catch (e) {
-        setUploadItems(prev => prev.map((p, pIdx) => (
-          pIdx === idx
-            ? {
-              ...p,
-              uploadStatus: 'failed',
-              uploadError: e?.message || 'Upload failed. Please try again.'
-            }
-            : p
-        )));
+        updateItem(idx, {
+          uploadStatus: 'failed',
+          uploadError: e?.message || 'Upload failed. Please try again.'
+        });
       }
-    }
+    };
+
+    // Launch all uploads concurrently
+    const tasks = uploadItems
+      .map((item, idx) => ({ item, idx }))
+      .filter(({ item }) => item.scanStatus === 'scanned')
+      .map(({ item, idx }) => processItem(item, idx));
+
+    await Promise.all(tasks);
 
     setUploading(false);
-    setSuccess('Batch upload complete.');
+    setSuccess('All uploads complete.');
   };
 
   const hasPendingScans = uploadItems.some(i => i.scanStatus === 'pending');
