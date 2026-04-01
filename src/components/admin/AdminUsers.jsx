@@ -41,7 +41,7 @@ export default function AdminUsers() {
       if (data.success) {
         setUsers(data.data);
         setPagination(data.pagination);
-        setStats(data.stats);
+        if (data.stats) setStats(data.stats);
       }
     } catch (err) {
       console.error('Failed to fetch users:', err.message || err);
@@ -126,19 +126,19 @@ export default function AdminUsers() {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-          <div className="text-3xl font-bold text-white mb-1">{stats.totalUsers.toLocaleString()}</div>
+          <div className="text-3xl font-bold text-white mb-1">{(stats?.totalUsers ?? 0).toLocaleString()}</div>
           <p className="text-sm text-brand-text-tertiary">Total Members</p>
         </div>
         <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-          <div className="text-3xl font-bold text-white mb-1">{stats.premiumCount.toLocaleString()}</div>
+          <div className="text-3xl font-bold text-white mb-1">{(stats?.premiumCount ?? 0).toLocaleString()}</div>
           <p className="text-sm text-brand-text-tertiary">Premium Members</p>
         </div>
         <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-          <div className="text-3xl font-bold text-white mb-1">{stats.proCount.toLocaleString()}</div>
+          <div className="text-3xl font-bold text-white mb-1">{(stats?.proCount ?? 0).toLocaleString()}</div>
           <p className="text-sm text-brand-text-tertiary">Pro Members</p>
         </div>
         <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-          <div className="text-3xl font-bold text-white mb-1">{stats.newThisMonth.toLocaleString()}</div>
+          <div className="text-3xl font-bold text-white mb-1">{(stats?.newThisMonth ?? 0).toLocaleString()}</div>
           <p className="text-sm text-brand-text-tertiary">New This Month</p>
         </div>
       </div>
