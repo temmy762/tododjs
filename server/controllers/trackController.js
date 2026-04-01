@@ -171,6 +171,7 @@ export const libraryTracks = async (req, res) => {
       search = '',
       genre,
       tonality,
+      category,
       sort = '-dateAdded',
       page = 1,
       limit = 30
@@ -190,6 +191,7 @@ export const libraryTracks = async (req, res) => {
       ];
     }
     if (genre) trackMatch.genre = genre;
+    if (category) trackMatch.category = category;
     if (tonality) trackMatch['tonality.camelot'] = tonality;
 
     // The 9 non-"Others" fixed genres — used for genre normalization in aggregation
@@ -206,6 +208,7 @@ export const libraryTracks = async (req, res) => {
         { artist: { $regex: search, $options: 'i' } }
       ];
     }
+    if (category) mashupMatch.category = category;
     if (genre) {
       // Mashups that predate the fixed-genre system may have genre='Mashup'.
       // When filtering 'Others', capture those non-fixed genres too.

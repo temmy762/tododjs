@@ -23,7 +23,7 @@ const mapTrack = (t) => ({
   source: t.source || 'track',
 });
 
-export default function LibraryPage({ onTrackInteraction, userFavorites = new Set() }) {
+export default function LibraryPage({ onTrackInteraction, userFavorites = new Set(), initialCategory = null, initialCategoryName = null, onCategoryReset }) {
   const { t } = useTranslation();
   const [tracks, setTracks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +34,16 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
   const [sortBy, setSortBy] = useState('dateAdded');
   const [filterGenre, setFilterGenre] = useState('all');
   const [filterTonality, setFilterTonality] = useState('all');
+  const [filterCategory, setFilterCategory] = useState(initialCategory);
+  const [filterCategoryName, setFilterCategoryName] = useState(initialCategoryName);
   const [tracksPerPage, setTracksPerPage] = useState(30);
+
+  // Sync when parent changes the initialCategory (e.g. clicking a category tab)
+  useEffect(() => {
+    setFilterCategory(initialCategory);
+    setFilterCategoryName(initialCategoryName);
+    setCurrentPage(1);
+  }, [initialCategory, initialCategoryName]);
   const FIXED_GENRES = [
     'Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap',
     'House', 'EDM', 'Afro House', 'Remember', 'International', 'Others'
@@ -87,6 +96,7 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
       });
       if (filterGenre !== 'all') params.set('genre', filterGenre);
       if (filterTonality !== 'all') params.set('tonality', filterTonality);
+      if (filterCategory) params.set('category', filterCategory);
 
       const res = await fetch(`${API_URL}/tracks/library?${params}`);
       if (!res.ok) { console.error('Library fetch error:', res.status); return; }
@@ -101,7 +111,7 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
     } finally {
       setLoading(false);
     }
-  }, [currentPage, tracksPerPage, sortBy, filterGenre, filterTonality]);
+  }, [currentPage, tracksPerPage, sortBy, filterGenre, filterTonality, filterCategory]);
 
   useEffect(() => {
     fetchTracks();
@@ -116,6 +126,13 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
   const handleFilterChange = (genre) => {
     setFilterGenre(genre);
     setCurrentPage(1);
+  };
+
+  const clearCategoryFilter = () => {
+    setFilterCategory(null);
+    setFilterCategoryName(null);
+    setCurrentPage(1);
+    onCategoryReset?.();
   };
 
   const handleTonalityChange = (tonality) => {
@@ -178,13 +195,19 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
           </div>
           
           {/* View Toggle and Reset */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {filterCategory && (
+              <button
+                onClick={clearCategoryFilter}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold hover:bg-accent/80 transition-all"
+              >
+                <span>{filterCategoryName || filterCategory}</span>
+                <X className="w-3 h-3" />
+              </button>
+            )}
             {filterTonality !== 'all' && (
               <button
-                onClick={() => {
-                  setFilterTonality('all');
-                  setCurrentPage(1);
-                }}
+                onClick={() => { setFilterTonality('all'); setCurrentPage(1); }}
                 className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30 hover:border-accent/50 transition-all duration-200 shadow-lg shadow-accent/10"
               >
                 <X className="w-4 h-4" />

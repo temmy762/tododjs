@@ -16,7 +16,8 @@ import {
   FolderOpen,
   Upload,
   X,
-  Menu
+  Menu,
+  Tag
 } from 'lucide-react';
 import AdminOverview from './AdminOverview';
 import AdminTracks from './AdminTracks';
@@ -33,6 +34,7 @@ import AdminRecordPool from './AdminRecordPool';
 import AdminDownloadStats from './AdminDownloadStats';
 import UploadProgressTracker from './UploadProgressTracker';
 import AdminMashups from './AdminMashups';
+import AdminCategories from './AdminCategories';
 import AdminUserDevices from './AdminUserDevices';
 import ErrorBoundary from '../ErrorBoundary';
 
@@ -71,6 +73,7 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
     { id: 'devices', label: 'Devices & Sessions', icon: Monitor },
     { id: 'subscriptions', label: t('admin.subscriptions'), icon: CreditCard },
     { id: 'analytics', label: t('admin.analytics'), icon: Database },
+    { id: 'categories', label: 'Categories', icon: Tag },
     { id: 'genres', label: t('admin.genres'), icon: Palette },
     { id: 'settings', label: t('admin.settings'), icon: Settings },
     { id: 'security', label: t('admin.security'), icon: Shield },
@@ -104,6 +107,8 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
         return <AdminAnalytics />;
       case 'pools':
         return <AdminPools />;
+      case 'categories':
+        return <AdminCategories />;
       case 'genres':
         return <AdminGenres />;
       case 'settings':

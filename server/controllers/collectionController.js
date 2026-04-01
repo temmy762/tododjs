@@ -14,6 +14,7 @@ import { pipeline as pipelineAsync } from 'stream/promises';
 import { parseBuffer } from 'music-metadata';
 import { detectTonality } from '../services/tonalityDetection.js';
 import { detectGenre, mapToFixedGenre } from '../services/genreDetection.js';
+import { detectCategory } from '../services/categoryDetection.js';
 import { generateCollectionName, detectGenres, extractDateFromFolderName } from '../utils/collectionNameGenerator.js';
 
 // Strip cloud-storage timestamp suffix from folder names e.g. -20260324T054836Z-1-002
@@ -1028,6 +1029,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
               title: metadata.title,
               artist: metadata.artist,
               genre: genreResult.genre || album.genre || 'Others',
+              category: detectCategory(metadata.title, finalAlbumName) || null,
               genreConfidence: genreResult.confidence,
               genreSource: genreResult.source,
               genreNeedsReview: genreResult.needsManualReview,
@@ -1560,6 +1562,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
           title: metadata.title,
           artist: metadata.artist,
           genre: genreResult.genre || album.genre || 'Others',
+          category: detectCategory(metadata.title, albumName) || null,
           genreConfidence: genreResult.confidence,
           genreSource: genreResult.source,
           genreNeedsReview: genreResult.needsManualReview,
@@ -1778,6 +1781,7 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
         title: metadata.title,
         artist: metadata.artist,
         genre: genreResult.genre || genre || 'Others',
+        category: detectCategory(metadata.title, albumName) || null,
         genreConfidence: genreResult.confidence,
         genreSource: genreResult.source,
         genreNeedsReview: genreResult.needsManualReview,

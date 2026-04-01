@@ -85,6 +85,11 @@ const trackSchema = new mongoose.Schema({
     type: String,
     required: false
   },
+  category: {
+    type: String,
+    default: null,
+    index: true
+  },
   collection: {
     type: String,
     default: 'New This Week'

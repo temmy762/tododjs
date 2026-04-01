@@ -43,6 +43,8 @@ function App() {
   const [panelIsPlaying, setPanelIsPlaying] = useState(false);
   const [panelProgress, setPanelProgress] = useState(0);
   const [activeGenre, setActiveGenre] = useState('all');
+  const [activeCategory, setActiveCategory] = useState(null);
+  const [activeCategoryName, setActiveCategoryName] = useState(null);
   const [activeTonality, setActiveTonality] = useState('all');
   const [activePage, setActivePage] = useState('library');
   const [selectedProfile, setSelectedProfile] = useState(null);
@@ -565,6 +567,9 @@ function App() {
           <LibraryPage 
             onTrackInteraction={handleTrackInteraction}
             userFavorites={userFavorites}
+            initialCategory={activeCategory}
+            initialCategoryName={activeCategoryName}
+            onCategoryReset={() => { setActiveCategory(null); setActiveCategoryName(null); }}
           />
         ) : activePage === 'album' ? (
           <RecordPoolPage 
@@ -609,9 +614,18 @@ function App() {
         ) : activePage === 'home' ? (
           <>
             <div className="sticky top-14 md:top-16 z-20 bg-dark-bg/95 backdrop-blur-md border-b border-white/5">
-              <GenreFilterHorizontal 
-                activeGenre={activeGenre}
-                onGenreChange={setActiveGenre}
+              <GenreFilterHorizontal
+                activeCategory={activeCategory}
+                onCategoryChange={(slug, name) => {
+                  if (!slug) {
+                    setActiveCategory(null);
+                    setActiveCategoryName(null);
+                  } else {
+                    setActiveCategory(slug);
+                    setActiveCategoryName(name || slug);
+                    setActivePage('library');
+                  }
+                }}
               />
             </div>
 

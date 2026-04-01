@@ -32,6 +32,7 @@ import mashupRoutes from './routes/mashup.js';
 import subscriptionRoutes from './routes/subscriptions.js';
 import stripeRoutes from './routes/stripe.js';
 import deviceRoutes from './routes/device.js';
+import categoryRoutes from './routes/category.js';
 
 const app = express();
 
@@ -146,6 +147,7 @@ app.use('/api/mashups', mashupRoutes);
 app.use('/api/subscriptions', subscriptionRoutes);
 app.use('/api/stripe', stripeRoutes);
 app.use('/api/devices', deviceRoutes);
+app.use('/api/categories', categoryRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
