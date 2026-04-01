@@ -73,18 +73,6 @@ export function extractCategoryFromAlbumName(albumName) {
 }
 
 /**
- * Detect the best category for a track, trying title first then album.
- * Returns the raw extracted string (not validated against the DB).
- * The caller should match this against existing Category documents.
- * @param {string} title
- * @param {string} albumName
- * @returns {string|null}
- */
-export function detectCategory(title, albumName) {
-  return extractCategoryFromTitle(title) || extractCategoryFromAlbumName(albumName) || null;
-}
-
-/**
  * Match a raw detected string against the list of known category names.
  * Case-insensitive. Returns the canonical category name or null.
  * @param {string} raw
@@ -96,4 +84,68 @@ export function matchToKnownCategory(raw, knownNames) {
   const lower = raw.toLowerCase().trim();
   const match = knownNames.find(n => n.toLowerCase().trim() === lower);
   return match || null;
+}
+
+/**
+ * Detect category from title + album, matching against a known list.
+ * Returns a result object with the assigned category name, what was
+ * extracted (raw), and where it came from (source).
+ *
+ * @param {string} title
+ * @param {string} albumName
+ * @param {string[]} knownNames  - category names from DB
+ * @returns {{ category: string, raw: string|null, source: 'title'|'album'|'none' }}
+ */
+export function detectCategory(title, albumName, knownNames = []) {
+  const fromTitle  = extractCategoryFromTitle(title);
+  const fromAlbum  = extractCategoryFromAlbumName(albumName);
+  const raw    = fromTitle || fromAlbum || null;
+  const source = fromTitle ? 'title' : fromAlbum ? 'album' : 'none';
+
+  if (!raw) return { category: 'Others', raw: null, source: 'none' };
+
+  const matched = matchToKnownCategory(raw, knownNames);
+  if (matched) return { category: matched, raw, source };
+
+  // Raw string extracted but doesn't match any known category yet
+  return { category: 'Others', raw, source };
+}
+
+// ─── Async variant with in-process category name cache ───────────────────────
+
+let _categoryCache   = null;
+let _categoryCacheTs = 0;
+const CACHE_TTL_MS   = 60_000; // refresh every 60 s
+
+async function getKnownCategoryNames() {
+  if (_categoryCache && (Date.now() - _categoryCacheTs) < CACHE_TTL_MS) {
+    return _categoryCache;
+  }
+  try {
+    const { default: Category } = await import('../models/Category.js');
+    const cats = await Category.find({ isActive: true }).select('name').lean();
+    _categoryCache   = cats.map(c => c.name);
+    _categoryCacheTs = Date.now();
+    return _categoryCache;
+  } catch {
+    return _categoryCache || [];
+  }
+}
+
+/**
+ * Async version — queries the DB for known categories (cached 60 s).
+ * Preferred in upload pipelines where category names need DB validation.
+ * @param {string} title
+ * @param {string} albumName
+ * @returns {Promise<{ category: string, raw: string|null, source: string }>}
+ */
+export async function detectCategoryAsync(title, albumName) {
+  const knownNames = await getKnownCategoryNames();
+  return detectCategory(title, albumName, knownNames);
+}
+
+/** Force-clear the category cache (call after admin creates/renames a category) */
+export function clearCategoryCache() {
+  _categoryCache   = null;
+  _categoryCacheTs = 0;
 }

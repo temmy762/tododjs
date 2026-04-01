@@ -25,6 +25,7 @@ import TrendingSection from './components/TrendingSection';
 import PricingPage from './components/PricingPage';
 import CheckoutModal from './components/CheckoutModal';
 import SubscriptionDashboard from './components/SubscriptionDashboard';
+import CategoryTrackSection from './components/CategoryTrackSection';
 import { contentRows, mockTracks, artistsAndLabels, albums as mockAlbums, playlists } from './data/mockData';
 import API_URL from './config/api';
 
@@ -43,8 +44,7 @@ function App() {
   const [panelIsPlaying, setPanelIsPlaying] = useState(false);
   const [panelProgress, setPanelProgress] = useState(0);
   const [activeGenre, setActiveGenre] = useState('all');
-  const [activeCategory, setActiveCategory] = useState(null);
-  const [activeCategoryName, setActiveCategoryName] = useState(null);
+  const [activeCategory, setActiveCategory] = useState(null); // category NAME, e.g. "Latin Box"
   const [activeTonality, setActiveTonality] = useState('all');
   const [activePage, setActivePage] = useState('library');
   const [selectedProfile, setSelectedProfile] = useState(null);
@@ -544,7 +544,7 @@ function App() {
         }}
       />
       
-      <Sidebar 
+      <Sidebar
         activePage={activePage}
         onNavigate={handleNavigate}
         onAdminClick={() => {
@@ -560,19 +560,16 @@ function App() {
         onLogout={handleLogout}
         onProfileClick={() => { setShowUserDashboard(true); setSearchOpen(false); }}
       />
-      
+
       <div className="md:ml-20">
         <main className={`pt-16 md:pt-20 ${panelOpen ? 'pb-36 md:pb-24' : 'pb-20 md:pb-10'} relative`}>
         {activePage === 'library' ? (
-          <LibraryPage 
+          <LibraryPage
             onTrackInteraction={handleTrackInteraction}
             userFavorites={userFavorites}
-            initialCategory={activeCategory}
-            initialCategoryName={activeCategoryName}
-            onCategoryReset={() => { setActiveCategory(null); setActiveCategoryName(null); }}
           />
         ) : activePage === 'album' ? (
-          <RecordPoolPage 
+          <RecordPoolPage
             onAlbumClick={handleAlbumPageClick}
             onAlbumDownload={handleAlbumDownload}
             onTrackInteraction={handleTrackInteraction}
@@ -616,39 +613,40 @@ function App() {
             <div className="sticky top-14 md:top-16 z-20 bg-dark-bg/95 backdrop-blur-md border-b border-white/5">
               <GenreFilterHorizontal
                 activeCategory={activeCategory}
-                onCategoryChange={(slug, name) => {
-                  if (!slug) {
-                    setActiveCategory(null);
-                    setActiveCategoryName(null);
-                  } else {
-                    setActiveCategory(slug);
-                    setActiveCategoryName(name || slug);
-                    setActivePage('library');
-                  }
-                }}
+                onCategoryChange={(name) => setActiveCategory(name || null)}
               />
             </div>
 
-            <TrendingSection onTrackInteraction={handleTrackInteraction} activeGenre={activeGenre} />
-
-            <div ref={tonalityRef}>
-              <TonalityFilter 
-                activeTonality={activeTonality}
-                onTonalityChange={setActiveTonality}
-              />
-            </div>
-
-            <div className="mb-8">
-              <TrackListView 
-                tracks={allTracks}
+            {activeCategory ? (
+              <CategoryTrackSection
+                categoryName={activeCategory}
                 onTrackInteraction={handleTrackInteraction}
                 userFavorites={userFavorites}
               />
-            </div>
+            ) : (
+              <>
+                <TrendingSection onTrackInteraction={handleTrackInteraction} activeGenre={activeGenre} />
 
-            <AlbumsSection albums={albums} onAlbumClick={handleAlbumPageClick} activeGenre={activeGenre} />
-            
-            <PlaylistsSection onAlbumClick={handleAlbumPageClick} activeGenre={activeGenre} />
+                <div ref={tonalityRef}>
+                  <TonalityFilter
+                    activeTonality={activeTonality}
+                    onTonalityChange={setActiveTonality}
+                  />
+                </div>
+
+                <div className="mb-8">
+                  <TrackListView
+                    tracks={allTracks}
+                    onTrackInteraction={handleTrackInteraction}
+                    userFavorites={userFavorites}
+                  />
+                </div>
+
+                <AlbumsSection albums={albums} onAlbumClick={handleAlbumPageClick} activeGenre={activeGenre} />
+
+                <PlaylistsSection onAlbumClick={handleAlbumPageClick} activeGenre={activeGenre} />
+              </>
+            )}
           </>
         ) : null}
         </main>

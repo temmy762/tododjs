@@ -90,6 +90,14 @@ const trackSchema = new mongoose.Schema({
     default: null,
     index: true
   },
+  categoryRaw: {
+    type: String,
+    default: null
+  },
+  categoryVerified: {
+    type: Boolean,
+    default: false
+  },
   collection: {
     type: String,
     default: 'New This Week'

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { 
   LayoutDashboard, 
@@ -37,11 +37,27 @@ import AdminMashups from './AdminMashups';
 import AdminCategories from './AdminCategories';
 import AdminUserDevices from './AdminUserDevices';
 import ErrorBoundary from '../ErrorBoundary';
+import API_URL from '../../config/api';
 
 export default function AdminDashboard({ onClose, user, onUserUpdate }) {
   const { t } = useTranslation();
   const [activeSection, setActiveSection] = useState('overview');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [uncategorizedCount, setUncategorizedCount] = useState(0);
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+
+  const fetchUncategorizedCount = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/categories/uncategorized/count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const d = await res.json();
+      if (d.success) setUncategorizedCount(d.count || 0);
+    } catch { /* non-fatal */ }
+  }, []);
+
+  useEffect(() => { fetchUncategorizedCount(); }, [fetchUncategorizedCount]);
 
   useEffect(() => {
     const onNavigate = (e) => {
@@ -187,6 +203,28 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
 
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto bg-dark-bg">
+          {/* Uncategorized tracks banner */}
+          {uncategorizedCount > 0 && !bannerDismissed && (
+            <div className="flex items-center justify-between gap-3 px-5 py-3 bg-amber-500/10 border-b border-amber-500/20">
+              <div className="flex items-center gap-2 text-amber-400 text-sm">
+                <span className="font-bold text-base">⚠</span>
+                <span>
+                  <strong>{uncategorizedCount.toLocaleString()} track{uncategorizedCount !== 1 ? 's' : ''}</strong> need category assignment
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setActiveSection('categories'); setBannerDismissed(true); }}
+                  className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold rounded-lg transition-all"
+                >
+                  Review Now
+                </button>
+                <button onClick={() => setBannerDismissed(true)} className="text-amber-400/60 hover:text-amber-400 transition-all">
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          )}
           <ErrorBoundary key={activeSection}>
             {renderContent()}
           </ErrorBoundary>

@@ -1,6 +1,7 @@
 import Category from '../models/Category.js';
 import Track from '../models/Track.js';
 import Mashup from '../models/Mashup.js';
+import { clearCategoryCache } from '../services/categoryDetection.js';
 
 // @desc    Get all active categories (public)
 // @route   GET /api/categories
@@ -55,6 +56,7 @@ export const createCategory = async (req, res) => {
       createdBy: req.user.id
     });
 
+    clearCategoryCache();
     res.status(201).json({ success: true, data: category });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -96,6 +98,7 @@ export const updateCategory = async (req, res) => {
     if (isActive !== undefined) category.isActive = isActive;
 
     await category.save();
+    clearCategoryCache();
     res.json({ success: true, data: category });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -114,6 +117,7 @@ export const deleteCategory = async (req, res) => {
     await Track.updateMany({ category: category.name }, { $set: { category: null } });
 
     await category.deleteOne();
+    clearCategoryCache();
     res.json({ success: true, message: 'Category deleted' });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -176,6 +180,70 @@ export const getCategoryTracks = async (req, res) => {
 // @desc    Seed initial categories from the hardcoded list (admin utility)
 // @route   POST /api/categories/seed
 // @access  Admin
+// @desc    Count of uncategorized tracks (for admin banner)
+// @route   GET /api/categories/uncategorized/count
+// @access  Admin
+export const getUncategorizedCount = async (req, res) => {
+  try {
+    const count = await Track.countDocuments({ category: 'Others', categoryVerified: false });
+    const rawLabels = await Track.aggregate([
+      { $match: { category: 'Others', categoryRaw: { $ne: null } } },
+      { $group: { _id: '$categoryRaw', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 20 }
+    ]);
+    res.json({ success: true, count, rawLabels });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// @desc    Get paginated uncategorized tracks
+// @route   GET /api/categories/uncategorized/tracks
+// @access  Admin
+export const getUncategorizedTracks = async (req, res) => {
+  try {
+    const { page = 1, limit = 50, rawLabel } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const match = { category: 'Others', categoryVerified: false };
+    if (rawLabel) match.categoryRaw = rawLabel;
+    const [total, tracks] = await Promise.all([
+      Track.countDocuments(match),
+      Track.find(match)
+        .sort('-dateAdded')
+        .skip(skip)
+        .limit(parseInt(limit))
+        .select('title artist categoryRaw dateAdded coverArt')
+        .lean()
+    ]);
+    res.json({ success: true, data: tracks, pagination: { total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)) } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// @desc    Bulk-assign category to tracks
+// @route   POST /api/categories/bulk-assign
+// @access  Admin
+export const bulkAssignCategory = async (req, res) => {
+  try {
+    const { trackIds, categoryName } = req.body;
+    if (!trackIds?.length || !categoryName) {
+      return res.status(400).json({ success: false, message: 'trackIds and categoryName are required' });
+    }
+    const category = await Category.findOne({ name: categoryName });
+    if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
+
+    const result = await Track.updateMany(
+      { _id: { $in: trackIds } },
+      { $set: { category: categoryName, categoryVerified: true } }
+    );
+    res.json({ success: true, updated: result.modifiedCount });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 export const seedCategories = async (req, res) => {
   const defaults = [
     { name: 'Intensa Music', color: '#EF4444', sortOrder: 1 },

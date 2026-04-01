@@ -14,7 +14,9 @@ import { pipeline as pipelineAsync } from 'stream/promises';
 import { parseBuffer } from 'music-metadata';
 import { detectTonality } from '../services/tonalityDetection.js';
 import { detectGenre, mapToFixedGenre } from '../services/genreDetection.js';
-import { detectCategory } from '../services/categoryDetection.js';
+import { detectCategoryAsync } from '../services/categoryDetection.js';
+import { sendEmail } from '../services/emailService.js';
+import User from '../models/User.js';
 import { generateCollectionName, detectGenres, extractDateFromFolderName } from '../utils/collectionNameGenerator.js';
 
 // Strip cloud-storage timestamp suffix from folder names e.g. -20260324T054836Z-1-002
@@ -32,6 +34,71 @@ function withTimeout(promise, timeoutMs, timeoutValue) {
   return Promise.race([promise, timeoutPromise]).finally(() => {
     if (timer) clearTimeout(timer);
   });
+}
+
+// ─── Post-upload: notify admin about tracks that landed in 'Others' ──────────
+async function notifyAdminUncategorized(collectionId, collectionName) {
+  try {
+    const count = await Track.countDocuments({ collectionId, category: 'Others' });
+    if (count === 0) return;
+
+    // Surface raw labels that were detected but didn't match any known category
+    const rawLabels = await Track.aggregate([
+      { $match: { collectionId, category: 'Others', categoryRaw: { $ne: null } } },
+      { $group: { _id: '$categoryRaw', count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 10 }
+    ]);
+
+    const adminEmail = process.env.ADMIN_EMAIL;
+    if (!adminEmail) return;
+
+    const labelRows = rawLabels.length
+      ? rawLabels.map(r => `<tr><td style="padding:6px 12px;border-bottom:1px solid #1a1a1a;">${r._id}</td><td style="padding:6px 12px;border-bottom:1px solid #1a1a1a;text-align:center;">${r.count}</td></tr>`).join('')
+      : '<tr><td colspan="2" style="padding:10px;color:#666;">No label hints detected in titles</td></tr>';
+
+    const html = `
+      <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;background:#0a0a0a;color:#fff;border-radius:12px;overflow:hidden;">
+        <div style="background:linear-gradient(135deg,#6366f1,#8b5cf6);padding:28px;text-align:center;">
+          <h1 style="margin:0;font-size:22px;font-weight:700;">⚠ Uncategorized Tracks</h1>
+          <p style="margin:8px 0 0;opacity:.8;font-size:14px;">Action required in TodoDJs Admin</p>
+        </div>
+        <div style="padding:28px;">
+          <p style="font-size:15px;color:#ccc;line-height:1.6;">
+            Collection <strong style="color:#fff;">${collectionName}</strong> finished processing.<br>
+            <strong style="color:#f59e0b;font-size:18px;">${count} track${count !== 1 ? 's' : ''}</strong> could not be matched to a known category and were placed in <strong>Others</strong>.
+          </p>
+          ${rawLabels.length ? `
+          <p style="font-size:13px;color:#888;margin-top:20px;margin-bottom:8px;">Labels detected in titles but not yet in your category list:</p>
+          <table style="width:100%;border-collapse:collapse;font-size:13px;color:#ccc;">
+            <thead><tr style="background:#111;">
+              <th style="padding:8px 12px;text-align:left;color:#888;">Detected Label</th>
+              <th style="padding:8px 12px;text-align:center;color:#888;">Tracks</th>
+            </tr></thead>
+            <tbody>${labelRows}</tbody>
+          </table>
+          <p style="font-size:12px;color:#555;margin-top:10px;">Tip: create these as categories in the admin panel and they'll auto-assign on the next upload.</p>
+          ` : ''}
+          <div style="margin-top:24px;text-align:center;">
+            <a href="${process.env.FRONTEND_URL || 'https://tododjs.com'}/#admin-categories" style="display:inline-block;padding:12px 28px;background:#7C3AED;color:#fff;text-decoration:none;border-radius:8px;font-weight:600;font-size:14px;">Review in Admin Panel</a>
+          </div>
+        </div>
+        <div style="padding:16px 28px;border-top:1px solid #1a1a1a;text-align:center;">
+          <p style="margin:0;font-size:12px;color:#555;">© ${new Date().getFullYear()} TodoDJs</p>
+        </div>
+      </div>`;
+
+    await sendEmail({
+      to: adminEmail,
+      subject: `⚠ ${count} uncategorized track${count !== 1 ? 's' : ''} in "${collectionName}"`,
+      html,
+      text: `${count} tracks in "${collectionName}" were placed in "Others" and need category assignment. Log in to review them at ${process.env.FRONTEND_URL || 'https://tododjs.com'}.`
+    });
+
+    console.log(`📧 Admin notified: ${count} uncategorized tracks in "${collectionName}"`);
+  } catch (err) {
+    console.error('notifyAdminUncategorized error:', err.message);
+  }
 }
 
 // @desc    Reprocess a collection from its stored Wasabi ZIP (useful after server restart)
@@ -1029,7 +1096,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
               title: metadata.title,
               artist: metadata.artist,
               genre: genreResult.genre || album.genre || 'Others',
-              category: detectCategory(metadata.title, finalAlbumName) || null,
+              ...(await detectCategoryAsync(metadata.title, finalAlbumName)),
+              categoryVerified: false,
               genreConfidence: genreResult.confidence,
               genreSource: genreResult.source,
               genreNeedsReview: genreResult.needsManualReview,
@@ -1172,6 +1240,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       console.log(`\n Collection processing completed!`);
       console.log(`   Albums: ${totalAlbumsNested}`);
       console.log(`   Tracks: ${totalTracksNested}`);
+
+      setImmediate(() => notifyAdminUncategorized(collection._id, collection.name).catch(() => {}));
 
       if (fs.existsSync(zipFilePath)) {
         fs.unlinkSync(zipFilePath);
@@ -1410,6 +1480,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
     console.log(`   Albums: ${totalAlbums}`);
     console.log(`   Tracks: ${totalTracks}`);
 
+    setImmediate(() => notifyAdminUncategorized(collection._id, collection.name).catch(() => {}));
+
     if (fs.existsSync(zipFilePath)) {
       fs.unlinkSync(zipFilePath);
       console.log(' Cleaned up temp ZIP file');
@@ -1562,7 +1634,8 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
           title: metadata.title,
           artist: metadata.artist,
           genre: genreResult.genre || album.genre || 'Others',
-          category: detectCategory(metadata.title, albumName) || null,
+          ...(await detectCategoryAsync(metadata.title, albumName)),
+          categoryVerified: false,
           genreConfidence: genreResult.confidence,
           genreSource: genreResult.source,
           genreNeedsReview: genreResult.needsManualReview,
@@ -1781,7 +1854,8 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
         title: metadata.title,
         artist: metadata.artist,
         genre: genreResult.genre || genre || 'Others',
-        category: detectCategory(metadata.title, albumName) || null,
+        ...(await detectCategoryAsync(metadata.title, albumName)),
+        categoryVerified: false,
         genreConfidence: genreResult.confidence,
         genreSource: genreResult.source,
         genreNeedsReview: genreResult.needsManualReview,

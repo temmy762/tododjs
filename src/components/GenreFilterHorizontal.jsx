@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Music, Layers } from 'lucide-react';
 import API_URL from '../config/api';
 
+// activeCategory = category NAME (e.g. "Latin Box"), not slug
 export default function GenreFilterHorizontal({ activeCategory, onCategoryChange }) {
   const [categories, setCategories] = useState([]);
 
@@ -36,11 +37,11 @@ export default function GenreFilterHorizontal({ activeCategory, onCategoryChange
             </button>
 
             {categories.map((cat) => {
-              const isActive = activeCategory === cat.slug;
+              const isActive = activeCategory === cat.name;
               return (
                 <button
                   key={cat._id}
-                  onClick={() => onCategoryChange(cat.slug, cat.name)}
+                  onClick={() => onCategoryChange(cat.name)}
                   className={`flex-shrink-0 flex items-center gap-2.5 px-5 py-2.5 rounded-lg font-medium text-sm transition-all duration-200 ${
                     isActive
                       ? 'text-white shadow-lg'

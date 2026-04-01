@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
-  Plus, Pencil, Trash2, Save, X, Tag, GripVertical,
-  Loader, AlertCircle, CheckCircle, RefreshCw, Hash
+  Plus, Pencil, Trash2, Save, X, Tag,
+  Loader, AlertCircle, CheckCircle, RefreshCw, Hash,
+  Inbox, Music, ChevronDown
 } from 'lucide-react';
 import API_URL from '../../config/api';
 
@@ -16,6 +17,7 @@ const DEFAULT_FORM = {
 };
 
 export default function AdminCategories() {
+  const [activeTab, setActiveTab] = useState('manage'); // 'manage' | 'review'
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -147,35 +149,50 @@ export default function AdminCategories() {
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
             <Tag className="text-accent" size={24} /> Categories
           </h1>
           <p className="text-brand-text-tertiary text-sm mt-1">
-            Manage the home page category tabs. These drive the navigation on the home page.
+            Manage home page category tabs and review uncategorized tracks.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {categories.length === 0 && (
-            <button
-              onClick={handleSeed}
-              disabled={seeding}
-              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/15 text-white text-sm rounded-lg transition-all"
-            >
+          {activeTab === 'manage' && categories.length === 0 && (
+            <button onClick={handleSeed} disabled={seeding}
+              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/15 text-white text-sm rounded-lg transition-all">
               {seeding ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
               Seed Defaults
             </button>
           )}
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/80 text-white text-sm font-medium rounded-lg transition-all"
-          >
-            <Plus size={16} /> New Category
-          </button>
+          {activeTab === 'manage' && (
+            <button onClick={openCreate}
+              className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/80 text-white text-sm font-medium rounded-lg transition-all">
+              <Plus size={16} /> New Category
+            </button>
+          )}
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 bg-dark-surface p-1 rounded-xl w-fit">
+        {[
+          { id: 'manage', label: 'Manage', icon: Tag },
+          { id: 'review', label: 'Review Queue', icon: Inbox },
+        ].map(({ id, label, icon: Icon }) => (
+          <button key={id} onClick={() => setActiveTab(id)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeTab === id ? 'bg-accent text-white' : 'text-brand-text-tertiary hover:text-white'
+            }`}>
+            <Icon size={14} /> {label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === 'review' && <ReviewQueue categories={categories} flash={flash} />}
+
+      {activeTab === 'manage' && (<>
       {/* Alerts */}
       {error && (
         <div className="flex items-center gap-2 mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
@@ -387,6 +404,195 @@ export default function AdminCategories() {
           </div>
         </div>
       )}
+      </>)}
+    </div>
+  );
+}
+
+// ─── Review Queue sub-component ─────────────────────────────────────────────
+function ReviewQueue({ categories, flash }) {
+  const [stats, setStats] = useState(null);
+  const [tracks, setTracks] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [selectedLabel, setSelectedLabel] = useState(null);
+  const [selected, setSelected] = useState(new Set());
+  const [assignTarget, setAssignTarget] = useState('');
+  const [assigning, setAssigning] = useState(false);
+  const [loadingTracks, setLoadingTracks] = useState(false);
+
+  const token = localStorage.getItem('token');
+
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_URL}/categories/uncategorized/count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const d = await res.json();
+      if (d.success) setStats(d);
+    } catch { /* ignore */ }
+  }, [token]);
+
+  const fetchTracks = useCallback(async () => {
+    setLoadingTracks(true);
+    try {
+      const params = new URLSearchParams({ page, limit: 50 });
+      if (selectedLabel) params.set('rawLabel', selectedLabel);
+      const res = await fetch(`${API_URL}/categories/uncategorized/tracks?${params}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const d = await res.json();
+      if (d.success) {
+        setTracks(d.data);
+        setTotalPages(d.pagination.pages || 1);
+      }
+    } catch { /* ignore */ }
+    finally { setLoadingTracks(false); }
+  }, [page, selectedLabel, token]);
+
+  useEffect(() => { fetchStats(); }, [fetchStats]);
+  useEffect(() => { fetchTracks(); setSelected(new Set()); }, [fetchTracks]);
+
+  const toggleSelect = (id) => {
+    setSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+  const selectAll = () => setSelected(new Set(tracks.map(t => t._id)));
+  const clearSelect = () => setSelected(new Set());
+
+  const handleBulkAssign = async () => {
+    if (!assignTarget) { flash('Select a target category', 'error'); return; }
+    if (!selected.size) { flash('Select at least one track', 'error'); return; }
+    setAssigning(true);
+    try {
+      const res = await fetch(`${API_URL}/categories/bulk-assign`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ trackIds: [...selected], categoryName: assignTarget })
+      });
+      const d = await res.json();
+      if (!d.success) throw new Error(d.message);
+      flash(`${d.updated} tracks assigned to "${assignTarget}"`);
+      setSelected(new Set());
+      setAssignTarget('');
+      fetchStats();
+      fetchTracks();
+    } catch (e) { flash(e.message, 'error'); }
+    finally { setAssigning(false); }
+  };
+
+  if (!stats) return <div className="flex items-center justify-center py-20"><Loader size={32} className="animate-spin text-accent" /></div>;
+
+  return (
+    <div className="space-y-5">
+      {/* Stats row */}
+      <div className="grid grid-cols-2 gap-4">
+        <div className="bg-dark-elevated border border-white/10 rounded-xl p-4">
+          <p className="text-xs text-brand-text-tertiary mb-1">Tracks needing assignment</p>
+          <p className="text-3xl font-bold text-amber-400">{stats.count.toLocaleString()}</p>
+        </div>
+        <div className="bg-dark-elevated border border-white/10 rounded-xl p-4">
+          <p className="text-xs text-brand-text-tertiary mb-1">Unique detected labels</p>
+          <p className="text-3xl font-bold text-white">{stats.rawLabels?.length || 0}</p>
+        </div>
+      </div>
+
+      {/* Detected raw labels */}
+      {stats.rawLabels?.length > 0 && (
+        <div className="bg-dark-elevated border border-white/10 rounded-xl p-4">
+          <p className="text-xs text-brand-text-tertiary mb-3 font-semibold uppercase tracking-wider">Labels Detected in Titles (not yet in your category list)</p>
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setSelectedLabel(null)}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${!selectedLabel ? 'bg-accent text-white' : 'bg-white/10 text-brand-text-tertiary hover:text-white'}`}>
+              All
+            </button>
+            {stats.rawLabels.map(({ _id, count }) => (
+              <button key={_id} onClick={() => setSelectedLabel(_id === selectedLabel ? null : _id)}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${selectedLabel === _id ? 'bg-accent text-white' : 'bg-white/10 text-brand-text-tertiary hover:text-white'}`}>
+                {_id}
+                <span className="bg-white/20 rounded-full px-1.5">{count}</span>
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-brand-text-tertiary/60 mt-3">
+            💡 Create a category with one of these names and it will auto-assign on the next upload.
+          </p>
+        </div>
+      )}
+
+      {/* Bulk assign bar */}
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 p-3 bg-accent/10 border border-accent/20 rounded-xl">
+          <span className="text-sm text-white font-medium">{selected.size} selected</span>
+          <select
+            value={assignTarget}
+            onChange={e => setAssignTarget(e.target.value)}
+            className="flex-1 bg-dark-surface text-white text-sm px-3 py-2 rounded-lg border border-white/10 focus:border-accent focus:outline-none"
+          >
+            <option value="">— Choose category —</option>
+            {categories.map(c => <option key={c._id} value={c.name}>{c.name}</option>)}
+          </select>
+          <button onClick={handleBulkAssign} disabled={assigning}
+            className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/80 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50">
+            {assigning ? <Loader size={13} className="animate-spin" /> : <CheckCircle size={13} />}
+            Assign
+          </button>
+          <button onClick={clearSelect} className="p-2 text-brand-text-tertiary hover:text-white rounded-lg transition-all">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
+      {/* Track list */}
+      <div className="bg-dark-elevated border border-white/10 rounded-xl overflow-hidden">
+        <div className="flex items-center justify-between p-3 border-b border-white/5">
+          <span className="text-xs text-brand-text-tertiary">
+            {selectedLabel ? `Showing tracks with label "${selectedLabel}"` : 'All uncategorized tracks'}
+          </span>
+          <button onClick={selectAll} className="text-xs text-accent hover:text-accent/80 transition-all">Select all</button>
+        </div>
+        {loadingTracks ? (
+          <div className="flex items-center justify-center py-12"><Loader size={24} className="animate-spin text-accent" /></div>
+        ) : tracks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-12 text-center">
+            <CheckCircle size={36} className="text-green-400 mb-2" />
+            <p className="text-white font-medium">All caught up!</p>
+            <p className="text-xs text-brand-text-tertiary mt-1">No uncategorized tracks in the queue.</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {tracks.map(t => (
+              <div key={t._id} onClick={() => toggleSelect(t._id)}
+                className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-all ${selected.has(t._id) ? 'bg-accent/10' : 'hover:bg-white/5'}`}>
+                <div className={`w-4 h-4 rounded border-2 flex-shrink-0 transition-all ${selected.has(t._id) ? 'bg-accent border-accent' : 'border-white/30'}`}>
+                  {selected.has(t._id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+                </div>
+                {t.coverArt && <img src={t.coverArt} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-white font-medium truncate">{t.title}</p>
+                  <p className="text-xs text-brand-text-tertiary truncate">{t.artist}</p>
+                </div>
+                {t.categoryRaw && (
+                  <span className="text-xs px-2 py-0.5 bg-amber-500/15 text-amber-400 rounded-full flex-shrink-0">{t.categoryRaw}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between p-3 border-t border-white/5">
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
+              className="text-xs text-brand-text-tertiary hover:text-white disabled:opacity-30 transition-all">← Prev</button>
+            <span className="text-xs text-brand-text-tertiary">{page} / {totalPages}</span>
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
+              className="text-xs text-brand-text-tertiary hover:text-white disabled:opacity-30 transition-all">Next →</button>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
