@@ -11,7 +11,7 @@ const router = express.Router();
 router.get('/', protect, authorize('admin'), async (req, res) => {
   try {
     const processingCollections = await Collection.find({
-      status: { $in: ['processing', 'uploading'] }
+      status: { $in: ['queued', 'processing', 'uploading'] }
     }).select('name status processingProgress totalDatePacks totalAlbums totalTracks createdAt updatedAt');
 
     const completedRecent = await Collection.find({

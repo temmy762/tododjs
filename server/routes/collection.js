@@ -16,6 +16,7 @@ import {
   uploadCollection,
   getCollections,
   getCollection,
+  getCollectionAlbums,
   updateCollection,
   deleteCollection,
   getCollectionStats,
@@ -26,7 +27,7 @@ import {
   cleanupDatePackNames
 } from '../controllers/collectionController.js';
 import { getDatePacksByCollection } from '../controllers/datePackController.js';
-import { protect, authorize } from '../middleware/auth.js';
+import { protect, authorize, optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -53,7 +54,7 @@ const thumbnailUpload = multer({
 });
 
 router.route('/')
-  .get(getCollections)
+  .get(optionalAuth, getCollections)
   .post(protect, authorize('admin'), upload.fields([
     { name: 'zipFile', maxCount: 1 },
     { name: 'thumbnailFile', maxCount: 1 }
@@ -66,6 +67,9 @@ router.route('/:id')
   .get(getCollection)
   .put(protect, authorize('admin'), thumbnailUpload.single('thumbnailFile'), updateCollection)
   .delete(protect, authorize('admin'), deleteCollection);
+
+router.route('/:id/albums')
+  .get(optionalAuth, getCollectionAlbums);
 
 router.route('/:id/stats')
   .get(getCollectionStats);

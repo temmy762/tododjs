@@ -17,6 +17,7 @@ import { detectGenre, mapToFixedGenre } from '../services/genreDetection.js';
 import { detectCategoryAsync } from '../services/categoryDetection.js';
 import { sendEmail } from '../services/emailService.js';
 import User from '../models/User.js';
+import { enqueueCollection } from '../services/processingQueue.js';
 import { generateCollectionName, detectGenres, extractDateFromFolderName } from '../utils/collectionNameGenerator.js';
 
 // Strip cloud-storage timestamp suffix from folder names e.g. -20260324T054836Z-1-002
@@ -101,6 +102,50 @@ async function notifyAdminUncategorized(collectionId, collectionName) {
   }
 }
 
+// ─── Auto-assign cover art to Albums, DatePacks, and Collection ──────────────
+async function autoAssignThumbnails(collectionId) {
+  try {
+    // 1. Albums — pick a random track cover per album
+    const albums = await Album.find({ collectionId, $or: [{ coverArt: null }, { coverArt: '' }, { coverArt: { $exists: false } }] });
+    for (const album of albums) {
+      const track = await Track.findOne({ albumId: album._id, coverArt: { $nin: [null, ''] } });
+      if (track?.coverArt) {
+        album.coverArt = track.coverArt;
+        await album.save();
+      }
+    }
+
+    // 2. DatePacks — pick a random track cover from any track in the pack
+    const datePacks = await DatePack.find({ collectionId, $or: [{ thumbnail: null }, { thumbnail: '' }, { thumbnail: { $exists: false } }] });
+    for (const dp of datePacks) {
+      const track = await Track.findOne({ datePackId: dp._id, coverArt: { $nin: [null, ''] } });
+      if (track?.coverArt) {
+        dp.thumbnail = track.coverArt;
+        await dp.save();
+      }
+    }
+
+    // 3. Collection — pick a random track cover from any track
+    const collection = await Collection.findById(collectionId);
+    if (collection && !collection.thumbnail) {
+      const track = await Track.findOne({ collectionId, coverArt: { $nin: [null, ''] } });
+      if (track?.coverArt) {
+        collection.thumbnail = track.coverArt;
+        await collection.save();
+      } else {
+        // No cover art found at all — notify admin via a flag
+        collection.missingThumbnail = true;
+        await collection.save();
+        console.log(`⚠ No cover art found for collection "${collection.name}" — admin notified via banner`);
+      }
+    }
+
+    console.log(`🖼  Auto-thumbnails assigned for collection ${collectionId}`);
+  } catch (err) {
+    console.error('autoAssignThumbnails error:', err.message);
+  }
+}
+
 // @desc    Reprocess a collection from its stored Wasabi ZIP (useful after server restart)
 // @route   POST /api/collections/:id/reprocess
 // @access  Private/Admin
@@ -158,12 +203,10 @@ export const reprocessCollection = async (req, res) => {
     console.log(`✅ Reprocess: ZIP downloaded to temp file: ${outPath}`);
 
     console.log(`🧵 Queuing reprocess background worker for collection: ${collection._id}`);
-    setImmediate(() => {
-      processCollectionAsync(collection._id, outPath, collection, [], [], { skipZipUpload: true })
-        .catch((e) => {
-          console.error(`❌ Unhandled processCollectionAsync rejection for reprocess ${collection._id}:`, e);
-        });
-    });
+    enqueueCollection(
+      () => processCollectionAsync(collection._id, outPath, collection, [], [], { skipZipUpload: true }),
+      collection._id
+    );
 
     return res.status(200).json({
       success: true,
@@ -756,14 +799,12 @@ export const uploadCollection = async (req, res) => {
       }
     });
 
-    // Background: process the ZIP file
+    // Background: process the ZIP file via queue (prevents concurrent stalling)
     console.log(` Queuing background processing for collection: ${collection._id}`);
-    setImmediate(() => {
-      processCollectionAsync(collection._id, zipFile.path, collection, createdDatePacks, createdAlbums)
-        .catch((e) => {
-          console.error(` Unhandled processCollectionAsync rejection for ${collection._id}:`, e);
-        });
-    });
+    enqueueCollection(
+      () => processCollectionAsync(collection._id, zipFile.path, collection, createdDatePacks, createdAlbums),
+      collection._id
+    );
   } catch (error) {
     console.error('Collection upload error:', error);
     res.status(500).json({
@@ -816,6 +857,13 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
   const tempFilesToClean = [];
   try {
     console.log(`\n Starting collection processing: ${collection.name}`);
+
+    // Move from 'queued' to 'processing' now that we have a slot
+    if (collection.status === 'queued' || collection.status === 'pending') {
+      collection.status = 'processing';
+      collection.processingProgress = 0;
+      await collection.save();
+    }
 
     if (!opts.skipZipUpload) {
       const zipSizeGB = (fs.statSync(zipFilePath).size / (1024 * 1024 * 1024)).toFixed(2);
@@ -1241,6 +1289,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       console.log(`   Albums: ${totalAlbumsNested}`);
       console.log(`   Tracks: ${totalTracksNested}`);
 
+      setImmediate(() => autoAssignThumbnails(collection._id).catch(() => {}));
       setImmediate(() => notifyAdminUncategorized(collection._id, collection.name).catch(() => {}));
 
       if (fs.existsSync(zipFilePath)) {
@@ -1480,6 +1529,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
     console.log(`   Albums: ${totalAlbums}`);
     console.log(`   Tracks: ${totalTracks}`);
 
+    setImmediate(() => autoAssignThumbnails(collection._id).catch(() => {}));
     setImmediate(() => notifyAdminUncategorized(collection._id, collection.name).catch(() => {}));
 
     if (fs.existsSync(zipFilePath)) {
@@ -1902,10 +1952,12 @@ function extractBPMFromFilename(filename) {
 
 // @desc    Get all collections
 // @route   GET /api/collections
-// @access  Public
+// @access  Public (completed only) / Admin (all)
 export const getCollections = async (req, res) => {
   try {
-    const collections = await Collection.find()
+    const isAdmin = req.user?.role === 'admin';
+    const filter = isAdmin ? {} : { status: 'completed' };
+    const collections = await Collection.find(filter)
       .populate('sourceId', 'name thumbnail')
       .sort('-createdAt');
 
@@ -1919,6 +1971,43 @@ export const getCollections = async (req, res) => {
       success: false,
       message: error.message
     });
+  }
+};
+
+// @desc    Get all albums in a collection (flat, sorted by datePack date desc)
+// @route   GET /api/collections/:id/albums
+// @access  Public
+export const getCollectionAlbums = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const isAdmin = req.user?.role === 'admin';
+
+    const collection = await Collection.findById(id).lean();
+    if (!collection) return res.status(404).json({ success: false, message: 'Collection not found' });
+    if (!isAdmin && collection.status !== 'completed') {
+      return res.status(404).json({ success: false, message: 'Collection not found' });
+    }
+
+    // Get all datepacks for sorting context
+    const datePacks = await DatePack.find({ collectionId: id }).sort('-date').lean();
+    const datePackOrder = new Map(datePacks.map((dp, i) => [dp._id.toString(), i]));
+    const datePackDates = new Map(datePacks.map(dp => [dp._id.toString(), dp.date]));
+
+    const albums = await Album.find({ collectionId: id })
+      .select('_id name coverArt trackCount genre year datePackId')
+      .lean();
+
+    // Attach datePackDate for sorting, then sort newest first
+    const enriched = albums.map(a => ({
+      ...a,
+      datePackDate: datePackDates.get(a.datePackId?.toString()) || null,
+      datePackOrder: datePackOrder.get(a.datePackId?.toString()) ?? 999
+    }));
+    enriched.sort((a, b) => (a.datePackOrder - b.datePackOrder) || a.name.localeCompare(b.name));
+
+    res.json({ success: true, count: enriched.length, data: enriched });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 

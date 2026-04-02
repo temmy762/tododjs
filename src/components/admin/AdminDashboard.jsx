@@ -45,6 +45,8 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [uncategorizedCount, setUncategorizedCount] = useState(0);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [missingThumbnailCollections, setMissingThumbnailCollections] = useState([]);
+  const [thumbBannerDismissed, setThumbBannerDismissed] = useState(false);
 
   const fetchUncategorizedCount = useCallback(async () => {
     try {
@@ -57,7 +59,24 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
     } catch { /* non-fatal */ }
   }, []);
 
-  useEffect(() => { fetchUncategorizedCount(); }, [fetchUncategorizedCount]);
+  const fetchMissingThumbnails = useCallback(async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/collections?all=true`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const d = await res.json();
+      if (d.success) {
+        const missing = (d.data || []).filter(c => c.missingThumbnail && c.status === 'completed');
+        setMissingThumbnailCollections(missing);
+      }
+    } catch { /* non-fatal */ }
+  }, []);
+
+  useEffect(() => {
+    fetchUncategorizedCount();
+    fetchMissingThumbnails();
+  }, [fetchUncategorizedCount, fetchMissingThumbnails]);
 
   useEffect(() => {
     const onNavigate = (e) => {
@@ -203,6 +222,29 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
 
         {/* Main Content */}
         <div className="flex-1 overflow-y-auto bg-dark-bg">
+          {/* Missing thumbnail banner */}
+          {missingThumbnailCollections.length > 0 && !thumbBannerDismissed && (
+            <div className="flex items-center justify-between gap-3 px-5 py-3 bg-blue-500/10 border-b border-blue-500/20">
+              <div className="flex items-center gap-2 text-blue-400 text-sm">
+                <span className="font-bold text-base">🖼</span>
+                <span>
+                  <strong>{missingThumbnailCollections.length} collection{missingThumbnailCollections.length !== 1 ? 's' : ''}</strong> {missingThumbnailCollections.length === 1 ? 'has' : 'have'} no cover art — no track cover found in ZIP
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setActiveSection('recordpool'); setThumbBannerDismissed(true); }}
+                  className="px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-xs font-semibold rounded-lg transition-all"
+                >
+                  Go to Record Pool
+                </button>
+                <button onClick={() => setThumbBannerDismissed(true)} className="text-blue-400/60 hover:text-blue-400 transition-all">
+                  <X size={14} />
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Uncategorized tracks banner */}
           {uncategorizedCount > 0 && !bannerDismissed && (
             <div className="flex items-center justify-between gap-3 px-5 py-3 bg-amber-500/10 border-b border-amber-500/20">

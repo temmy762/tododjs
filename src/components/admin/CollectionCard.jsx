@@ -10,15 +10,15 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete })
     switch (status) {
       case 'completed': return 'text-green-500';
       case 'processing': return 'text-yellow-500';
+      case 'queued': return 'text-blue-400';
       case 'failed': return 'text-red-500';
       default: return 'text-brand-text-tertiary';
     }
   };
 
   const getStatusIcon = (status) => {
-    if (status === 'processing') {
-      return <Loader size={16} className="animate-spin" />;
-    }
+    if (status === 'processing') return <Loader size={16} className="animate-spin" />;
+    if (status === 'queued') return <Loader size={16} className="animate-spin opacity-60" />;
     return null;
   };
 
@@ -74,6 +74,13 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete })
             </button>
           </div>
         </div>
+
+        {collection.status === 'queued' && (
+          <div className="absolute top-3 right-3 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-500 flex items-center gap-2">
+            <Loader size={14} className="animate-spin opacity-60" />
+            <span className="text-xs font-medium">Queued</span>
+          </div>
+        )}
 
         {collection.status === 'processing' && (
           <div className="absolute top-3 right-3 px-3 py-1 rounded-full bg-yellow-500/20 border border-yellow-500 flex items-center gap-2">

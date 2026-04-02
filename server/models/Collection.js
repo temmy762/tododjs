@@ -61,8 +61,12 @@ const collectionSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['pending', 'processing', 'completed', 'failed'],
+    enum: ['pending', 'queued', 'processing', 'completed', 'failed'],
     default: 'pending'
+  },
+  missingThumbnail: {
+    type: Boolean,
+    default: false
   },
   processingProgress: {
     type: Number,

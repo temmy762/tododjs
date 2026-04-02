@@ -1,86 +1,57 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Disc, Calendar, Music, ChevronRight, ArrowLeft, Loader, Download, Play } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
+import { Disc, Music, ChevronRight, ArrowLeft, Loader, Download, Play } from 'lucide-react';
 import API_URL from '../config/api';
 
+// Gradient fallbacks when a card has no thumbnail
+const GRADIENTS = [
+  'from-purple-600 to-indigo-800',
+  'from-pink-600 to-rose-800',
+  'from-blue-600 to-cyan-800',
+  'from-orange-600 to-red-800',
+  'from-green-600 to-teal-800',
+  'from-yellow-600 to-amber-800',
+];
 
-export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackInteraction }) {
-  const { t } = useTranslation();
-  const [view, setView] = useState('list'); // list | dateCards | albums
+export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
+  const [view, setView] = useState('list'); // list | albums
   const [collections, setCollections] = useState([]);
-  const [sources, setSources] = useState([]);
-  const [dateCards, setDateCards] = useState([]);
   const [albums, setAlbums] = useState([]);
-  const [selectedParent, setSelectedParent] = useState(null); // { ...item, _type: 'collection'|'source' }
-  const [selectedDateCard, setSelectedDateCard] = useState(null);
+  const [selectedCollection, setSelectedCollection] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchAll = useCallback(async () => {
+  const fetchCollections = useCallback(async () => {
     try {
       setLoading(true);
-      const [colRes, srcRes] = await Promise.all([
-        fetch(`${API_URL}/collections`),
-        fetch(`${API_URL}/sources`)
-      ]);
-      const [colData, srcData] = await Promise.all([colRes.json(), srcRes.json()]);
-      if (colData.success) setCollections((colData.data || []).filter(c => c.status === 'completed'));
-      if (srcData.success) setSources(srcData.data || []);
-    } catch (err) { console.error('Error fetching record pool:', err); }
+      const res = await fetch(`${API_URL}/collections`);
+      const data = await res.json();
+      if (data.success) setCollections(data.data || []);
+    } catch (err) { console.error('Error fetching collections:', err); }
     finally { setLoading(false); }
   }, []);
 
-  const fetchDateCards = useCallback(async (parent) => {
+  const fetchAlbums = useCallback(async (collectionId) => {
     try {
       setLoading(true);
-      const url = parent._type === 'source'
-        ? `${API_URL}/date-packs/source/${parent._id}`
-        : `${API_URL}/collections/${parent._id}/date-packs`;
-      const res = await fetch(url);
+      const res = await fetch(`${API_URL}/collections/${collectionId}/albums`);
       const data = await res.json();
-      if (data.success) setDateCards(data.data);
-    } catch (err) { console.error('Error fetching date cards:', err); }
-    finally { setLoading(false); }
-  }, []);
-
-  const fetchAlbums = useCallback(async (dateCardId) => {
-    try {
-      setLoading(true);
-      const res = await fetch(`${API_URL}/date-packs/${dateCardId}/albums`);
-      const data = await res.json();
-      if (data.success) setAlbums(data.data);
+      if (data.success) setAlbums(data.data || []);
     } catch (err) { console.error('Error fetching albums:', err); }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => { fetchCollections(); }, [fetchCollections]);
 
-  const openParent = (item) => {
-    setSelectedParent(item);
-    setSelectedDateCard(null);
-    setView('dateCards');
-    fetchDateCards(item);
-  };
-
-  const openDateCard = (dc) => {
-    setSelectedDateCard(dc);
+  const openCollection = (col) => {
+    setSelectedCollection(col);
     setView('albums');
-    fetchAlbums(dc._id);
+    fetchAlbums(col._id);
   };
 
   const goBack = () => {
-    if (view === 'albums') {
-      setView('dateCards');
-      setSelectedDateCard(null);
-    } else if (view === 'dateCards') {
-      setView('list');
-      setSelectedParent(null);
-    }
+    setView('list');
+    setSelectedCollection(null);
+    setAlbums([]);
   };
-
-  const allItems = [
-    ...collections.map(c => ({ ...c, _type: 'collection' })),
-    ...sources.map(s => ({ ...s, _type: 'source' }))
-  ];
 
   return (
     <div className="px-4 sm:px-6 md:px-10 py-4 md:py-6">
@@ -88,52 +59,36 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
       <div className="mb-8">
         {view !== 'list' && (
           <button onClick={goBack} className="flex items-center gap-1.5 text-brand-text-tertiary hover:text-white transition-colors mb-4 text-sm">
-            <ArrowLeft size={16} /> Back
+            <ArrowLeft size={16} /> Back to Record Pools
           </button>
         )}
 
         {view === 'list' && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">Records Pools</h1>
-            <p className="text-brand-text-tertiary">Accede a todas tus record pools y packs Premium en un único lugar.</p>
+            <h1 className="text-3xl sm:text-4xl font-bold text-white mb-2">Record Pools</h1>
+            <p className="text-brand-text-tertiary">Access all your premium record pools in one place.</p>
           </div>
         )}
 
-        {view === 'dateCards' && selectedParent && (
-          <ParentHeader parent={selectedParent} />
-        )}
-
-        {view === 'albums' && selectedDateCard && selectedParent && (
-          <DateCardHeader dateCard={selectedDateCard} parent={selectedParent} />
+        {view === 'albums' && selectedCollection && (
+          <CollectionHeader collection={selectedCollection} />
         )}
       </div>
 
-      {/* Unified List Grid */}
+      {/* Collection Cards */}
       {view === 'list' && (
         loading ? <LoadingState /> : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {allItems.map((item, i) => (
-              <PoolCard key={`${item._type}-${item._id}`} item={item} index={i} onClick={() => openParent(item)} />
+            {collections.map((col, i) => (
+              <PoolCard key={col._id} item={col} index={i} onClick={() => openCollection(col)} />
             ))}
-            {allItems.length === 0 && <EmptyState icon={Disc} text="No record pools available yet" />}
+            {collections.length === 0 && <EmptyState icon={Disc} text="No record pools available yet" />}
           </div>
         )
       )}
 
-      {/* Date Cards */}
-      {view === 'dateCards' && selectedParent && (
-        loading ? <LoadingState /> : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {dateCards.map((dc, i) => (
-              <DateCard key={dc._id} dateCard={dc} index={i} onClick={() => openDateCard(dc)} />
-            ))}
-            {dateCards.length === 0 && <EmptyState icon={Calendar} text="No date cards yet" />}
-          </div>
-        )
-      )}
-
-      {/* Albums */}
-      {view === 'albums' && selectedDateCard && (
+      {/* Albums (flat, sorted by date) */}
+      {view === 'albums' && (
         loading ? <LoadingState /> : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {albums.map((album, i) => (
@@ -146,7 +101,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
                 onDownload={() => onAlbumDownload?.(album)}
               />
             ))}
-            {albums.length === 0 && <EmptyState icon={Music} text="No albums in this date pack yet" />}
+            {albums.length === 0 && <EmptyState icon={Music} text="No albums in this collection yet" />}
           </div>
         )
       )}
@@ -154,68 +109,40 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, onTrackI
   );
 }
 
-// Parent Header (Collection or Source)
-function ParentHeader({ parent }) {
+// Collection header shown when albums view is open
+function CollectionHeader({ collection }) {
   return (
     <div className="flex items-center gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-xl shadow-black/30 flex-shrink-0 bg-dark-surface flex items-center justify-center">
-        {parent.thumbnail
-          ? <img src={parent.thumbnail} alt={parent.name} className="w-full h-full object-cover" />
-          : <Disc size={36} className="text-accent" />}
+        {collection.thumbnail
+          ? <img src={collection.thumbnail} alt={collection.name} className="w-full h-full object-cover" />
+          : <div className={`w-full h-full bg-gradient-to-br ${GRADIENTS[0]} flex items-center justify-center`}><Disc size={32} className="text-white/60" /></div>}
       </div>
       <div>
         <p className="text-xs text-accent font-semibold uppercase tracking-wider mb-1">Record Pool</p>
-        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">{parent.name}</h1>
-        <div className="flex items-center gap-3 text-sm text-brand-text-tertiary">
-          {parent.year && <span>{parent.year}</span>}
-          {parent.platform && <><span className="text-white/20">|</span><span>{parent.platform}</span></>}
-          {parent._type === 'collection' && <><span className="text-white/20">|</span><span>{parent.totalDatePacks || 0} date packs</span></>}
-          <span className="text-white/20">|</span>
-          <span>{parent.totalTracks || 0} tracks</span>
+        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">{collection.name}</h1>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-brand-text-tertiary">
+          {collection.year && <span>{collection.year}</span>}
+          <span className="text-white/20">·</span>
+          <span className="flex items-center gap-1"><Disc size={13} className="text-accent" />{collection.totalAlbums || 0} albums</span>
+          <span className="text-white/20">·</span>
+          <span className="flex items-center gap-1"><Music size={13} className="text-accent" />{collection.totalTracks || 0} tracks</span>
         </div>
       </div>
     </div>
   );
 }
 
-// Date Card Header
-function DateCardHeader({ dateCard, parent }) {
-  const dateStr = new Date(dateCard.date).toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
-  return (
-    <div className="flex items-center gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-xl shadow-black/30 flex-shrink-0 bg-dark-surface flex items-center justify-center">
-        {dateCard.thumbnail
-          ? <img src={dateCard.thumbnail} alt={dateCard.name} className="w-full h-full object-cover" />
-          : <Calendar size={36} className="text-accent" />}
-      </div>
-      <div>
-        <div className="flex items-center gap-2 text-xs text-brand-text-tertiary mb-1">
-          <span className="text-accent font-semibold uppercase tracking-wider">Date Pack</span>
-          <ChevronRight size={12} />
-          <span>{parent.name}</span>
-        </div>
-        <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">{dateCard.name}</h1>
-        <div className="flex items-center gap-3 text-sm text-brand-text-tertiary">
-          <Calendar size={14} className="text-accent" />
-          <span>{dateStr}</span>
-          <span className="text-white/20">|</span>
-          <span>{dateCard.totalAlbums || 0} albums</span>
-          <span className="text-white/20">|</span>
-          <span>{dateCard.totalTracks || 0} tracks</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Unified Pool Card (Collection or Source)
+// Mother card for a collection
 function PoolCard({ item, index, onClick }) {
+  const gradient = GRADIENTS[index % GRADIENTS.length];
   return (
     <div
       onClick={onClick}
       className="group cursor-pointer rounded-2xl overflow-hidden bg-dark-elevated border border-white/5 hover:border-accent/30 transition-all duration-500 hover:shadow-xl hover:shadow-accent/5 hover:-translate-y-1 animate-in fade-in slide-in-from-bottom-4"
-      style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'both' }}
+      style={{ animationDelay: `${index * 60}ms`, animationFillMode: 'both' }}
     >
+      {/* Cover */}
       <div className="relative aspect-[4/3] overflow-hidden bg-dark-surface">
         {item.thumbnail ? (
           <img
@@ -224,63 +151,28 @@ function PoolCard({ item, index, onClick }) {
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center"><Disc size={48} className="text-white/10" /></div>
+          <div className={`w-full h-full bg-gradient-to-br ${gradient} flex items-center justify-center`}>
+            <Disc size={52} className="text-white/20" />
+          </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
         <div className="absolute bottom-0 left-0 right-0 p-5">
-          <h3 className="text-xl font-bold text-white mb-1 drop-shadow-lg">{item.name}</h3>
-          <p className="text-white/60 text-sm">{item.year}{item.platform && ` • ${item.platform}`}</p>
+          <h3 className="text-xl font-bold text-white mb-1 drop-shadow-lg line-clamp-2">{item.name}</h3>
+          <p className="text-white/60 text-sm">{item.year}{item.platform && ` · ${item.platform}`}</p>
         </div>
         <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
       </div>
-      <div className="p-4 flex items-center justify-between">
+      {/* Stats */}
+      <div className="px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4 text-sm">
-          {item._type === 'collection'
-            ? <span className="text-brand-text-tertiary"><Disc size={14} className="inline mr-1 text-accent" />{item.totalDatePacks || 0} packs</span>
-            : <span className="text-brand-text-tertiary"><Disc size={14} className="inline mr-1 text-accent" />{item.totalAlbums || 0} albums</span>
-          }
-          <span className="text-brand-text-tertiary"><Music size={14} className="inline mr-1 text-accent" />{item.totalTracks || 0} tracks</span>
+          <span className="text-brand-text-tertiary flex items-center gap-1">
+            <Disc size={13} className="text-accent" />{item.totalAlbums || 0} albums
+          </span>
+          <span className="text-brand-text-tertiary flex items-center gap-1">
+            <Music size={13} className="text-accent" />{item.totalTracks || 0} tracks
+          </span>
         </div>
         <ChevronRight size={18} className="text-brand-text-tertiary group-hover:text-accent group-hover:translate-x-1 transition-all duration-300" />
-      </div>
-    </div>
-  );
-}
-
-// Date Card with hover animation
-function DateCard({ dateCard, index, onClick }) {
-  const dateStr = new Date(dateCard.date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
-  return (
-    <div
-      onClick={onClick}
-      className="group cursor-pointer rounded-2xl overflow-hidden bg-dark-elevated border border-white/5 hover:border-accent/30 transition-all duration-500 hover:shadow-xl hover:shadow-accent/5 hover:-translate-y-1 animate-in fade-in slide-in-from-bottom-4"
-      style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'both' }}
-    >
-      <div className="relative aspect-square overflow-hidden bg-dark-surface">
-        {dateCard.thumbnail ? (
-          <img
-            src={dateCard.thumbnail}
-            alt={dateCard.name}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center"><Calendar size={48} className="text-white/10" /></div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-        <div className="absolute top-3 right-3 px-2.5 py-1 bg-black/50 backdrop-blur-md rounded-full text-xs font-medium text-white/90 flex items-center gap-1">
-          <Calendar size={11} />{dateStr}
-        </div>
-        <div className="absolute bottom-0 left-0 right-0 p-4">
-          <h3 className="text-lg font-bold text-white drop-shadow-lg">{dateCard.name}</h3>
-        </div>
-        <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-      </div>
-      <div className="p-3 flex items-center justify-between text-sm">
-        <div className="flex items-center gap-3">
-          <span className="text-brand-text-tertiary"><Disc size={13} className="inline mr-1 text-accent" />{dateCard.totalAlbums || 0}</span>
-          <span className="text-brand-text-tertiary"><Music size={13} className="inline mr-1 text-accent" />{dateCard.totalTracks || 0}</span>
-        </div>
-        <ChevronRight size={16} className="text-brand-text-tertiary group-hover:text-accent group-hover:translate-x-1 transition-all duration-300" />
       </div>
     </div>
   );
