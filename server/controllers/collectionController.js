@@ -1976,7 +1976,8 @@ function extractBPMFromFilename(filename) {
 export const getCollections = async (req, res) => {
   try {
     const isAdmin = req.user?.role === 'admin';
-    const filter = isAdmin ? {} : { status: 'completed' };
+    // Exclude in-flight / failed only — old docs without a status field are treated as visible
+    const filter = isAdmin ? {} : { status: { $nin: ['pending', 'queued', 'processing', 'failed'] } };
     const collections = await Collection.find(filter)
       .populate('sourceId', 'name thumbnail')
       .sort('-createdAt');

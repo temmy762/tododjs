@@ -111,11 +111,12 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
 
 // Collection header shown when albums view is open
 function CollectionHeader({ collection }) {
+  const [imgError, setImgError] = useState(false);
   return (
     <div className="flex items-center gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-xl shadow-black/30 flex-shrink-0 bg-dark-surface flex items-center justify-center">
-        {collection.thumbnail
-          ? <img src={collection.thumbnail} alt={collection.name} className="w-full h-full object-cover" />
+        {collection.thumbnail && !imgError
+          ? <img src={collection.thumbnail} alt={collection.name} onError={() => setImgError(true)} className="w-full h-full object-cover" />
           : <div className={`w-full h-full bg-gradient-to-br ${GRADIENTS[0]} flex items-center justify-center`}><Disc size={32} className="text-white/60" /></div>}
       </div>
       <div>
@@ -136,6 +137,7 @@ function CollectionHeader({ collection }) {
 // Mother card for a collection
 function PoolCard({ item, index, onClick }) {
   const gradient = GRADIENTS[index % GRADIENTS.length];
+  const [imgError, setImgError] = useState(false);
   return (
     <div
       onClick={onClick}
@@ -144,10 +146,11 @@ function PoolCard({ item, index, onClick }) {
     >
       {/* Cover */}
       <div className="relative aspect-[4/3] overflow-hidden bg-dark-surface">
-        {item.thumbnail ? (
+        {item.thumbnail && !imgError ? (
           <img
             src={item.thumbnail}
             alt={item.name}
+            onError={() => setImgError(true)}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
         ) : (
@@ -180,6 +183,7 @@ function PoolCard({ item, index, onClick }) {
 
 // Album Card with hover animation
 function AlbumCard({ album, index, onClick, onPlay, onDownload }) {
+  const [imgError, setImgError] = useState(false);
   return (
     <div
       onClick={onClick}
@@ -187,10 +191,11 @@ function AlbumCard({ album, index, onClick, onPlay, onDownload }) {
       style={{ animationDelay: `${index * 80}ms`, animationFillMode: 'both' }}
     >
       <div className="relative aspect-square overflow-hidden bg-dark-surface">
-        {album.coverArt ? (
+        {album.coverArt && !imgError ? (
           <img
             src={album.coverArt}
             alt={album.name}
+            onError={() => setImgError(true)}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
           />
         ) : (
