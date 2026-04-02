@@ -1588,6 +1588,9 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
   // Re-open ZIP for streaming extraction
   const zipfile = await openZipFile(zipFilePath);
   
+  // Per-album cover art cache (extracted from first MP3 with embedded picture)
+  const albumCoverCache = new Map();
+
   // Process each album
   for (const [albumName, albumMp3s] of mp3sByAlbum) {
     const albumId = albumMap.get(albumName);
@@ -1622,7 +1625,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
         
         const mp3Name = path.basename(mp3Info.fileName);
         
-        // Parse metadata
+        // Parse metadata + extract embedded cover art
         let metadata = {
           title: path.parse(mp3Name).name,
           artist: 'Unknown Artist',
@@ -1638,10 +1641,26 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
             bpm: musicMetadata.common.bpm || extractBPMFromFilename(mp3Name),
             duration: musicMetadata.format.duration || 0
           };
+
+          // Extract embedded cover art from first track in album that has it
+          if (!albumCoverCache.has(album._id.toString()) && musicMetadata.common.picture?.length > 0) {
+            try {
+              const pic = musicMetadata.common.picture[0];
+              const mimeType = pic.format || 'image/jpeg';
+              const ext = mimeType.split('/').pop() || 'jpg';
+              const coverKey = `collections/${collection.name}/albums/${album.name}/cover.${ext}`;
+              const coverUpload = await uploadToWasabi(Buffer.from(pic.data), coverKey, mimeType);
+              albumCoverCache.set(album._id.toString(), { url: coverUpload.location, key: coverKey });
+              Album.findByIdAndUpdate(album._id, { coverArt: coverUpload.location, coverArtKey: coverKey }).catch(() => {});
+            } catch { /* ignore — fall back to collection thumbnail */ }
+          }
         } catch (error) {
           console.log(`      Metadata parsing failed for ${mp3Name}`);
           metadata.bpm = extractBPMFromFilename(mp3Name);
         }
+
+        const trackCoverArt = albumCoverCache.get(album._id.toString())?.url || album.coverArt || collection.thumbnail;
+        const trackCoverArtKey = albumCoverCache.get(album._id.toString())?.key || null;
         
         // Detect tonality and genre (time bounded)
         const tonalityResult = await withTimeout(
@@ -1692,7 +1711,8 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
           bpm: metadata.bpm || 128,
           tonality: tonality,
           pool: collection.platform,
-          coverArt: album.coverArt || collection.thumbnail,
+          coverArt: trackCoverArt || '',
+          coverArtKey: trackCoverArtKey,
           audioFile: {
             url: trackUpload.location,
             key: trackUpload.key,
