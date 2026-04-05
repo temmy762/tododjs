@@ -31,17 +31,25 @@ const LIMIT    = limitArg !== -1 ? parseInt(process.argv[limitArg + 1]) || Infin
 // ─── download helper ──────────────────────────────────────────────────────────
 function downloadBuffer(url) {
   return new Promise((resolve, reject) => {
-    const client = url.startsWith('https') ? https : http;
-    client.get(url, res => {
-      if (res.statusCode !== 200) {
-        res.resume();
-        return reject(new Error(`HTTP ${res.statusCode} for ${url}`));
-      }
-      const chunks = [];
-      res.on('data', c => chunks.push(c));
-      res.on('end', () => resolve(Buffer.concat(chunks)));
-      res.on('error', reject);
-    }).on('error', reject);
+    const get = (targetUrl, redirects = 0) => {
+      if (redirects > 5) return reject(new Error('Too many redirects'));
+      const client = targetUrl.startsWith('https') ? https : http;
+      client.get(targetUrl, res => {
+        if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307) {
+          res.resume();
+          return get(res.headers.location, redirects + 1);
+        }
+        if (res.statusCode !== 200) {
+          res.resume();
+          return reject(new Error(`HTTP ${res.statusCode}`));
+        }
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => resolve(Buffer.concat(chunks)));
+        res.on('error', reject);
+      }).on('error', reject);
+    };
+    get(url);
   });
 }
 
@@ -58,6 +66,7 @@ async function main() {
 
   const Mashup = (await import('../models/Mashup.js')).default;
   const { detectTonality } = await import('../services/tonalityDetection.js');
+  const { ensureSignedUrl } = await import('../config/wasabi.js');
 
   // Build query
   const query = ALL
@@ -82,7 +91,7 @@ async function main() {
     const m = mashups[i];
     const label = `[${i + 1}/${total}] "${m.title}" — ${m.artist}`;
 
-    if (!m.audioFile?.url) {
+    if (!m.audioFile?.url && !m.audioFile?.key) {
       console.log(`  ⚠  ${label} — no audio URL, skipping`);
       stats.skipped++;
       continue;
@@ -90,10 +99,20 @@ async function main() {
 
     console.log(`\n  🔍 ${label}`);
 
+    // Get a signed download URL (handles private Wasabi S3 objects)
+    let downloadUrl;
+    try {
+      downloadUrl = await ensureSignedUrl(m.audioFile.key || m.audioFile.url, 3600);
+    } catch (err) {
+      console.log(`  ❌  Could not sign URL: ${err.message}`);
+      stats.failed++;
+      continue;
+    }
+
     let audioBuffer;
     try {
       process.stdout.write('     Downloading…');
-      audioBuffer = await downloadBuffer(m.audioFile.url);
+      audioBuffer = await downloadBuffer(downloadUrl);
       process.stdout.write(` ${(audioBuffer.length / 1024 / 1024).toFixed(1)} MB\n`);
     } catch (err) {
       console.log(`\n  ❌  Download failed: ${err.message}`);
