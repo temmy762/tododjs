@@ -414,6 +414,26 @@ export default function AdminCategories() {
   );
 }
 
+// ─── TrackThumb — always shows cover or gradient fallback ────────────────────
+function TrackThumb({ src, alt }) {
+  const [err, setErr] = useState(false);
+  if (src && !err) {
+    return (
+      <img
+        src={src}
+        alt={alt || ''}
+        onError={() => setErr(true)}
+        className="w-9 h-9 rounded-lg object-cover flex-shrink-0 bg-dark-surface"
+      />
+    );
+  }
+  return (
+    <div className="w-9 h-9 rounded-lg flex-shrink-0 bg-gradient-to-br from-accent/30 to-purple-900 flex items-center justify-center">
+      <Music size={14} className="text-white/50" />
+    </div>
+  );
+}
+
 // ─── Review Queue sub-component ─────────────────────────────────────────────
 function ReviewQueue({ categories, flash }) {
   const [stats, setStats] = useState(null);
@@ -575,7 +595,7 @@ function ReviewQueue({ categories, flash }) {
                 <div className={`w-4 h-4 rounded border-2 flex-shrink-0 transition-all ${selected.has(t._id) ? 'bg-accent border-accent' : 'border-white/30'}`}>
                   {selected.has(t._id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                 </div>
-                {t.coverArt && <img src={t.coverArt} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />}
+                <TrackThumb src={t.coverArt} alt={t.title} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-white font-medium truncate">{t.title}</p>
                   <p className="text-xs text-brand-text-tertiary truncate">{t.artist}</p>

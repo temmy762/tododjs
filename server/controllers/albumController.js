@@ -439,14 +439,16 @@ export const updateAlbum = async (req, res) => {
 // @access  Public
 export const getAlbums = async (req, res) => {
   try {
-    const { sourceId, year, search, limit = 20, page = 1 } = req.query;
+    const { sourceId, year, search, genre, category, limit = 20, page = 1 } = req.query;
     
     let query = { isActive: true };
     
     if (sourceId) query.sourceId = sourceId;
     if (year) query.year = year;
+    if (genre) query.genre = { $regex: genre, $options: 'i' };
+    if (category) query.genre = { $regex: category, $options: 'i' };
     if (search) {
-      query.$text = { $search: search };
+      query.name = { $regex: search, $options: 'i' };
     }
 
     const albums = await Album.find(query)
