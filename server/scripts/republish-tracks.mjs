@@ -33,57 +33,32 @@ async function main() {
   const draftTracks = await Track.find({ status: 'draft' }).lean();
   console.log(`🎵  Found ${draftTracks.length} draft tracks`);
 
-  let eligible = 0;
-  let published = 0;
-  let skipped   = 0;
+  // Count eligible tracks (have artist, genre, bpm, tonality.camelot, audioFile.url)
+  const eligibleQuery = {
+    status: 'draft',
+    artist:             { $exists: true, $ne: '' },
+    genre:              { $exists: true, $ne: '' },
+    bpm:                { $exists: true, $ne: null },
+    'tonality.camelot': { $exists: true, $ne: '' },
+    'audioFile.url':    { $exists: true, $ne: '' }
+  };
 
-  for (const doc of draftTracks) {
-    const hasAll =
-      doc.artist &&
-      doc.genre &&
-      doc.bpm &&
-      doc.tonality?.camelot &&
-      doc.audioFile?.url;
+  const eligibleCount = await Track.countDocuments(eligibleQuery);
+  const skippedCount  = draftTracks.length - eligibleCount;
 
-    if (!hasAll) {
-      skipped++;
-      continue;
-    }
-
-    eligible++;
-
-    if (DRY_RUN) {
-      console.log(`  [DRY] Would publish: "${doc.title}" (${doc._id})`);
-      continue;
-    }
-
-    try {
-      const track = await Track.findById(doc._id);
-      track.status = undefined;   // let the pre-save hook decide
-      // Force the hook to re-evaluate by momentarily resetting status
-      track.set('status', 'draft');
-      // The pre-save hook will promote it if metadata is complete
-      await track.save();
-
-      const reloaded = await Track.findById(doc._id).select('status');
-      if (reloaded.status === 'published') {
-        published++;
-        console.log(`  ✅  Published: "${doc.title}"`);
-      } else {
-        console.log(`  ⚠️   Still draft: "${doc.title}" — check hook logic`);
-      }
-    } catch (err) {
-      console.error(`  ❌  Error saving "${doc.title}":`, err.message);
-    }
+  if (DRY_RUN) {
+    console.log(`  [DRY] Would publish : ${eligibleCount} tracks`);
+    console.log(`  [DRY] Missing data  : ${skippedCount} tracks (no publish)`);
+  } else {
+    const result = await Track.updateMany(eligibleQuery, { $set: { status: 'published' } });
+    console.log(`  ✅  Published       : ${result.modifiedCount} tracks`);
   }
 
   console.log('\n─── Summary ───────────────────────────────────');
   console.log(`  Total draft tracks  : ${draftTracks.length}`);
-  console.log(`  Eligible to publish : ${eligible}`);
-  console.log(`  Missing metadata    : ${skipped}`);
-  if (!DRY_RUN) {
-    console.log(`  Published           : ${published}`);
-  } else {
+  console.log(`  Eligible to publish : ${eligibleCount}`);
+  console.log(`  Missing metadata    : ${skippedCount}`);
+  if (DRY_RUN) {
     console.log('  (dry-run — nothing saved)');
   }
   console.log('───────────────────────────────────────────────');
