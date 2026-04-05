@@ -51,9 +51,9 @@ export default function PlaylistsSection({ onAlbumClick, activeGenre = 'all' }) 
       <div className="mb-4 md:mb-6">
         <div className="flex items-center gap-2">
           <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-          <h2 className="text-lg md:text-2xl font-bold text-white">Últimas Subidas</h2>
+          <h2 className="text-lg md:text-2xl font-bold text-white">Latest Uploads</h2>
         </div>
-        <p className="text-xs md:text-sm text-brand-text-tertiary mt-1">Últimas novedades de tus record pools y packs Premium favoritos</p>
+        <p className="text-xs md:text-sm text-brand-text-tertiary mt-1">The latest from your favorite record pools and Premium packs</p>
       </div>
       
       <div className="relative">

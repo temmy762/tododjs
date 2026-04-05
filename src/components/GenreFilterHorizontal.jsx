@@ -16,8 +16,8 @@ export default function GenreFilterHorizontal({ activeCategory, onCategoryChange
   return (
     <div className="relative px-4 md:px-10 pt-4 md:pt-5 pb-4 md:pb-5 bg-gradient-to-b from-dark-bg via-dark-bg/98 to-dark-bg/95">
       <div className="mb-3 md:mb-4">
-        <h2 className="text-lg md:text-xl font-bold text-white tracking-tight">Explora por Record Pools</h2>
-        <p className="text-[10px] md:text-xs text-brand-text-tertiary/80 mt-1">Accede a tus record pools y packs Premium favoritos</p>
+        <h2 className="text-lg md:text-xl font-bold text-white tracking-tight">Browse by Record Pool</h2>
+        <p className="text-[10px] md:text-xs text-brand-text-tertiary/80 mt-1">Access your favorite record pools and Premium packs</p>
       </div>
 
       <div className="relative">
@@ -33,7 +33,7 @@ export default function GenreFilterHorizontal({ activeCategory, onCategoryChange
               }`}
             >
               <Music size={16} className="flex-shrink-0" />
-              <span className="whitespace-nowrap">Todos</span>
+              <span className="whitespace-nowrap">All</span>
             </button>
 
             {categories.map((cat) => {

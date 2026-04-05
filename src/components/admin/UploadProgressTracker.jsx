@@ -11,7 +11,8 @@ import {
   Disc, 
   FolderOpen,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  X
 } from 'lucide-react';
 import API_URL from '../../config/api';
 
@@ -61,16 +62,17 @@ function StatusBadge({ status }) {
   );
 }
 
-function CollectionCard({ collection, isExpanded, onToggle }) {
+function CollectionCard({ collection, isExpanded, onToggle, onDismiss, canDismiss }) {
   const progressColor = collection.status === 'completed' ? 'green' 
     : collection.status === 'failed' ? 'red' 
     : 'accent';
 
   return (
     <div className="bg-dark-elevated border border-white/10 rounded-xl overflow-hidden transition-all duration-200 hover:border-white/20">
+      <div className="flex items-center">
       <button
         onClick={onToggle}
-        className="w-full p-4 flex items-center justify-between text-left"
+        className="flex-1 p-4 flex items-center justify-between text-left"
       >
         <div className="flex items-center gap-4 flex-1 min-w-0">
           <div className="w-10 h-10 rounded-lg bg-accent/20 flex items-center justify-center flex-shrink-0">
@@ -101,6 +103,16 @@ function CollectionCard({ collection, isExpanded, onToggle }) {
           </div>
         </div>
       </button>
+      {canDismiss && (
+        <button
+          onClick={e => { e.stopPropagation(); onDismiss?.(collection._id); }}
+          className="p-3 mr-2 text-brand-text-tertiary hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all flex-shrink-0"
+          title="Dismiss stale upload"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      )}
+      </div>
 
       <div className="px-4 pb-1">
         <ProgressBar value={collection.processingProgress ?? 0} color={progressColor} />
@@ -187,6 +199,23 @@ export default function UploadProgressTracker() {
   const handleRefresh = () => {
     setLoading(true);
     fetchStatus();
+  };
+
+  const dismissUpload = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_BASE}/upload-status/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'include'
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProcessing(prev => prev.filter(c => c._id !== id));
+      }
+    } catch (err) {
+      console.error('Dismiss upload error:', err);
+    }
   };
 
   const toggleExpand = (id) => {
@@ -277,6 +306,8 @@ export default function UploadProgressTracker() {
                 collection={collection}
                 isExpanded={expandedId === collection._id}
                 onToggle={() => toggleExpand(collection._id)}
+                onDismiss={dismissUpload}
+                canDismiss={true}
               />
             ))}
           </div>

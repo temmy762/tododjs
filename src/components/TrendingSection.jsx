@@ -85,7 +85,7 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
             }`}
           >
             <Flame size={15} className={activeTab === 'trending' ? 'text-white' : 'text-brand-text-tertiary'} />
-            <span>Más Descargado</span>
+            <span>Most Downloaded</span>
           </button>
           <button
             onClick={() => setActiveTab('recent')}
@@ -96,7 +96,7 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
             }`}
           >
             <Sparkles size={15} className={activeTab === 'recent' ? 'text-white' : 'text-brand-text-tertiary'} />
-            <span>Últimas Subidas</span>
+            <span>Latest Uploads</span>
           </button>
         </div>
 

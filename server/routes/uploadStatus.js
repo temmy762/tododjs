@@ -86,4 +86,25 @@ router.get('/:id', protect, authorize('admin'), async (req, res) => {
   }
 });
 
+// @desc    Dismiss (force-fail) a stale stuck upload
+// @route   DELETE /api/upload-status/:id
+// @access  Private/Admin
+router.delete('/:id', protect, authorize('admin'), async (req, res) => {
+  try {
+    const collection = await Collection.findById(req.params.id);
+    if (!collection) {
+      return res.status(404).json({ success: false, message: 'Collection not found' });
+    }
+    if (!['queued', 'processing', 'uploading'].includes(collection.status)) {
+      return res.status(400).json({ success: false, message: 'Collection is not in an active state' });
+    }
+    collection.status = 'failed';
+    collection.processingProgress = 0;
+    await collection.save();
+    res.json({ success: true, message: 'Upload dismissed' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 export default router;

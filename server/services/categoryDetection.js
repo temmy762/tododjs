@@ -63,8 +63,12 @@ export function extractCategoryFromTitle(title) {
  */
 export function extractCategoryFromAlbumName(albumName) {
   if (!albumName) return null;
-  // Strip trailing: Pack, Vol, Vol., Pt., Edition, 2024, 2025 etc.
   const cleaned = albumName
+    // Strip trailing date stamps: 24-02-2026, 2026-02-24, 20260224
+    .replace(/[\s_-]+\d{1,2}[-./]\d{1,2}[-./]\d{2,4}[\w\s,.-]*$/gi, '')
+    .replace(/[\s_-]+\d{4}[-./]\d{1,2}[-./]\d{1,2}[\w\s,.-]*$/gi, '')
+    .replace(/[\s_-]+\d{8}[\w\s,.-]*$/gi, '')
+    // Strip trailing: Pack, Vol, Pt, Edition, year-only, numbers
     .replace(/\s+(?:pack|vol\.?|volume|pt\.?|part|edition|series|\d{4}|\d+)[\s\d]*$/gi, '')
     .replace(/\s*\(.*\)\s*$/, '')
     .trim();
@@ -79,11 +83,46 @@ export function extractCategoryFromAlbumName(albumName) {
  * @param {string[]} knownNames  - array of Category.name values from DB
  * @returns {string|null}
  */
+// Date-like suffix patterns to strip before matching
+const DATE_SUFFIX_RE = /[\s_-]+(?:\d{1,2}[-./]\d{1,2}[-./]\d{2,4}|\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{2}-\d{2}-\d{4}|\d{8}|\bvol\.?\s*\d+|\bpt\.?\s*\d+|\bpart\s*\d+|\b20\d{2}\b)[\s\w.,\-]*$/gi;
+
+function stripDateSuffixes(str) {
+  return str.replace(DATE_SUFFIX_RE, '').trim();
+}
+
 export function matchToKnownCategory(raw, knownNames) {
   if (!raw || !knownNames?.length) return null;
   const lower = raw.toLowerCase().trim();
-  const match = knownNames.find(n => n.toLowerCase().trim() === lower);
-  return match || null;
+
+  // 1. Exact case-insensitive match
+  const exact = knownNames.find(n => n.toLowerCase().trim() === lower);
+  if (exact) return exact;
+
+  // 2. Exact match after stripping date/vol suffixes from raw
+  const stripped = stripDateSuffixes(raw).toLowerCase().trim();
+  if (stripped && stripped !== lower) {
+    const strippedMatch = knownNames.find(n => n.toLowerCase().trim() === stripped);
+    if (strippedMatch) return strippedMatch;
+  }
+
+  // 3. Prefix match: raw string STARTS WITH a known category name
+  //    e.g. 'AFRO HOUSE 24-02-2026' starts with 'AFRO HOUSE'
+  const prefixMatch = knownNames.find(n => {
+    const nLower = n.toLowerCase().trim();
+    if (nLower.length < 3) return false;
+    return lower.startsWith(nLower + ' ') || lower.startsWith(nLower + '-') || lower === nLower;
+  });
+  if (prefixMatch) return prefixMatch;
+
+  // 4. Known category is contained anywhere in raw (handles 'DJ CITY LATINO...' → 'DJ City')
+  const containsMatch = knownNames.find(n => {
+    const nLower = n.toLowerCase().trim();
+    if (nLower.length < 4) return false;
+    return lower.includes(nLower);
+  });
+  if (containsMatch) return containsMatch;
+
+  return null;
 }
 
 /**

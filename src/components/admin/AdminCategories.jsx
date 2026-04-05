@@ -515,7 +515,7 @@ function ReviewQueue({ categories, flash }) {
               All
             </button>
             {stats.rawLabels.map(({ _id, count }) => (
-              <button key={_id} onClick={() => setSelectedLabel(_id === selectedLabel ? null : _id)}
+              <button key={_id} onClick={() => { setSelectedLabel(_id === selectedLabel ? null : _id); setPage(1); }}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all ${selectedLabel === _id ? 'bg-accent text-white' : 'bg-white/10 text-brand-text-tertiary hover:text-white'}`}>
                 {_id}
                 <span className="bg-white/20 rounded-full px-1.5">{count}</span>

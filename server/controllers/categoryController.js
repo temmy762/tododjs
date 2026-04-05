@@ -186,12 +186,29 @@ export const getCategoryTracks = async (req, res) => {
 export const getUncategorizedCount = async (req, res) => {
   try {
     const count = await Track.countDocuments({ category: 'Others', categoryVerified: false });
-    const rawLabels = await Track.aggregate([
+    const rawAgg = await Track.aggregate([
       { $match: { category: 'Others', categoryRaw: { $ne: null } } },
       { $group: { _id: '$categoryRaw', count: { $sum: 1 } } },
       { $sort: { count: -1 } },
-      { $limit: 20 }
+      { $limit: 200 }
     ]);
+
+    // Strip date/number suffixes in JS and merge groups with same cleaned label
+    const DATE_RE = /[\s_\-]+(?:\d{1,2}[-./]\d{1,2}[-./]\d{2,4}|\d{4}[-./]\d{1,2}[-./]\d{1,2}|\d{8}|\b20\d{2}\b)[\s\w.,:\-]*$/i;
+    const merged = new Map();
+    for (const { _id, count } of rawAgg) {
+      const cleaned = _id.replace(DATE_RE, '').trim();
+      const key = cleaned.toLowerCase();
+      if (!key) continue;
+      if (merged.has(key)) {
+        merged.get(key).count += count;
+      } else {
+        merged.set(key, { _id: cleaned, count });
+      }
+    }
+    const rawLabels = [...merged.values()]
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 25);
     res.json({ success: true, count, rawLabels });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

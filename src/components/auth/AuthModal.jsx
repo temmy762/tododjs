@@ -1,8 +1,15 @@
-import { useState } from 'react';
-import { X, Mail, Lock, User, Eye, EyeOff, AlertCircle, Phone, Globe } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Mail, Lock, User, Eye, EyeOff, AlertCircle, Phone, Globe, Fingerprint, Loader } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import API_URL from '../../config/api';
 import ForgotPasswordModal from '../ForgotPasswordModal';
+import {
+  isBiometricAvailable,
+  getBiometricCredential,
+  registerBiometric,
+  verifyBiometric,
+  clearBiometric,
+} from '../../services/webauthnService';
 
 function getDeviceId() {
   let deviceId = localStorage.getItem('deviceId');
@@ -22,6 +29,18 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricRegistered, setBiometricRegistered] = useState(false);
+  const [biometricLoading, setBiometricLoading] = useState(false);
+  const [showBiometricPrompt, setShowBiometricPrompt] = useState(false);
+  const [lastLoginData, setLastLoginData] = useState(null);
+
+  useEffect(() => {
+    isBiometricAvailable().then(available => {
+      setBiometricAvailable(available);
+      if (available) setBiometricRegistered(!!getBiometricCredential());
+    });
+  }, []);
 
   const switchMode = () => {
     setMode(mode === 'login' ? 'register' : 'login');
@@ -80,7 +99,12 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
         if (data.success) {
           localStorage.setItem('token', data.token);
           if (rememberMe) localStorage.setItem('rememberMe', 'true');
-          onSuccess(data.user);
+          if (biometricAvailable && !biometricRegistered) {
+            setLastLoginData(data);
+            setShowBiometricPrompt(true);
+          } else {
+            onSuccess(data.user);
+          }
         } else if (data.deviceLimitReached) {
           setError(`Device limit reached for this account (${data.maxDevices} device${data.maxDevices > 1 ? 's' : ''} allowed). The account owner has been notified by email. If you are the account owner, please sign in on one of your registered devices and remove it from Settings → Devices to free up a slot.`);
           return;
@@ -94,6 +118,79 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
       setLoading(false);
     }
   };
+
+  const handleBiometricLogin = async () => {
+    setBiometricLoading(true);
+    setError('');
+    try {
+      await verifyBiometric();
+      const storedToken = localStorage.getItem('token');
+      if (!storedToken) {
+        throw new Error('No saved session found. Please login with your password.');
+      }
+      const response = await fetch(`${API_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${storedToken}`,
+        },
+        credentials: 'include',
+      });
+      const data = await response.json();
+      if (data.success) {
+        localStorage.setItem('token', data.token);
+        onSuccess(data.user);
+      } else {
+        setError('Session expired. Please login with your password.');
+        clearBiometric();
+        setBiometricRegistered(false);
+      }
+    } catch (err) {
+      if (err.name === 'NotAllowedError') {
+        setError('Biometric verification cancelled.');
+      } else {
+        setError(err.message || 'Biometric login failed. Please use your password.');
+      }
+    } finally {
+      setBiometricLoading(false);
+    }
+  };
+
+  const handleEnableBiometric = async () => {
+    try {
+      await registerBiometric(lastLoginData.user._id, lastLoginData.user.name || lastLoginData.user.email);
+      setBiometricRegistered(true);
+    } catch { /* user declined */ }
+    onSuccess(lastLoginData.user);
+  };
+
+  if (showBiometricPrompt) {
+    return (
+      <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+        <div className="bg-dark-elevated rounded-2xl max-w-sm w-full p-8 text-center">
+          <div className="w-20 h-20 rounded-full bg-accent/10 border-2 border-accent/30 flex items-center justify-center mx-auto mb-5">
+            <Fingerprint size={40} className="text-accent" />
+          </div>
+          <h3 className="text-xl font-bold text-white mb-2">Enable Fingerprint Login</h3>
+          <p className="text-brand-text-tertiary text-sm mb-6">
+            Log in faster next time using your device&apos;s biometric authentication — fingerprint, Face ID, or Windows Hello.
+          </p>
+          <button
+            onClick={handleEnableBiometric}
+            className="w-full py-3 bg-accent hover:bg-accent/80 rounded-lg text-white font-semibold text-sm mb-3 transition-all flex items-center justify-center gap-2"
+          >
+            <Fingerprint size={18} /> Enable Fingerprint Login
+          </button>
+          <button
+            onClick={() => onSuccess(lastLoginData.user)}
+            className="w-full py-3 bg-white/5 hover:bg-white/10 rounded-lg text-brand-text-tertiary text-sm transition-all"
+          >
+            Not now
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4 overflow-y-auto">
@@ -250,6 +347,26 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
             {loading ? t('common.loading') : mode === 'login' ? t('auth.loginButton') : t('auth.signupButton')}
           </button>
         </form>
+
+        {mode === 'login' && biometricAvailable && biometricRegistered && (
+          <>
+            <div className="flex items-center gap-3 my-4">
+              <div className="flex-1 h-px bg-white/10" />
+              <span className="text-xs text-brand-text-tertiary">or</span>
+              <div className="flex-1 h-px bg-white/10" />
+            </div>
+            <button
+              type="button"
+              onClick={handleBiometricLogin}
+              disabled={biometricLoading}
+              className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-accent/30 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2.5 disabled:opacity-50"
+            >
+              {biometricLoading
+                ? <><Loader size={18} className="animate-spin" /> Verifying…</>
+                : <><Fingerprint size={18} className="text-accent" /> Login with Fingerprint</>}
+            </button>
+          </>
+        )}
 
         <div className="mt-6 text-center">
           <p className="text-sm text-brand-text-tertiary">
