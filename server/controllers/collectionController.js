@@ -3,7 +3,7 @@ import DatePack from '../models/DatePack.js';
 import Album from '../models/Album.js';
 import Track from '../models/Track.js';
 import Source from '../models/Source.js';
-import s3Client, { uploadToWasabi, deleteFromWasabi } from '../config/wasabi.js';
+import s3Client, { uploadToWasabi, deleteFromWasabi, ensureSignedUrl, signImageFields } from '../config/wasabi.js';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import yauzl from 'yauzl';
 import AdmZip from 'adm-zip';
@@ -1197,6 +1197,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       for (const a of createdAlbumsList) {
         const c = await Track.countDocuments({ albumId: a._id });
         a.trackCount = c;
+        a.status = c > 0 ? 'complete' : 'failed';
         await a.save();
       }
 
@@ -1585,9 +1586,6 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
   let totalSize = 0;
   let processedAlbums = 0;
   
-  // Re-open ZIP for streaming extraction
-  const zipfile = await openZipFile(zipFilePath);
-  
   // Per-album cover art cache (extracted from first MP3 with embedded picture)
   const albumCoverCache = new Map();
 
@@ -1612,8 +1610,8 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
     // Process each MP3 in this album
     for (const mp3Info of albumMp3s) {
       try {
-        // Extract MP3 from ZIP
-        const mp3Buffer = await extractFileFromZip(zipfile, mp3Info.fileName);
+        // Extract MP3 from ZIP (fresh yauzl instance per call — avoids listener accumulation)
+        const mp3Buffer = await extractEntryToBufferByName(zipFilePath, mp3Info.fileName);
         if (!mp3Buffer) {
           console.log(`      Could not extract ${mp3Info.fileName}`);
           continue;
@@ -1742,8 +1740,6 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
     console.log(`      Album complete: ${albumTrackCount} tracks uploaded`);
   }
   
-  zipfile.close();
-  
   return {
     albums: processedAlbums,
     tracks: totalTracks,
@@ -1849,7 +1845,12 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
       uploadedBy: collection.uploadedBy
     });
 
-    const albumZipBuffer = Buffer.from(dateZip.toBuffer());
+    // Build a ZIP containing only this album's tracks
+    const albumZip = new AdmZip();
+    for (const entry of mp3Files) {
+      albumZip.addFile(path.basename(entry.entryName), entry.getData());
+    }
+    const albumZipBuffer = albumZip.toBuffer();
     const albumZipKey = `collections/${collection.name}/albums/${albumName}/album.zip`;
     const albumZipUpload = await uploadToWasabi(
       albumZipBuffer,
@@ -1980,7 +1981,11 @@ export const getCollections = async (req, res) => {
     const filter = isAdmin ? {} : { status: { $nin: ['pending', 'queued', 'processing', 'failed'] } };
     const collections = await Collection.find(filter)
       .populate('sourceId', 'name thumbnail')
-      .sort('-createdAt');
+      .sort('-createdAt')
+      .lean();
+
+    // Sign Wasabi thumbnail URLs so the browser can load them
+    await signImageFields(collections, ['thumbnail']);
 
     res.status(200).json({
       success: true,
@@ -2005,7 +2010,8 @@ export const getCollectionAlbums = async (req, res) => {
 
     const collection = await Collection.findById(id).lean();
     if (!collection) return res.status(404).json({ success: false, message: 'Collection not found' });
-    if (!isAdmin && collection.status !== 'completed') {
+    const blocked = ['pending', 'queued', 'processing', 'failed'];
+    if (!isAdmin && blocked.includes(collection.status)) {
       return res.status(404).json({ success: false, message: 'Collection not found' });
     }
 
@@ -2017,6 +2023,9 @@ export const getCollectionAlbums = async (req, res) => {
     const albums = await Album.find({ collectionId: id })
       .select('_id name coverArt trackCount genre year datePackId')
       .lean();
+
+    // Sign album cover art URLs
+    await signImageFields(albums, ['coverArt']);
 
     // Attach datePackDate for sorting, then sort newest first
     const enriched = albums.map(a => ({
@@ -2038,7 +2047,8 @@ export const getCollectionAlbums = async (req, res) => {
 export const getCollection = async (req, res) => {
   try {
     const collection = await Collection.findById(req.params.id)
-      .populate('sourceId', 'name thumbnail');
+      .populate('sourceId', 'name thumbnail')
+      .lean();
 
     if (!collection) {
       return res.status(404).json({
@@ -2046,6 +2056,8 @@ export const getCollection = async (req, res) => {
         message: 'Collection not found'
       });
     }
+
+    if (collection.thumbnail) collection.thumbnail = await ensureSignedUrl(collection.thumbnail);
 
     res.status(200).json({
       success: true,

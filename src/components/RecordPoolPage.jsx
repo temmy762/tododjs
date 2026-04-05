@@ -14,42 +14,54 @@ const GRADIENTS = [
 
 export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
   const [view, setView] = useState('list'); // list | albums
-  const [collections, setCollections] = useState([]);
+  const [poolItems, setPoolItems] = useState([]); // combined sources + collections
   const [albums, setAlbums] = useState([]);
-  const [selectedCollection, setSelectedCollection] = useState(null);
+  const [selectedItem, setSelectedItem] = useState(null); // { ...item, _type: 'source'|'collection' }
   const [loading, setLoading] = useState(false);
 
-  const fetchCollections = useCallback(async () => {
+  const fetchPoolItems = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/collections`);
-      const data = await res.json();
-      if (data.success) setCollections(data.data || []);
-    } catch (err) { console.error('Error fetching collections:', err); }
+      const [colRes, srcRes] = await Promise.all([
+        fetch(`${API_URL}/collections`),
+        fetch(`${API_URL}/sources`),
+      ]);
+      const [colData, srcData] = await Promise.all([colRes.json(), srcRes.json()]);
+      const cols = (colData.success ? colData.data || [] : []).map(c => ({ ...c, _type: 'collection' }));
+      const srcs = (srcData.success ? srcData.data || [] : []).map(s => ({ ...s, _type: 'source' }));
+      // Sources first (they hold the bulk of content), then collections
+      setPoolItems([...srcs, ...cols]);
+    } catch (err) { console.error('Error fetching pool items:', err); }
     finally { setLoading(false); }
   }, []);
 
-  const fetchAlbums = useCallback(async (collectionId) => {
+  const fetchAlbums = useCallback(async (item) => {
     try {
       setLoading(true);
-      const res = await fetch(`${API_URL}/collections/${collectionId}/albums`);
+      let url;
+      if (item._type === 'source') {
+        url = `${API_URL}/albums?sourceId=${item._id}&limit=100`;
+      } else {
+        url = `${API_URL}/collections/${item._id}/albums`;
+      }
+      const res = await fetch(url);
       const data = await res.json();
       if (data.success) setAlbums(data.data || []);
     } catch (err) { console.error('Error fetching albums:', err); }
     finally { setLoading(false); }
   }, []);
 
-  useEffect(() => { fetchCollections(); }, [fetchCollections]);
+  useEffect(() => { fetchPoolItems(); }, [fetchPoolItems]);
 
-  const openCollection = (col) => {
-    setSelectedCollection(col);
+  const openItem = (item) => {
+    setSelectedItem(item);
     setView('albums');
-    fetchAlbums(col._id);
+    fetchAlbums(item);
   };
 
   const goBack = () => {
     setView('list');
-    setSelectedCollection(null);
+    setSelectedItem(null);
     setAlbums([]);
   };
 
@@ -70,19 +82,19 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
           </div>
         )}
 
-        {view === 'albums' && selectedCollection && (
-          <CollectionHeader collection={selectedCollection} />
+        {view === 'albums' && selectedItem && (
+          <CollectionHeader collection={selectedItem} />
         )}
       </div>
 
-      {/* Collection Cards */}
+      {/* Pool Cards — Sources + Collections combined */}
       {view === 'list' && (
         loading ? <LoadingState /> : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {collections.map((col, i) => (
-              <PoolCard key={col._id} item={col} index={i} onClick={() => openCollection(col)} />
+            {poolItems.map((item, i) => (
+              <PoolCard key={item._id} item={item} index={i} onClick={() => openItem(item)} />
             ))}
-            {collections.length === 0 && <EmptyState icon={Disc} text="No record pools available yet" />}
+            {poolItems.length === 0 && <EmptyState icon={Disc} text="No record pools available yet" />}
           </div>
         )
       )}

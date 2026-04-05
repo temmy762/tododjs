@@ -313,6 +313,45 @@ export const logout = async (req, res) => {
   });
 };
 
+// @desc    Refresh JWT token
+// @route   POST /api/auth/refresh
+// @access  Private
+export const refreshToken = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user || !user.isActive) {
+      return res.status(401).json({ success: false, message: 'User not found or inactive' });
+    }
+
+    const newToken = generateToken(user._id);
+    const avatar = await signAvatarUrl(user);
+
+    const cookieOptions = {
+      expires: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax'
+    };
+
+    res.status(200)
+      .cookie('token', newToken, cookieOptions)
+      .json({
+        success: true,
+        token: newToken,
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          subscription: user.subscription,
+          avatar
+        }
+      });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Update user details
 // @route   PUT /api/auth/updatedetails
 // @access  Private

@@ -2,14 +2,19 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   X, User, Mail, Phone, Save, Camera, Lock, Eye, EyeOff,
   Download, Heart, Music, TrendingUp, CheckCircle, AlertCircle,
-  LogOut, Pencil, Shield, Play, Trash2
+  LogOut, Pencil, Shield, Play, Trash2, Settings
 } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import API_URL from '../config/api';
 import DeviceManagement from './DeviceManagement';
+import DownloadHistory from './DownloadHistory';
 
 const API = API_URL;
 
 export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, onTrackInteraction }) {
+  const navigate = useNavigate();
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('overview');
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -243,11 +248,12 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
   };
 
   const tabs = [
-    { id: 'overview', label: 'Overview' },
-    { id: 'favorites', label: 'Favorites' },
-    { id: 'devices', label: 'Devices' },
-    { id: 'edit', label: 'Edit Profile' },
-    { id: 'password', label: 'Change Password' },
+    { id: 'overview', label: t('profile.overview') },
+    { id: 'favorites', label: t('profile.favorites') },
+    { id: 'downloads', label: t('profile.downloads') },
+    { id: 'devices', label: t('profile.devices') },
+    { id: 'edit', label: t('profile.editProfile') },
+    { id: 'password', label: t('profile.changePassword') },
   ];
 
   return (
@@ -256,7 +262,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
       <div className="h-14 bg-dark-elevated border-b border-white/10 flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-3">
           <User className="w-5 h-5 text-accent" />
-          <h1 className="text-base md:text-lg font-bold text-white">My Profile</h1>
+          <h1 className="text-base md:text-lg font-bold text-white">{t('profile.myProfile')}</h1>
         </div>
         <button
           onClick={onClose}
@@ -391,20 +397,27 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
               </div>
 
               {/* Quick Actions */}
-              <div className="flex gap-2 md:gap-3">
+              <div className="grid grid-cols-3 gap-2 md:gap-3">
                 <button
                   onClick={() => { setActiveTab('edit'); clearMessage(); }}
-                  className="flex-1 py-2.5 md:py-3 px-3 md:px-4 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition-colors text-xs md:text-sm font-medium text-white flex items-center justify-center gap-2"
+                  className="py-2.5 md:py-3 px-3 md:px-4 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition-colors text-xs md:text-sm font-medium text-white flex items-center justify-center gap-2"
                 >
                   <Pencil className="w-4 h-4 text-accent shrink-0" />
-                  Edit Profile
+                  {t('dashboard.editProfile')}
                 </button>
                 <button
                   onClick={() => { setActiveTab('password'); clearMessage(); }}
-                  className="flex-1 py-2.5 md:py-3 px-3 md:px-4 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition-colors text-xs md:text-sm font-medium text-white flex items-center justify-center gap-2"
+                  className="py-2.5 md:py-3 px-3 md:px-4 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition-colors text-xs md:text-sm font-medium text-white flex items-center justify-center gap-2"
                 >
                   <Lock className="w-4 h-4 text-accent shrink-0" />
-                  Change Password
+                  {t('profile.password')}
+                </button>
+                <button
+                  onClick={() => { onClose(); navigate('/settings'); }}
+                  className="py-2.5 md:py-3 px-3 md:px-4 rounded-xl bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] transition-colors text-xs md:text-sm font-medium text-white flex items-center justify-center gap-2"
+                >
+                  <Settings className="w-4 h-4 text-accent shrink-0" />
+                  {t('dashboard.settings')}
                 </button>
               </div>
 
@@ -414,7 +427,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                 className="w-full py-2.5 md:py-3 px-4 rounded-xl bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 transition-colors text-sm font-medium text-red-400 flex items-center justify-center gap-2"
               >
                 <LogOut className="w-4 h-4" />
-                Logout
+                {t('dashboard.logout')}
               </button>
             </div>
           )}
@@ -601,6 +614,13 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ── Downloads Tab ── */}
+          {activeTab === 'downloads' && (
+            <div>
+              <DownloadHistory onTrackInteraction={onTrackInteraction} />
             </div>
           )}
 

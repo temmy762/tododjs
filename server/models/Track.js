@@ -168,8 +168,8 @@ const trackSchema = new mongoose.Schema({
 
 // Auto-determine status based on metadata completeness
 trackSchema.pre('save', function (next) {
-  // Only auto-set on creation or if status is still draft
-  if (this.isNew || this.status === 'draft') {
+  // Only auto-set when status is still draft — never override an explicit 'published'
+  if (this.status === 'draft') {
     const hasArtist = this.artist && this.artist !== 'Unknown Artist';
     const hasTonality = this.tonality && this.tonality.camelot;
     const hasBpm = this.bpm && this.bpm > 0;

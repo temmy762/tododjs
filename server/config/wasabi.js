@@ -194,4 +194,65 @@ export const uploadMultipleToWasabi = async (files, progressCallback) => {
   return results;
 };
 
+/**
+ * Convert a Wasabi URL or S3 key into a fresh signed URL.
+ * - If the value is falsy or an external URL → return as-is.
+ * - If it's a full Wasabi URL (signed or unsigned) → extract the key, re-sign.
+ * - If it's just an S3 key → sign directly.
+ */
+export const ensureSignedUrl = async (urlOrKey, expiresIn = 7200) => {
+  if (!urlOrKey) return urlOrKey;
+
+  const str = String(urlOrKey);
+
+  // External URL (not Wasabi) — pass through
+  if (
+    (str.startsWith('http://') || str.startsWith('https://')) &&
+    !str.includes('wasabisys.com')
+  ) {
+    return str;
+  }
+
+  let key = str;
+
+  if (str.includes('wasabisys.com')) {
+    try {
+      const url = new URL(str);
+      // Path is /bucket/key — strip leading /bucket/
+      const pathParts = url.pathname.split('/');
+      // First part is empty string (leading /), second is bucket name
+      key = decodeURIComponent(pathParts.slice(2).join('/'));
+    } catch {
+      return str; // malformed URL — return as-is
+    }
+  }
+
+  if (!key) return str;
+
+  try {
+    return await getSignedDownloadUrl(key, expiresIn);
+  } catch {
+    return str; // signing failed — return original
+  }
+};
+
+/**
+ * Sign image fields on an array of lean documents in-place.
+ * @param {Array} docs - Array of plain objects
+ * @param {string[]} fields - Field names to sign (e.g. ['coverArt', 'thumbnail'])
+ */
+export const signImageFields = async (docs, fields) => {
+  const promises = [];
+  for (const doc of docs) {
+    for (const f of fields) {
+      if (doc[f]) {
+        promises.push(
+          ensureSignedUrl(doc[f]).then((signed) => { doc[f] = signed; })
+        );
+      }
+    }
+  }
+  await Promise.all(promises);
+};
+
 export default s3Client;

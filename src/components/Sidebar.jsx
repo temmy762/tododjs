@@ -1,19 +1,24 @@
 import { useState } from 'react';
 import { Home, Disc, Library, Layers, Shield, LogIn, LogOut, CreditCard } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate, useLocation } from 'react-router-dom';
 
-export default function Sidebar({ activePage = 'home', onNavigate, onAdminClick, user, onLoginClick, onLogout, onProfileClick }) {
+export default function Sidebar({ onAdminClick, user, onLoginClick, onLogout, onProfileClick }) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
   
   const isAdmin = user?.role === 'admin';
 
   const navItems = [
-    { id: 'home', label: t('nav.home'), icon: Home },
-    { id: 'library', label: t('nav.library'), icon: Library },
-    { id: 'album', label: t('nav.recordPool'), icon: Disc },
-    { id: 'mashup', label: t('nav.liveMashup'), icon: Layers },
-    ...(!isAdmin ? [{ id: 'pricing', label: t('subscription.pricing'), icon: CreditCard }] : [])
+    { path: '/', label: t('nav.home'), icon: Home },
+    { path: '/library', label: t('nav.library'), icon: Library },
+    { path: '/record-pool', label: t('nav.recordPool'), icon: Disc },
+    { path: '/mashup', label: t('nav.liveMashup'), icon: Layers },
+    ...(!isAdmin ? [{ path: '/pricing', label: t('subscription.pricing'), icon: CreditCard }] : [])
   ];
+
+  const activePage = location.pathname;
 
   return (
     <>
@@ -23,12 +28,12 @@ export default function Sidebar({ activePage = 'home', onNavigate, onAdminClick,
         <nav className="flex-1 flex flex-col gap-4 py-2">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activePage === item.id;
+            const isActive = activePage === item.path;
             
             return (
               <button
-                key={item.id}
-                onClick={() => onNavigate?.(item.id)}
+                key={item.path}
+                onClick={() => navigate(item.path)}
                 className={`group relative flex flex-col items-center gap-1.5 transition-all duration-300 ${
                   isActive ? 'scale-100' : 'scale-90 hover:scale-100'
                 }`}
@@ -120,12 +125,12 @@ export default function Sidebar({ activePage = 'home', onNavigate, onAdminClick,
         <div className="flex items-center justify-around px-2 py-1.5">
           {navItems.map((item) => {
             const Icon = item.icon;
-            const isActive = activePage === item.id;
+            const isActive = activePage === item.path;
             
             return (
               <button
-                key={item.id}
-                onClick={() => onNavigate?.(item.id)}
+                key={item.path}
+                onClick={() => navigate(item.path)}
                 className="flex flex-col items-center gap-0.5 py-1 px-3 min-w-[60px]"
               >
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 ${

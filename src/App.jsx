@@ -1,38 +1,63 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
 import SearchOverlay from './components/SearchOverlay';
 import AuthModal from './components/auth/AuthModal';
 import { authService } from './services/authService';
+import { startTokenRefreshScheduler, stopTokenRefreshScheduler } from './services/apiFetch';
 import ArtistAlbumView from './components/ArtistAlbumView';
 import TonalityFilter from './components/TonalityFilter';
 import GenreFilterHorizontal from './components/GenreFilterHorizontal';
 import AlbumsSection from './components/AlbumsSection';
 import PlaylistsSection from './components/PlaylistsSection';
 import TrackListView from './components/TrackListView';
-import LibraryPage from './components/LibraryPage';
-import AlbumPage from './components/AlbumPage';
-import RecordPoolPage from './components/RecordPoolPage';
 import AlbumDetailView from './components/AlbumDetailView';
-import LiveMashUpPage from './components/LiveMashUpPage';
-import AdminDashboard from './components/admin/AdminDashboard';
-import CheckoutPage from './components/CheckoutPage';
-import ProfilePage from './pages/ProfilePage';
-import UserDashboard from './components/UserDashboard';
+
+// Lazy-loaded pages for code splitting
+const LibraryPage = lazy(() => import('./components/LibraryPage'));
+const AlbumPage = lazy(() => import('./components/AlbumPage'));
+const RecordPoolPage = lazy(() => import('./components/RecordPoolPage'));
+const LiveMashUpPage = lazy(() => import('./components/LiveMashUpPage'));
+const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
+const CheckoutPage = lazy(() => import('./components/CheckoutPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const UserDashboard = lazy(() => import('./components/UserDashboard'));
 import BackgroundGradients from './components/BackgroundGradients';
 import MusicControlPanel from './components/MusicControlPanel';
 import TrendingSection from './components/TrendingSection';
-import PricingPage from './components/PricingPage';
 import CheckoutModal from './components/CheckoutModal';
-import SubscriptionDashboard from './components/SubscriptionDashboard';
-import CategoryTrackSection from './components/CategoryTrackSection';
-import { contentRows, mockTracks, artistsAndLabels, albums as mockAlbums, playlists } from './data/mockData';
+const PricingPage = lazy(() => import('./components/PricingPage'));
+const SubscriptionDashboard = lazy(() => import('./components/SubscriptionDashboard'));
+const CategoryTrackSection = lazy(() => import('./components/CategoryTrackSection'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 import API_URL from './config/api';
 
 const API = API_URL;
 
+// Map URL paths to internal page IDs
+const PATH_TO_PAGE = {
+  '/': 'home',
+  '/library': 'library',
+  '/record-pool': 'album',
+  '/mashup': 'mashup',
+  '/profile': 'profile',
+  '/pricing': 'pricing',
+  '/subscription': 'subscription',
+  '/settings': 'settings',
+};
+const PAGE_TO_PATH = Object.fromEntries(Object.entries(PATH_TO_PAGE).map(([k, v]) => [v, k]));
+
 function App() {
   console.log('App component rendering...');
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Derive activePage from the current URL
+  const activePage = useMemo(() => {
+    return PATH_TO_PAGE[location.pathname] || 'home';
+  }, [location.pathname]);
+
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -46,7 +71,6 @@ function App() {
   const [activeGenre, setActiveGenre] = useState('all');
   const [activeCategory, setActiveCategory] = useState(null); // category NAME, e.g. "Latin Box"
   const [activeTonality, setActiveTonality] = useState('all');
-  const [activePage, setActivePage] = useState('library');
   const [selectedProfile, setSelectedProfile] = useState(null);
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [selectedPlaylist, setSelectedPlaylist] = useState(null);
@@ -127,21 +151,9 @@ function App() {
     fetchAlbums();
   }, []);
 
-  // Use live data if available, fall back to mock
-  const tracks = liveTracks.length > 0 ? liveTracks : mockTracks;
-  const albums = liveAlbums.length > 0 ? liveAlbums : mockAlbums;
-
-  const filteredRows = useMemo(() => {
-    if (activeGenre === 'all') return contentRows;
-    
-    return contentRows.map(row => ({
-      ...row,
-      tracks: row.tracks.filter(track => 
-        track.collection.toLowerCase().includes(activeGenre.toLowerCase()) ||
-        track.title.toLowerCase().includes(activeGenre.toLowerCase())
-      )
-    })).filter(row => row.tracks.length > 0);
-  }, [activeGenre]);
+  // Live data from API (no mock fallback)
+  const tracks = liveTracks;
+  const albums = liveAlbums;
 
   // Check for authenticated user on mount
   useEffect(() => {
@@ -161,6 +173,16 @@ function App() {
     };
     checkAuth();
   }, []);
+
+  // Start/stop token refresh scheduler based on auth state
+  useEffect(() => {
+    if (user) {
+      startTokenRefreshScheduler();
+    } else {
+      stopTokenRefreshScheduler();
+    }
+    return () => stopTokenRefreshScheduler();
+  }, [user]);
 
   useEffect(() => {
     if (!searchQuery.trim()) {
@@ -340,7 +362,7 @@ function App() {
     await authService.logout();
     setUser(null);
     setShowAdminDashboard(false);
-    setActivePage('home');
+    navigate('/');
   };
 
   const handleOpenAuth = () => {
@@ -386,8 +408,9 @@ function App() {
   };
 
   const handleNavigate = (pageId) => {
-    setActivePage(pageId);
-    console.log('Navigate to:', pageId);
+    const path = PAGE_TO_PATH[pageId] || '/';
+    navigate(path);
+    console.log('Navigate to:', pageId, '→', path);
   };
 
   const handleAlbumClick = (album) => {
@@ -443,9 +466,10 @@ function App() {
         setAlbumDetailLoading(false);
       }
     } else {
-      // Fallback for mock albums
+      // No API ID available — show album with no tracks
       setSelectedAlbumDetail(album);
-      setAlbumDetailTracks(tracks.filter(t => t.artist === album.artist).slice(0, album.trackCount));
+      setAlbumDetailTracks([]);
+      setAlbumDetailLoading(false);
     }
   };
 
@@ -533,11 +557,10 @@ function App() {
         activeTonality={activeTonality}
         onTonalityChange={setActiveTonality}
         user={user}
-        onNavigate={handleNavigate}
         onLoginClick={handleOpenAuth}
         onSubscribe={() => {
           if (user) {
-            handleNavigate('pricing');
+            navigate('/pricing');
           } else {
             setAuthModalOpen(true);
           }
@@ -545,8 +568,6 @@ function App() {
       />
       
       <Sidebar
-        activePage={activePage}
-        onNavigate={handleNavigate}
         onAdminClick={() => {
           if (user && user.role === 'admin') {
             setShowAdminDashboard(true);
@@ -563,6 +584,7 @@ function App() {
 
       <div className="md:ml-20">
         <main className={`pt-16 md:pt-20 ${panelOpen ? 'pb-36 md:pb-24' : 'pb-20 md:pb-10'} relative`}>
+        <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
         {activePage === 'library' ? (
           <LibraryPage
             onTrackInteraction={handleTrackInteraction}
@@ -608,6 +630,8 @@ function App() {
               }
             }}
           />
+        ) : activePage === 'settings' ? (
+          <SettingsPage />
         ) : activePage === 'home' ? (
           <>
             <div className="sticky top-14 md:top-16 z-20 bg-dark-bg/95 backdrop-blur-md border-b border-white/5">
@@ -649,6 +673,7 @@ function App() {
             )}
           </>
         ) : null}
+        </Suspense>
         </main>
       </div>
 
@@ -674,7 +699,7 @@ function App() {
         user={user}
         onAuthRequired={handleOpenAuth}
         onSubscribe={() => {
-          handleNavigate('pricing');
+          navigate('/pricing');
         }}
       />
 
@@ -721,27 +746,31 @@ function App() {
           user={user}
           onAuthRequired={handleOpenAuth}
           onSubscribe={() => {
-            handleNavigate('pricing');
+            navigate('/pricing');
           }}
         />
       )}
 
       {showAdminDashboard && (
-        <AdminDashboard 
-          onClose={() => setShowAdminDashboard(false)} 
-          user={user}
-          onUserUpdate={setUser}
-        />
+        <Suspense fallback={null}>
+          <AdminDashboard 
+            onClose={() => setShowAdminDashboard(false)} 
+            user={user}
+            onUserUpdate={setUser}
+          />
+        </Suspense>
       )}
 
       {showUserDashboard && user && (
-        <UserDashboard
-          user={user}
-          onClose={() => setShowUserDashboard(false)}
-          onUserUpdate={setUser}
-          onLogout={handleLogout}
-          onTrackInteraction={handleTrackInteraction}
-        />
+        <Suspense fallback={null}>
+          <UserDashboard
+            user={user}
+            onClose={() => setShowUserDashboard(false)}
+            onUserUpdate={setUser}
+            onLogout={handleLogout}
+            onTrackInteraction={handleTrackInteraction}
+          />
+        </Suspense>
       )}
 
       {showCheckoutModal && selectedSubscriptionPlan && (

@@ -90,6 +90,11 @@ export default function AdminCategories() {
       if (!data.success) throw new Error(data.message);
       flash(editingId ? 'Category updated' : 'Category created');
       setShowForm(false);
+      if (editingId) {
+        setCategories(prev => prev.map(c => c._id === editingId ? { ...c, ...data.data } : c));
+      } else {
+        setCategories(prev => [...prev, { ...data.data, trackCount: 0 }]);
+      }
       fetchCategories();
     } catch (e) {
       flash(e.message, 'error');

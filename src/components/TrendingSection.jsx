@@ -28,17 +28,18 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
     try {
       setLoading(true);
       const response = await fetch(`${API_URL}/downloads/trending?period=${period}&limit=10`);
-      
-      if (!response.ok) {
-        console.error('Trending API error:', response.status, response.statusText);
-        return;
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.data?.length > 0) {
+          setTrendingTracks(data.data);
+          return;
+        }
       }
-      
-      const data = await response.json();
-      if (data.success) {
-        setTrendingTracks(data.data || []);
-      } else {
-        console.error('Trending API returned error:', data.message);
+      // Fall back to newest tracks when no download data exists
+      const fallback = await fetch(`${API_URL}/tracks/browse?limit=10&sort=-dateAdded`);
+      if (fallback.ok) {
+        const fbData = await fallback.json();
+        if (fbData.success) setTrendingTracks(fbData.data || []);
       }
     } catch (error) {
       console.error('Error fetching trending tracks:', error.message || error);
@@ -49,19 +50,11 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
 
   const fetchRecentTracks = async () => {
     try {
-      const response = await fetch(`${API_URL}/downloads/recent?limit=10`);
-      
-      if (!response.ok) {
-        console.error('Recent API error:', response.status, response.statusText);
-        return;
-      }
-      
+      // Use browse API for recently added tracks (reliable even with 0 downloads)
+      const response = await fetch(`${API_URL}/tracks/browse?limit=10&sort=-dateAdded`);
+      if (!response.ok) return;
       const data = await response.json();
-      if (data.success) {
-        setRecentTracks(data.data || []);
-      } else {
-        console.error('Recent API returned error:', data.message);
-      }
+      if (data.success) setRecentTracks(data.data || []);
     } catch (error) {
       console.error('Error fetching recent tracks:', error.message || error);
     }

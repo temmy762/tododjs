@@ -10,11 +10,11 @@ import {
   getUncategorizedTracks,
   bulkAssignCategory
 } from '../controllers/categoryController.js';
-import { protect, authorize } from '../middleware/auth.js';
+import { protect, authorize, optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.get('/', getCategories);
+router.get('/', optionalAuth, getCategories);
 router.post('/seed', protect, authorize('admin'), seedCategories);
 router.get('/uncategorized/count', protect, authorize('admin'), getUncategorizedCount);
 router.get('/uncategorized/tracks', protect, authorize('admin'), getUncategorizedTracks);
