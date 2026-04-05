@@ -13,23 +13,19 @@
  *   --dry-run   Report what would change without saving
  */
 
+import 'dotenv/config';
 import mongoose from 'mongoose';
-import dotenv from 'dotenv';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: join(__dirname, '../../.env') });
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
 async function main() {
-  if (!process.env.MONGODB_URI) {
-    console.error('❌  MONGODB_URI is not set in .env');
+  const MONGO_URI = process.env.MONGO_URI || process.env.MONGODB_URI;
+  if (!MONGO_URI) {
+    console.error('❌  MONGO_URI / MONGODB_URI is not set in .env');
     process.exit(1);
   }
 
-  await mongoose.connect(process.env.MONGODB_URI);
+  await mongoose.connect(MONGO_URI);
   console.log('✅  Connected to MongoDB');
 
   const Track = (await import('../models/Track.js')).default;
