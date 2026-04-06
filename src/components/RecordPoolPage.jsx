@@ -84,7 +84,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
     setFeedLoading(true);
     try {
       const params = new URLSearchParams({ limit: FEED_LIMIT, page });
-      if (category)  params.set('genre', category);
+      if (category)  params.set('category', category);
       if (searchQ.trim()) params.set('search', searchQ.trim());
       const sortMap = { newest: '-createdAt', oldest: 'createdAt', name: 'name', tracks: '-trackCount' };
       params.set('sort', sortMap[sortV] || '-createdAt');
@@ -135,10 +135,12 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
     return list;
   }, [poolAlbums, search, sort]);
 
+  // By Pool view: only show Sources (actual record pool brands), not upload Collections
   const filteredPools = useMemo(() => {
-    if (!search.trim()) return poolItems;
+    const sources = poolItems.filter(i => i._type === 'source');
+    if (!search.trim()) return sources;
     const q = search.toLowerCase();
-    return poolItems.filter(i => i.name?.toLowerCase().includes(q));
+    return sources.filter(i => i.name?.toLowerCase().includes(q));
   }, [poolItems, search]);
 
   // ─── helpers ──────────────────────────────────────────────────────────────────

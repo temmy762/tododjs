@@ -439,34 +439,65 @@ export const updateAlbum = async (req, res) => {
 // @access  Public
 export const getAlbums = async (req, res) => {
   try {
-    const { sourceId, year, search, genre, category, limit = 20, page = 1 } = req.query;
-    
+    const { sourceId, year, search, genre, category, sort, limit = 20, page = 1 } = req.query;
+
     let query = { isActive: true };
-    
+
     if (sourceId) query.sourceId = sourceId;
     if (year) query.year = year;
     if (genre) query.genre = { $regex: genre, $options: 'i' };
-    if (category) query.genre = { $regex: category, $options: 'i' };
+
+    // category filter: match against source names first, fall back to album name/genre
+    if (category && !sourceId) {
+      const matchedSources = await Source.find({
+        name: { $regex: category, $options: 'i' }
+      }).select('_id').lean();
+
+      if (matchedSources.length > 0) {
+        query.sourceId = { $in: matchedSources.map(s => s._id) };
+      } else {
+        // fallback: match album name or genre field
+        query.$or = [
+          { genre: { $regex: category, $options: 'i' } },
+          { name:  { $regex: category, $options: 'i' } }
+        ];
+      }
+    }
+
     if (search) {
       query.name = { $regex: search, $options: 'i' };
     }
 
-    const albums = await Album.find(query)
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit))
-      .populate('sourceId', 'name year platform thumbnail')
-      .populate('uploadedBy', 'name');
+    // sort param: -createdAt | createdAt | name | -trackCount
+    const sortMap = {
+      '-createdAt':  { createdAt: -1 },
+      'createdAt':   { createdAt:  1 },
+      'name':        { name: 1 },
+      '-trackCount': { trackCount: -1 }
+    };
+    const sortOrder = sortMap[sort] || { createdAt: -1 };
 
-    const total = await Album.countDocuments(query);
+    const pageNum  = parseInt(page);
+    const limitNum = parseInt(limit);
+
+    const [albums, total] = await Promise.all([
+      Album.find(query)
+        .sort(sortOrder)
+        .limit(limitNum)
+        .skip((pageNum - 1) * limitNum)
+        .populate('sourceId', 'name year platform thumbnail')
+        .populate('uploadedBy', 'name'),
+      Album.countDocuments(query)
+    ]);
+
     const albumsWithUrls = await resolveSignedUrls(albums, ['coverArt']);
 
     res.status(200).json({
       success: true,
       count: albumsWithUrls.length,
       total,
-      page: parseInt(page),
-      pages: Math.ceil(total / parseInt(limit)),
+      page: pageNum,
+      pages: Math.ceil(total / limitNum),
       data: albumsWithUrls
     });
   } catch (error) {
