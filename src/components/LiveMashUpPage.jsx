@@ -19,6 +19,17 @@ const CAMELOT_KEYS = [
   '1B','2B','3B','4B','5B','6B','7B','8B','9B','10B','11B','12B',
 ];
 
+// Common DJ version-type tags and the title keywords that match them
+const VERSION_TAGS = [
+  { label: 'Intro',    regex: /\bintro\b/i },
+  { label: 'Outro',    regex: /\boutro\b/i },
+  { label: 'Clean',    regex: /\bclean\b/i },
+  { label: 'Dirty',    regex: /\bdirty\b/i },
+  { label: 'Extended', regex: /\bextended\b/i },
+  { label: 'Original', regex: /\boriginal\b/i },
+  { label: 'Acapella', regex: /\bacapella\b/i },
+];
+
 const SORT_MAP = {
   dateAdded: '-createdAt',
   title: 'title',
@@ -59,6 +70,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
   // ── standalone filter state (completely independent) ─────────
   const [filterGenre, setFilterGenre] = useState('all');
   const [filterTonality, setFilterTonality] = useState('all');
+  const [filterTag, setFilterTag] = useState('all');
   const [sortBy, setSortBy] = useState('dateAdded');
   const [currentPage, setCurrentPage] = useState(1);
   const [tracksPerPage, setTracksPerPage] = useState(30);
@@ -143,7 +155,15 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
     return nums;
   };
 
-  const hasActiveFilters = filterGenre !== 'all' || filterTonality !== 'all';
+  // Client-side tag filter
+  const displayedTracks = filterTag === 'all'
+    ? tracks
+    : tracks.filter(t => {
+        const tagDef = VERSION_TAGS.find(v => v.label === filterTag);
+        return tagDef ? tagDef.regex.test(t.title) : true;
+      });
+
+  const hasActiveFilters = filterGenre !== 'all' || filterTonality !== 'all' || filterTag !== 'all';
 
   return (
     <div className="min-h-screen">
@@ -176,7 +196,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
           <div className="flex items-center gap-2">
             {hasActiveFilters && (
               <button
-                onClick={() => { setFilterGenre('all'); setFilterTonality('all'); setCurrentPage(1); }}
+                onClick={() => { setFilterGenre('all'); setFilterTonality('all'); setFilterTag('all'); setCurrentPage(1); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30 text-xs font-semibold transition-all"
               >
                 <X className="w-3 h-3" /> Clear filters
@@ -223,6 +243,32 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
               <option value="bpm">BPM (High to Low)</option>
             </select>
           </div>
+        </div>
+      </div>
+
+      {/* Version Tag Chips */}
+      <div className="px-4 md:px-10 pt-3 pb-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-brand-text-tertiary font-medium flex-shrink-0">Tags:</span>
+          <button
+            onClick={() => setFilterTag('all')}
+            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+              filterTag === 'all' ? 'bg-accent text-white' : 'bg-white/10 text-brand-text-tertiary hover:text-white'
+            }`}
+          >
+            All
+          </button>
+          {VERSION_TAGS.map(({ label }) => (
+            <button
+              key={label}
+              onClick={() => setFilterTag(prev => prev === label ? 'all' : label)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                filterTag === label ? 'bg-accent text-white' : 'bg-white/10 text-brand-text-tertiary hover:text-white'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -280,13 +326,13 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
         </div>
       ) : viewMode === 'list' ? (
         <TrackListView
-          tracks={tracks}
+          tracks={displayedTracks}
           onTrackInteraction={handleMashupInteraction}
           userFavorites={userFavorites}
         />
       ) : (
         <TrackGridView
-          tracks={tracks}
+          tracks={displayedTracks}
           onTrackInteraction={handleMashupInteraction}
         />
       )}
