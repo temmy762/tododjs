@@ -26,39 +26,36 @@ function convertToCamelot(key, scale) {
   return CAMELOT_MAP[keyString] || null;
 }
 
-function parseKeyFromID3(initialKey) {
+export function parseKeyFromID3(initialKey) {
   if (!initialKey) return null;
-  
+  const raw = initialKey.trim();
+
   // Try Camelot notation first (e.g. "8A", "11B")
-  const camelotMatch = initialKey.match(/\b([1-9]|1[0-2])[AB]\b/);
+  const camelotMatch = raw.match(/^([1-9]|1[0-2])[AB]$/i);
   if (camelotMatch) {
-    return {
-      camelot: camelotMatch[0]
-    };
+    return { camelot: raw.toUpperCase() };
   }
 
-  // Try standard key notation (e.g. "Bb minor", "F# major", "C♯ min")
-  const keyMatch = initialKey.match(/([A-G][#♯]?|[A-G][b♭])\s*(major|minor|maj|min|m)\b/i);
+  // Shorthand: "Ebm" / "F#m" (minor) or "EbM" / "Ebmaj" (major)
+  const shortMatch = raw.match(/^([A-G][#♯b♭]?)(m|M|maj|min|major|minor)?$/i);
+  if (shortMatch) {
+    const key = shortMatch[1];
+    const suffix = (shortMatch[2] || '').toLowerCase();
+    const scale = (!suffix || suffix === 'm' || suffix.startsWith('min')) ? 'minor'
+                : 'major';
+    // No suffix → could be either; assume major for single-letter/note
+    const finalScale = suffix === '' ? 'major' : scale;
+    return { key, scale: finalScale, camelot: convertToCamelot(key, finalScale) };
+  }
+
+  // Try verbose notation (e.g. "Bb minor", "F# major", "C♯ min")
+  const keyMatch = raw.match(/([A-G][#♯]?|[A-G][b♭])\s*(major|minor|maj|min)\b/i);
   if (keyMatch) {
     const key = keyMatch[1];
     const scale = keyMatch[2].toLowerCase().startsWith('maj') ? 'major' : 'minor';
-    return {
-      key,
-      scale,
-      camelot: convertToCamelot(key, scale)
-    };
+    return { key, scale, camelot: convertToCamelot(key, scale) };
   }
 
-  // Try just a key letter with sharp/flat (no scale specified, assume major)
-  const keyOnlyMatch = initialKey.match(/^([A-G][#♯b♭]?)$/);
-  if (keyOnlyMatch) {
-    return {
-      key: keyOnlyMatch[1],
-      scale: 'major',
-      camelot: convertToCamelot(keyOnlyMatch[1], 'major')
-    };
-  }
-  
   return null;
 }
 
@@ -77,8 +74,22 @@ export async function detectTonality(audioBuffer, metadata) {
   try {
     const musicMetadata = await parseBuffer(audioBuffer, { mimeType: 'audio/mpeg' });
     
-    if (musicMetadata.common.initialKey) {
-      const id3Tonality = parseKeyFromID3(musicMetadata.common.initialKey);
+    // Also check raw native TKEY if common.initialKey isn't surfaced
+    let rawKey = musicMetadata.common.initialKey;
+    if (!rawKey) {
+      for (const container of Object.values(musicMetadata.native || {})) {
+        for (const tag of container) {
+          if (['TKEY', 'KEY', 'initialkey', 'Initial key'].includes(tag.id) && tag.value) {
+            rawKey = String(tag.value).trim();
+            break;
+          }
+        }
+        if (rawKey) break;
+      }
+    }
+
+    if (rawKey) {
+      const id3Tonality = parseKeyFromID3(rawKey);
       if (id3Tonality) {
         tonality = {
           key: id3Tonality.key || null,

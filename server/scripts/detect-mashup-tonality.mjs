@@ -65,7 +65,7 @@ async function main() {
   console.log('✅  Connected to MongoDB\n');
 
   const Mashup = (await import('../models/Mashup.js')).default;
-  const { detectTonality } = await import('../services/tonalityDetection.js');
+  const { detectTonality, parseKeyFromID3 } = await import('../services/tonalityDetection.js');
   const { ensureSignedUrl } = await import('../config/wasabi.js');
   const { parseBuffer } = await import('music-metadata');
 
@@ -140,14 +140,12 @@ async function main() {
     let result;
     try {
       result = await detectTonality(audioBuffer, { title: m.title, artist: m.artist });
-      // If main detection missed it but native tag has a value, use that
+      // If main detection missed it but native tag has a value, convert and use it
       if (nativeKeyHint && !result.tonality?.camelot) {
-        const { parseKeyFromID3 } = await import('../services/tonalityDetection.js').catch(() => ({ parseKeyFromID3: null }));
-        // Simple inline parse: accept raw camelot values like "5A" or "10B"
-        const camelotMatch = nativeKeyHint.match(/\b([1-9]|1[0-2])[AB]\b/i);
-        if (camelotMatch) {
-          result.tonality = { camelot: camelotMatch[0].toUpperCase(), source: 'native-id3', confidence: 0.8, needsManualReview: false };
-          console.log(`   ✓ Camelot from native tag: ${result.tonality.camelot}`);
+        const parsed = parseKeyFromID3(nativeKeyHint);
+        if (parsed?.camelot) {
+          result.tonality = { key: parsed.key || null, scale: parsed.scale || null, camelot: parsed.camelot, source: 'native-id3', confidence: 0.8, needsManualReview: false };
+          console.log(`   ✓ Camelot from native tag (${nativeKeyHint}): ${result.tonality.camelot}`);
         }
       }
     } catch (err) {
