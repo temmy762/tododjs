@@ -17,6 +17,7 @@ dotenv.config({ path: resolve(__dirname, '../.env') });
 import mongoose from 'mongoose';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { parseBuffer } from 'music-metadata';
+import OpenAI from 'openai';
 
 // ── Inline Wasabi client (avoid circular import from wasabi.js) ────────────
 const s3 = new S3Client({
@@ -49,14 +50,58 @@ async function bpmFromID3(buffer) {
   return null;
 }
 
+// ── OpenAI client ─────────────────────────────────────────────────────────
+const openai = process.env.OPENAI_API_KEY
+  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY, timeout: 20000 })
+  : null;
+
 // ── Extract BPM from Essentia.js audio analysis ───────────────────────────
 async function bpmFromAudio(buffer) {
+  if (process.env.ESSENTIA_ENABLED === 'false') {
+    console.log('   ⚠ Essentia disabled (ESSENTIA_ENABLED=false) — skipping audio analysis');
+    return null;
+  }
   try {
     const { analyzeAudio } = await import('../services/audioAnalysis.js');
     const result = await analyzeAudio(buffer);
     if (result?.bpm && result.bpm >= 60 && result.bpm <= 220) return Math.round(result.bpm);
   } catch (err) {
     console.log('   ⚠ Essentia analysis failed:', err.message);
+  }
+  return null;
+}
+
+// ── Estimate BPM via OpenAI from title + artist ───────────────────────────
+async function bpmFromAI(title, artist) {
+  if (!openai) {
+    console.log('   ⚠ No OPENAI_API_KEY — skipping AI BPM estimation');
+    return null;
+  }
+  try {
+    console.log('   🤖 Asking OpenAI for BPM estimate...');
+    const response = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a music expert specializing in DJ music. Given a track title and artist, estimate the BPM (beats per minute). Respond ONLY with valid JSON: {"bpm": <integer between 60 and 220>, "confidence": "high"|"medium"|"low"}. If you truly cannot estimate, use {"bpm": null, "confidence": "unknown"}.',
+        },
+        {
+          role: 'user',
+          content: `Track: "${title}" by ${artist}`,
+        },
+      ],
+      temperature: 0,
+      max_tokens: 60,
+    });
+    const raw = response.choices[0].message.content.trim();
+    const parsed = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    if (parsed.bpm && parsed.bpm >= 60 && parsed.bpm <= 220) {
+      console.log(`   ✓ BPM from AI: ${parsed.bpm} (confidence: ${parsed.confidence})`);
+      return Math.round(parsed.bpm);
+    }
+  } catch (err) {
+    console.log('   ⚠ OpenAI BPM estimation failed:', err.message);
   }
   return null;
 }
@@ -119,6 +164,11 @@ async function main() {
       if (!bpm) {
         bpm = bpmFromTitle(mashup.title);
         if (bpm) { console.log(`   ✓ BPM from title: ${bpm}`); }
+      }
+
+      // Priority 4: OpenAI AI estimation
+      if (!bpm) {
+        bpm = await bpmFromAI(mashup.title, mashup.artist);
       }
 
       if (bpm) {
