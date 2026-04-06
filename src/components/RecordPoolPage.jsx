@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Disc, Music, ChevronRight, ArrowLeft, Loader, Download, Play,
-  Search, X, Grid3x3, List, Layers, ChevronLeft, ChevronRight as ChevronRightIcon,
-  Flame, Clock, SortAsc, Filter
+  Search, X, Grid3x3, List, ChevronLeft, ChevronRight as ChevronRightIcon,
+  Calendar, Layers2
 } from 'lucide-react';
 import API_URL from '../config/api';
 
@@ -23,109 +23,105 @@ const SORT_OPTIONS = [
   { value: 'tracks', label: 'Most Tracks'  },
 ];
 
-/**
- * RecordPoolPage — DJ-first UX
- *
- * Primary view: Category tab bar → album feed filtered by genre.
- *   Think like a DJ: browse AFRO HOUSE, LATIN BOX, etc. and see what dropped today.
- * Secondary view: "Browse Pools" → pool cards → albums inside a pool.
- */
+// Strip trailing vol/number/edition to get the series base name
+function getSeriesName(name) {
+  return name
+    .replace(/[\s_\-]+(?:vol(?:ume)?\.?\s*\d+|ep\.?\s*\d+|n[o°]\.?\s*\d+|#\s*\d+|(?:part|pt)\.?\s*\d+|\b\d{1,2}(?:st|nd|rd|th)?\b)[\s.,:\-]*$/i, '')
+    .trim() || name;
+}
+
 export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
-  // ─── mode: 'feed' | 'pools' | 'pool-detail' ─────────────────────────────────
-  const [mode, setMode]             = useState('feed');   // DJ album feed
+  // ─── mode: 'pools' | 'pool-detail' ──────────────────────────────────────────
+  const [mode, setMode]             = useState('pools');
   const [poolItems, setPoolItems]   = useState([]);
-  const [categories, setCategories] = useState([]);
   const [selectedPool, setSelectedPool] = useState(null);
   const [loadingMeta, setLoadingMeta]   = useState(true);
 
-  // feed state
-  const [feedAlbums, setFeedAlbums]   = useState([]);
-  const [feedLoading, setFeedLoading] = useState(false);
-  const [feedPage, setFeedPage]       = useState(1);
-  const [feedTotal, setFeedTotal]     = useState(0);
-  const FEED_LIMIT = 24;
-
   // pool-detail state
-  const [poolAlbums, setPoolAlbums]     = useState([]);
-  const [poolLoading, setPoolLoading]   = useState(false);
+  const [poolAlbums, setPoolAlbums]   = useState([]);
+  const [poolLoading, setPoolLoading] = useState(false);
 
   // filters
-  const [activeCategory, setActiveCategory] = useState(null); // null = All
-  const [search, setSearch]               = useState('');
-  const [sort, setSort]                   = useState('newest');
-  const [viewMode, setViewMode]           = useState('grid');
-
-  const tabBarRef = useRef(null);
+  const [search, setSearch]     = useState('');
+  const [sort, setSort]         = useState('newest');
+  const [viewMode, setViewMode] = useState('grid');
 
   // ─── initial load ────────────────────────────────────────────────────────────
   useEffect(() => {
     (async () => {
       setLoadingMeta(true);
       try {
-        const [colRes, srcRes, catRes] = await Promise.all([
+        const [colRes, srcRes] = await Promise.all([
           fetch(`${API_URL}/collections`),
           fetch(`${API_URL}/sources`),
-          fetch(`${API_URL}/categories`),
         ]);
-        const [colData, srcData, catData] = await Promise.all([
-          colRes.json(), srcRes.json(), catRes.json()
-        ]);
+        const [colData, srcData] = await Promise.all([colRes.json(), srcRes.json()]);
         const cols = (colData.success ? colData.data || [] : []).map(c => ({ ...c, _type: 'collection' }));
         const srcs = (srcData.success ? srcData.data || [] : []).map(s => ({ ...s, _type: 'source' }));
         setPoolItems([...srcs, ...cols]);
-        setCategories(catData.success ? catData.data || [] : []);
       } catch { /* ignore */ }
       finally { setLoadingMeta(false); }
     })();
   }, []);
 
-  // ─── fetch album feed (DJ view) ───────────────────────────────────────────────
-  const fetchFeed = useCallback(async (page, category, searchQ, sortV) => {
-    setFeedLoading(true);
-    try {
-      const params = new URLSearchParams({ limit: FEED_LIMIT, page });
-      if (category)  params.set('category', category);
-      if (searchQ.trim()) params.set('search', searchQ.trim());
-      const sortMap = { newest: '-createdAt', oldest: 'createdAt', name: 'name', tracks: '-trackCount' };
-      params.set('sort', sortMap[sortV] || '-createdAt');
-      const res  = await fetch(`${API_URL}/albums?${params}`);
-      const data = await res.json();
-      if (data.success) {
-        setFeedAlbums(data.data || []);
-        setFeedTotal(data.total || 0);
+  // ─── derived: sources ────────────────────────────────────────────────────────
+  const sources = useMemo(() => poolItems.filter(i => i._type === 'source'), [poolItems]);
+
+  // ─── derived: collection series grouped by (seriesName, year) ────────────────
+  const collectionSeries = useMemo(() => {
+    const completed = poolItems.filter(i => i._type === 'collection' && i.status === 'completed');
+    const map = new Map();
+    for (const col of completed) {
+      const seriesName = getSeriesName(col.name);
+      const year = col.year || new Date(col.createdAt || Date.now()).getFullYear();
+      const key = `${seriesName.toLowerCase()}::${year}`;
+      if (!map.has(key)) {
+        map.set(key, {
+          _id: key, _type: 'series', name: seriesName, year,
+          collections: [], thumbnail: null, totalAlbums: 0, totalTracks: 0,
+        });
       }
-    } catch { /* ignore */ }
-    finally { setFeedLoading(false); }
-  }, []);
+      const entry = map.get(key);
+      entry.collections.push(col);
+      entry.totalAlbums  += col.totalAlbums  || 0;
+      entry.totalTracks  += col.totalTracks  || 0;
+      if (!entry.thumbnail && col.thumbnail) entry.thumbnail = col.thumbnail;
+    }
+    return [...map.values()].sort((a, b) => b.year - a.year || a.name.localeCompare(b.name));
+  }, [poolItems]);
 
-  // re-fetch when feed filters change
-  useEffect(() => {
-    if (mode === 'feed') fetchFeed(feedPage, activeCategory, search, sort);
-  }, [mode, feedPage, activeCategory, search, sort, fetchFeed]);
-
-  // reset page on filter change
-  useEffect(() => { setFeedPage(1); }, [activeCategory, search, sort]);
-
-  // ─── fetch pool detail albums ─────────────────────────────────────────────────
+  // ─── fetch pool/series detail albums ─────────────────────────────────────────
   const openPool = useCallback(async (item) => {
     setSelectedPool(item);
     setMode('pool-detail');
     setPoolLoading(true);
     try {
-      const url = item._type === 'source'
-        ? `${API_URL}/albums?sourceId=${item._id}&limit=200`
-        : `${API_URL}/collections/${item._id}/albums`;
-      const res  = await fetch(url);
-      const data = await res.json();
-      if (data.success) setPoolAlbums(data.data || []);
+      let albums = [];
+      if (item._type === 'source') {
+        const res  = await fetch(`${API_URL}/albums?sourceId=${item._id}&limit=200`);
+        const data = await res.json();
+        if (data.success) albums = data.data || [];
+      } else if (item._type === 'series') {
+        const results = await Promise.all(
+          item.collections.map(c =>
+            fetch(`${API_URL}/collections/${c._id}/albums`).then(r => r.json())
+          )
+        );
+        for (const data of results) {
+          if (data.success) albums.push(...(data.data || []));
+        }
+        albums.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      }
+      setPoolAlbums(albums);
     } catch { /* ignore */ }
     finally { setPoolLoading(false); }
   }, []);
 
-  // ─── filtered pool detail list ────────────────────────────────────────────────
+  // ─── filtered pool-detail albums ─────────────────────────────────────────────
   const filteredPoolAlbums = useMemo(() => {
-    let list = [...poolAlbums];
-    if (search.trim()) list = list.filter(a => a.name?.toLowerCase().includes(search.toLowerCase()));
+    let list = search.trim()
+      ? poolAlbums.filter(a => a.name?.toLowerCase().includes(search.toLowerCase()))
+      : [...poolAlbums];
     switch (sort) {
       case 'oldest': list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)); break;
       case 'name':   list.sort((a, b) => (a.name || '').localeCompare(b.name || '')); break;
@@ -135,68 +131,48 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
     return list;
   }, [poolAlbums, search, sort]);
 
-  // Map category name → album count from matching source.totalAlbums
-  const categoryAlbumCount = useMemo(() => {
-    const sources = poolItems.filter(i => i._type === 'source');
-    const map = {};
-    for (const cat of categories) {
-      const match = sources.find(s =>
-        s.name?.toLowerCase().includes(cat.name?.toLowerCase()) ||
-        cat.name?.toLowerCase().includes(s.name?.toLowerCase())
-      );
-      if (match) map[cat._id] = match.totalAlbums || 0;
-    }
-    return map;
-  }, [poolItems, categories]);
-
-  // By Pool view: only show Sources (actual record pool brands), not upload Collections
-  const filteredPools = useMemo(() => {
-    const sources = poolItems.filter(i => i._type === 'source');
+  // ─── filtered sources & series for pools view ─────────────────────────────────
+  const filteredSources = useMemo(() => {
     if (!search.trim()) return sources;
     const q = search.toLowerCase();
-    return sources.filter(i => i.name?.toLowerCase().includes(q));
-  }, [poolItems, search]);
+    return sources.filter(s => s.name?.toLowerCase().includes(q));
+  }, [sources, search]);
+
+  const filteredSeries = useMemo(() => {
+    if (!search.trim()) return collectionSeries;
+    const q = search.toLowerCase();
+    return collectionSeries.filter(s => s.name?.toLowerCase().includes(q));
+  }, [collectionSeries, search]);
 
   // ─── helpers ──────────────────────────────────────────────────────────────────
   const goBack = () => {
-    if (mode === 'pool-detail') { setMode('pools'); setSelectedPool(null); setPoolAlbums([]); }
-    else setMode('feed');
+    setMode('pools');
+    setSelectedPool(null);
+    setPoolAlbums([]);
     setSearch('');
   };
-
-  const handleCategoryClick = (cat) => {
-    setActiveCategory(prev => prev === cat ? null : cat);
-    setMode('feed');
-  };
-
-  const feedPages = Math.max(1, Math.ceil(feedTotal / FEED_LIMIT));
 
   // ─── render ───────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen">
 
-      {/* ── Sticky header + category tabs ─────────────────────────────────── */}
+      {/* ── Sticky header ──────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-dark-bg/95 backdrop-blur-md border-b border-white/[0.06]">
-
-        {/* Title row */}
         <div className="px-4 md:px-10 pt-5 pb-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            {mode !== 'feed' && (
+            {mode === 'pool-detail' && (
               <button onClick={goBack} className="p-1.5 rounded-lg hover:bg-white/10 text-brand-text-tertiary hover:text-white transition-all">
                 <ArrowLeft size={18} />
               </button>
             )}
             <div>
               <h1 className="text-xl font-bold text-white leading-tight">
-                {mode === 'pool-detail' && selectedPool ? selectedPool.name
-                  : mode === 'pools' ? 'Browse Pools'
-                  : 'Record Pools'}
+                {mode === 'pool-detail' && selectedPool ? selectedPool.name : 'Record Pools'}
               </h1>
               <p className="text-[11px] text-brand-text-tertiary mt-0.5">
-                {mode === 'feed' && !activeCategory ? `${feedTotal.toLocaleString()} albums across all pools`
-                  : mode === 'feed' && activeCategory ? `${feedTotal.toLocaleString()} albums in ${activeCategory}`
-                  : mode === 'pools' ? `${filteredPools.length} pools available`
-                  : `${filteredPoolAlbums.length} albums`}
+                {mode === 'pool-detail'
+                  ? `${filteredPoolAlbums.length} albums`
+                  : `${filteredSources.length} pools · ${filteredSeries.length} collections`}
               </p>
             </div>
           </div>
@@ -219,16 +195,14 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
               )}
             </div>
 
-            {/* Sort — dark bg so option text is readable on all OS */}
+            {/* Sort */}
             <select
               value={sort}
               onChange={e => setSort(e.target.value)}
               className="bg-[#1c1c2e] border border-white/10 rounded-lg text-xs text-white px-2.5 py-1.5 focus:outline-none focus:border-accent/50 cursor-pointer"
             >
               {SORT_OPTIONS.map(o => (
-                <option key={o.value} value={o.value} style={{ background: '#1c1c2e', color: '#fff' }}>
-                  {o.label}
-                </option>
+                <option key={o.value} value={o.value} style={{ background: '#1c1c2e', color: '#fff' }}>{o.label}</option>
               ))}
             </select>
 
@@ -243,142 +217,62 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
                 <List size={13} />
               </button>
             </div>
-
-            {/* Browse Pools toggle */}
-            <button
-              onClick={() => { setMode(m => m === 'pools' ? 'feed' : 'pools'); setSearch(''); }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                mode === 'pools' ? 'bg-accent border-accent text-white' : 'bg-white/[0.06] border-white/10 text-brand-text-tertiary hover:text-white'
-              }`}
-            >
-              <Layers size={13} /> {mode === 'pools' ? 'By Genre' : 'By Pool'}
-            </button>
           </div>
         </div>
-
-        {/* Category tabs — only shown in feed mode */}
-        {mode === 'feed' && !loadingMeta && (
-          <div className="relative px-4 md:px-10 pb-0">
-            <div ref={tabBarRef} className="flex items-center gap-1.5 overflow-x-auto scrollbar-hidden pb-3 scroll-smooth">
-              {/* All tab */}
-              <button
-                onClick={() => handleCategoryClick(null)}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-200 ${
-                  !activeCategory
-                    ? 'bg-accent text-white shadow-lg shadow-accent/20'
-                    : 'text-brand-text-tertiary hover:text-white hover:bg-white/[0.06]'
-                }`}
-              >
-                <Flame size={13} className={!activeCategory ? 'text-white' : 'text-brand-text-tertiary'} />
-                All New Drops
-              </button>
-
-              {categories.map(cat => {
-                const isActive = activeCategory === cat.name;
-                return (
-                  <button
-                    key={cat._id}
-                    onClick={() => handleCategoryClick(cat.name)}
-                    className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all duration-200 ${
-                      isActive ? 'text-white shadow-lg' : 'text-brand-text-tertiary hover:text-white hover:bg-white/[0.06]'
-                    }`}
-                    style={isActive ? { backgroundColor: cat.color || '#7C3AED', boxShadow: `0 4px 14px ${cat.color || '#7C3AED'}40` } : {}}
-                  >
-                    {cat.thumbnail
-                      ? <img src={cat.thumbnail} alt="" className="w-4 h-4 rounded-full object-cover" onError={e => e.target.style.display='none'} />
-                      : <Disc size={12} />}
-                    {cat.name}
-                    {categoryAlbumCount[cat._id] > 0 && (
-                      <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${isActive ? 'bg-white/20' : 'bg-white/10 text-brand-text-tertiary'}`}>
-                        {categoryAlbumCount[cat._id].toLocaleString()} albums
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── Content ─────────────────────────────────────────────────────────── */}
       <div className="px-4 md:px-10 py-5">
 
-        {/* Mobile search bar */}
+        {/* Mobile search */}
         <div className="relative sm:hidden mb-4">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-brand-text-tertiary pointer-events-none" />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search albums or pools…"
+          <input value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Search pools or collections…"
             className="w-full pl-7 pr-7 py-2 bg-white/[0.06] border border-white/10 rounded-lg text-xs text-white placeholder-brand-text-tertiary/60 focus:outline-none focus:border-accent/50"
           />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-text-tertiary hover:text-white">
-              <X size={11} />
-            </button>
-          )}
+          {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-text-tertiary hover:text-white"><X size={11} /></button>}
         </div>
 
-        {/* ── FEED: latest albums by category ─────────────────────────────── */}
-        {mode === 'feed' && (
-          <>
-            {feedLoading ? <LoadingState /> : feedAlbums.length === 0 ? (
-              <EmptyState icon={Music} text={activeCategory ? `No albums in ${activeCategory} yet` : 'No albums available yet'} />
-            ) : viewMode === 'grid' ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4">
-                {feedAlbums.map((album, i) => (
-                  <AlbumCard key={album._id} album={album} index={i}
-                    onClick={() => onAlbumClick?.(album)}
-                    onPlay={() => onAlbumClick?.(album, { autoPlay: true })}
-                    onDownload={() => onAlbumDownload?.(album)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-1.5">
-                {feedAlbums.map((album, i) => (
-                  <AlbumRow key={album._id} album={album} index={i}
-                    onClick={() => onAlbumClick?.(album)}
-                    onDownload={() => onAlbumDownload?.(album)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Pagination */}
-            {feedPages > 1 && !feedLoading && (
-              <div className="flex items-center justify-center gap-3 mt-8">
-                <button
-                  onClick={() => setFeedPage(p => Math.max(1, p - 1))}
-                  disabled={feedPage === 1}
-                  className="p-2 rounded-lg bg-white/5 border border-white/10 text-white disabled:opacity-30 hover:bg-white/10 transition-all"
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <span className="text-sm text-brand-text-tertiary">
-                  Page <span className="text-white font-semibold">{feedPage}</span> of {feedPages}
-                </span>
-                <button
-                  onClick={() => setFeedPage(p => Math.min(feedPages, p + 1))}
-                  disabled={feedPage === feedPages}
-                  className="p-2 rounded-lg bg-white/5 border border-white/10 text-white disabled:opacity-30 hover:bg-white/10 transition-all"
-                >
-                  <ChevronRightIcon size={16} />
-                </button>
-              </div>
-            )}
-          </>
-        )}
-
-        {/* ── POOLS: browse pool cards ─────────────────────────────────────── */}
+        {/* ── POOLS: Sources + Collection Series ───────────────────────────── */}
         {mode === 'pools' && (
           loadingMeta ? <LoadingState /> : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-              {filteredPools.map((item, i) => (
-                <PoolCard key={item._id} item={item} index={i} onClick={() => openPool(item)} />
-              ))}
-              {filteredPools.length === 0 && <EmptyState icon={Disc} text="No pools match your search" />}
+            <div className="space-y-10">
+              {/* Record Pool Sources */}
+              {filteredSources.length > 0 && (
+                <section>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Disc size={15} className="text-accent" />
+                    <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Record Pools</h2>
+                    <span className="text-xs text-brand-text-tertiary">({filteredSources.length})</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                    {filteredSources.map((item, i) => (
+                      <PoolCard key={item._id} item={item} index={i} onClick={() => openPool(item)} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Collection Series */}
+              {filteredSeries.length > 0 && (
+                <section>
+                  <div className="flex items-center gap-2 mb-4">
+                    <Layers2 size={15} className="text-accent" />
+                    <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Collections</h2>
+                    <span className="text-xs text-brand-text-tertiary">({filteredSeries.length})</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                    {filteredSeries.map((item, i) => (
+                      <SeriesCard key={item._id} item={item} index={i} onClick={() => openPool(item)} />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {filteredSources.length === 0 && filteredSeries.length === 0 && (
+                <EmptyState icon={Disc} text="No pools or collections match your search" />
+              )}
             </div>
           )
         )}
@@ -420,9 +314,10 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
   );
 }
 
-// Collection header shown when albums view is open
+// Collection/Pool header shown when albums view is open
 function CollectionHeader({ collection, albumCount }) {
   const [imgError, setImgError] = useState(false);
+  const isSeries = collection._type === 'series';
   return (
     <div className="flex items-center gap-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden shadow-xl shadow-black/30 flex-shrink-0 bg-dark-surface flex items-center justify-center">
@@ -431,15 +326,68 @@ function CollectionHeader({ collection, albumCount }) {
           : <div className={`w-full h-full bg-gradient-to-br ${GRADIENTS[0]} flex items-center justify-center`}><Disc size={32} className="text-white/60" /></div>}
       </div>
       <div>
-        <p className="text-xs text-accent font-semibold uppercase tracking-wider mb-1">Record Pool</p>
+        <p className="text-xs text-accent font-semibold uppercase tracking-wider mb-1">
+          {isSeries ? 'Collection Series' : 'Record Pool'}
+        </p>
         <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">{collection.name}</h1>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-brand-text-tertiary">
-          {collection.year && <span>{collection.year}</span>}
+          {collection.year && <span className="flex items-center gap-1"><Calendar size={12} /> {collection.year}</span>}
+          {isSeries && collection.collections?.length > 1 && (
+            <><span className="text-white/20">·</span>
+            <span>{collection.collections.length} packs</span></>
+          )}
           <span className="text-white/20">·</span>
           <span className="flex items-center gap-1"><Disc size={13} className="text-accent" />{albumCount ?? collection.totalAlbums ?? 0} albums</span>
           <span className="text-white/20">·</span>
           <span className="flex items-center gap-1"><Music size={13} className="text-accent" />{collection.totalTracks || 0} tracks</span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Series card for grouped Collections
+function SeriesCard({ item, index, onClick }) {
+  const gradient = GRADIENTS[index % GRADIENTS.length];
+  const [imgError, setImgError] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      className="group cursor-pointer rounded-2xl overflow-hidden bg-dark-elevated border border-white/5 hover:border-accent/30 transition-all duration-500 hover:shadow-xl hover:shadow-accent/5 hover:-translate-y-1 animate-in fade-in slide-in-from-bottom-4"
+      style={{ animationDelay: `${index * 60}ms`, animationFillMode: 'both' }}
+    >
+      <div className="relative aspect-[4/3] overflow-hidden bg-dark-surface">
+        {item.thumbnail && !imgError ? (
+          <img src={item.thumbnail} alt={item.name} onError={() => setImgError(true)}
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+        ) : (
+          <div className={`w-full h-full bg-gradient-to-br ${gradient} flex items-center justify-center`}>
+            <Layers2 size={48} className="text-white/20" />
+          </div>
+        )}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+        <div className="absolute top-3 right-3">
+          <span className="bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full">
+            {item.year}
+          </span>
+        </div>
+        <div className="absolute bottom-0 left-0 right-0 p-4">
+          <h3 className="text-lg font-bold text-white mb-0.5 drop-shadow-lg line-clamp-2">{item.name}</h3>
+          {item.collections?.length > 1 && (
+            <p className="text-white/60 text-xs">{item.collections.length} packs</p>
+          )}
+        </div>
+      </div>
+      <div className="px-4 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-4 text-sm">
+          <span className="text-brand-text-tertiary flex items-center gap-1">
+            <Disc size={12} className="text-accent" />{item.totalAlbums} albums
+          </span>
+          <span className="text-brand-text-tertiary flex items-center gap-1">
+            <Music size={12} className="text-accent" />{item.totalTracks} tracks
+          </span>
+        </div>
+        <ChevronRight size={16} className="text-brand-text-tertiary group-hover:text-accent group-hover:translate-x-1 transition-all duration-300" />
       </div>
     </div>
   );
