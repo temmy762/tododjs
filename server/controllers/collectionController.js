@@ -2079,7 +2079,7 @@ export const getCollection = async (req, res) => {
 // @access  Private/Admin
 export const updateCollection = async (req, res) => {
   try {
-    const { name, year, month, thumbnail } = req.body;
+    const { name, year, month, thumbnail, sourceId } = req.body;
 
     const collection = await Collection.findById(req.params.id);
 
@@ -2094,6 +2094,18 @@ export const updateCollection = async (req, res) => {
     if (year) collection.year = year;
     if (month !== undefined) collection.month = month;
     if (req.body.platform !== undefined) collection.platform = req.body.platform;
+    if (sourceId !== undefined) {
+      collection.sourceId = sourceId || undefined;
+      // Cascade sourceId to all albums and tracks in this collection
+      const newSourceId = sourceId || null;
+      if (newSourceId) {
+        await Album.updateMany({ collectionId: collection._id }, { $set: { sourceId: newSourceId } });
+        await Track.updateMany({ collectionId: collection._id }, { $set: { sourceId: newSourceId } });
+      } else {
+        await Album.updateMany({ collectionId: collection._id }, { $unset: { sourceId: '' } });
+        await Track.updateMany({ collectionId: collection._id }, { $unset: { sourceId: '' } });
+      }
+    }
     if (req.file) {
       const ext = path.extname(req.file.originalname) || '.jpg';
       const thumbKey = `collections/${collection._id}/thumbnail${ext}`;

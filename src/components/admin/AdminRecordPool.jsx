@@ -708,10 +708,19 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
   const [name, setName] = useState(collection?.name || '');
   const [year, setYear] = useState(collection?.year || new Date().getFullYear());
   const [platform, setPlatform] = useState(collection?.platform || '');
+  const [sourceId, setSourceId] = useState(collection?.sourceId?._id || collection?.sourceId || '');
+  const [sources, setSources] = useState([]);
   const [thumbFile, setThumbFile] = useState(null);
   const [thumbUrl, setThumbUrl] = useState(collection?.thumbnail || '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    fetch(`${API}/sources`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setSources(d.data || []); })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -722,6 +731,7 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
       fd.append('name', name);
       fd.append('year', year);
       fd.append('platform', platform);
+      if (sourceId) fd.append('sourceId', sourceId);
       if (thumbFile) fd.append('thumbnailFile', thumbFile);
       else if (thumbUrl) fd.append('thumbnail', thumbUrl);
       const res = await fetch(`${API}/collections/${collection._id}`, {
@@ -758,6 +768,14 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
               <label className="block text-sm font-medium mb-1">Platform</label>
               <input type="text" value={platform} onChange={e => setPlatform(e.target.value)} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent" placeholder="e.g., PlayList Pro" />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Assign to Pool (Source)</label>
+            <select value={sourceId} onChange={e => setSourceId(e.target.value)} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-sm">
+              <option value="">— No pool assigned —</option>
+              {sources.map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
+            </select>
+            <p className="text-xs text-brand-text-tertiary mt-1">Albums will become visible under this pool&apos;s genre tab.</p>
           </div>
           <ThumbnailField file={thumbFile} setFile={setThumbFile} url={thumbUrl} setUrl={setThumbUrl} error={error} setError={setError} />
           <div className="flex gap-3 pt-2">
