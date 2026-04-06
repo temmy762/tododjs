@@ -9,7 +9,8 @@ import {
   createMashup,
   updateMashup,
   deleteMashup,
-  getMashupPlayback
+  getMashupPlayback,
+  getMashupGenres
 } from '../controllers/mashupController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -43,6 +44,7 @@ const bannerUpload = multer({
 
 // Public routes
 router.get('/', getMashups);
+router.get('/genres', getMashupGenres);
 router.get('/settings', getMashupSettings);
 router.get('/:id/playback', getMashupPlayback);
 

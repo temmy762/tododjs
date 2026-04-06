@@ -6,20 +6,54 @@ import { detectGenreWithAI } from '../services/openai.js';
 import { detectTonality } from '../services/tonalityDetection.js';
 import { parseBuffer } from 'music-metadata';
 
-// @desc    Get all mashups (public)
+// @desc    Get all mashups (public) with optional server-side filtering
 // @route   GET /api/mashups
 // @access  Public
 export const getMashups = async (req, res) => {
   try {
-    const { sort = '-createdAt', limit = 100 } = req.query;
+    const {
+      sort = '-createdAt',
+      limit = 30,
+      page = 1,
+      genre,
+      tonality,
+    } = req.query;
 
-    const mashups = await Mashup.find({ isPublished: true })
+    const query = { isPublished: true };
+    if (genre && genre !== 'all') query.genre = genre;
+    if (tonality && tonality !== 'all') query.tonality = tonality;
+
+    const total = await Mashup.countDocuments(query);
+    const mashups = await Mashup.find(query)
       .sort(sort)
+      .skip((parseInt(page) - 1) * parseInt(limit))
       .limit(parseInt(limit))
       .lean();
 
     const signed = await resolveSignedUrls(mashups, ['coverArt']);
-    res.status(200).json({ success: true, count: signed.length, data: signed });
+    res.status(200).json({
+      success: true,
+      count: signed.length,
+      data: signed,
+      pagination: {
+        total,
+        pages: Math.ceil(total / parseInt(limit)),
+        page: parseInt(page),
+        limit: parseInt(limit),
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Get distinct genres from published mashups
+// @route   GET /api/mashups/genres
+// @access  Public
+export const getMashupGenres = async (req, res) => {
+  try {
+    const genres = await Mashup.distinct('genre', { isPublished: true });
+    res.status(200).json({ success: true, data: genres.filter(Boolean).sort() });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
