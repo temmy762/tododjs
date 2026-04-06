@@ -694,9 +694,14 @@ export const uploadCollection = async (req, res) => {
     const finalYear = year || (extractedDate ? extractedDate.getFullYear() : now.getFullYear());
     const finalMonth = month || (extractedDate ? String(extractedDate.getMonth() + 1).padStart(2, '0') : String(now.getMonth() + 1).padStart(2, '0'));
 
+    const collectionName = name || path.parse(zipFile.originalname).name;
+    const detectedSeriesName = collectionName
+      .replace(/[\s_\-]+(?:vol(?:ume)?\.?\s*\d+|ep\.?\s*\d+|n[o°]\.?\s*\d+|#\s*\d+|(?:part|pt)\.?\s*\d+|\b\d{1,2}(?:st|nd|rd|th)?\b)[\s.,:\-]*$/i, '')
+      .trim() || collectionName;
+
     console.log('💾 Creating collection record in database...');
     const collection = await Collection.create({
-      name: name || path.parse(zipFile.originalname).name,
+      name: collectionName,
       platform: 'PlayList Pro', // Fixed platform name
       year: finalYear,
       month: finalMonth,
@@ -712,7 +717,8 @@ export const uploadCollection = async (req, res) => {
         detectedGenres: parsedScanResult.detectedGenres,
         folderStructure: parsedScanResult.datePacks
       } : null,
-      collectionNameSource: name ? 'userEdited' : 'motherFolder'
+      collectionNameSource: name ? 'userEdited' : 'motherFolder',
+      seriesName: detectedSeriesName,
     });
     console.log(`✅ Collection created: ${collection._id}`);
 

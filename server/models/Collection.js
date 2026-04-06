@@ -106,6 +106,11 @@ const collectionSchema = new mongoose.Schema({
     type: String,
     enum: ['motherFolder', 'zipFilename', 'userEdited'],
     default: 'motherFolder'
+  },
+  seriesName: {
+    type: String,
+    trim: true,
+    index: true,
   }
 }, {
   timestamps: true
