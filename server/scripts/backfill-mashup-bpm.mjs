@@ -7,7 +7,13 @@
  *   node server/scripts/backfill-mashup-bpm.mjs
  */
 
-import 'dotenv/config';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
+import dotenv from 'dotenv';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: resolve(__dirname, '../.env') });
+
 import mongoose from 'mongoose';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { parseBuffer } from 'music-metadata';
