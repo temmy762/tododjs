@@ -67,6 +67,7 @@ async function main() {
   const Mashup = (await import('../models/Mashup.js')).default;
   const { detectTonality } = await import('../services/tonalityDetection.js');
   const { ensureSignedUrl } = await import('../config/wasabi.js');
+  const { parseBuffer } = await import('music-metadata');
 
   // Build query
   const query = ALL
@@ -85,7 +86,7 @@ async function main() {
 
   console.log(`🎵  Found ${mashups.length} mashup(s) to process${LIMIT < Infinity ? ` (capped at ${LIMIT})` : ''}\n`);
 
-  const stats = { ok: 0, noBpm: 0, failed: 0, skipped: 0 };
+  const stats = { ok: 0, needsReview: 0, failed: 0, skipped: 0 };
 
   for (let i = 0; i < total; i++) {
     const m = mashups[i];
@@ -120,9 +121,35 @@ async function main() {
       continue;
     }
 
+    // ── Extra: scan ALL native ID3 frames for any key field ──────────────
+    let nativeKeyHint = null;
+    try {
+      const mm = await parseBuffer(audioBuffer, { mimeType: 'audio/mpeg' });
+      // Check every native tag container for TKEY / KEY / initialkey
+      for (const container of Object.values(mm.native || {})) {
+        for (const tag of container) {
+          if (['TKEY', 'KEY', 'initialkey', 'Initial key'].includes(tag.id)) {
+            nativeKeyHint = String(tag.value).trim();
+            if (nativeKeyHint) { console.log(`   ✓ Native ID3 key tag (${tag.id}): ${nativeKeyHint}`); break; }
+          }
+        }
+        if (nativeKeyHint) break;
+      }
+    } catch { /* non-fatal */ }
+
     let result;
     try {
       result = await detectTonality(audioBuffer, { title: m.title, artist: m.artist });
+      // If main detection missed it but native tag has a value, use that
+      if (nativeKeyHint && !result.tonality?.camelot) {
+        const { parseKeyFromID3 } = await import('../services/tonalityDetection.js').catch(() => ({ parseKeyFromID3: null }));
+        // Simple inline parse: accept raw camelot values like "5A" or "10B"
+        const camelotMatch = nativeKeyHint.match(/\b([1-9]|1[0-2])[AB]\b/i);
+        if (camelotMatch) {
+          result.tonality = { camelot: camelotMatch[0].toUpperCase(), source: 'native-id3', confidence: 0.8, needsManualReview: false };
+          console.log(`   ✓ Camelot from native tag: ${result.tonality.camelot}`);
+        }
+      }
     } catch (err) {
       console.log(`  ❌  Detection failed: ${err.message}`);
       stats.failed++;
@@ -133,9 +160,11 @@ async function main() {
     const newTonality = tonality?.camelot || '';
     const newBpm      = (!m.bpm || m.bpm === 0) ? detectedBpm : m.bpm;
 
+    const needsReview = !newTonality || tonality?.needsManualReview === true;
     const changes = [];
     if (newTonality && newTonality !== m.tonality) changes.push(`tonality: "${m.tonality || '(empty)'}" → "${newTonality}"`);
     if (newBpm      && newBpm !== m.bpm)            changes.push(`bpm: ${m.bpm || '(empty)'} → ${newBpm}`);
+    if (needsReview !== (m.tonalityNeedsReview ?? false)) changes.push(`tonalityNeedsReview: ${m.tonalityNeedsReview} → ${needsReview}`);
 
     if (!changes.length) {
       console.log(`     ✓ No changes needed (tonality already: "${m.tonality}", bpm: ${m.bpm})`);
@@ -144,7 +173,7 @@ async function main() {
     }
 
     console.log(`     ✓ Updates: ${changes.join(' | ')}`);
-    if (tonality?.needsManualReview) console.log(`     ⚠  Low-confidence detection — flag for manual review`);
+    if (needsReview) { console.log(`     ⚠  Flagged for manual review`); stats.needsReview++; }
 
     if (!DRY_RUN) {
       try {
@@ -153,7 +182,8 @@ async function main() {
           {
             $set: {
               ...(newTonality ? { tonality: newTonality } : {}),
-              ...(newBpm      ? { bpm: newBpm }           : {})
+              ...(newBpm      ? { bpm: newBpm }           : {}),
+              tonalityNeedsReview: needsReview
             }
           }
         );
@@ -173,6 +203,7 @@ async function main() {
   console.log('═══════════════════════════════════════════════');
   console.log(`  Total processed : ${total}`);
   console.log(`  Updated         : ${stats.ok}${DRY_RUN ? ' (dry-run)' : ''}`);
+  console.log(`  Needs review    : ${stats.needsReview} (flagged tonalityNeedsReview=true)`);
   console.log(`  Skipped         : ${stats.skipped}`);
   console.log(`  Failed          : ${stats.failed}`);
   console.log('═══════════════════════════════════════════════\n');

@@ -109,20 +109,16 @@ export async function detectTonality(audioBuffer, metadata) {
 
       if (!tonality && analysis.key) {
         const clampedConfidence = Math.max(0, Math.min(1, analysis.confidence || 0));
-        // Only trust audio analysis if confidence is positive
-        if (clampedConfidence > 0) {
-          tonality = {
-            key: analysis.key,
-            scale: analysis.scale,
-            camelot: analysis.camelot,
-            source: 'audio-analysis',
-            confidence: clampedConfidence,
-            needsManualReview: clampedConfidence < 0.5
-          };
-          console.log(`   ✓ Key from audio analysis: ${tonality.camelot || tonality.key} (confidence: ${clampedConfidence.toFixed(2)})`);
-        } else {
-          console.log(`   ⚠ Audio analysis returned low confidence (${analysis.confidence}), skipping`);
-        }
+        // Accept any key from audio analysis; flag low-confidence for manual review
+        tonality = {
+          key: analysis.key,
+          scale: analysis.scale,
+          camelot: analysis.camelot,
+          source: 'audio-analysis',
+          confidence: clampedConfidence,
+          needsManualReview: clampedConfidence < 0.6
+        };
+        console.log(`   ✓ Key from audio analysis: ${tonality.camelot || tonality.key} (confidence: ${clampedConfidence.toFixed(2)})`);
       }
 
       if (!detectedBpm && analysis.bpm) {

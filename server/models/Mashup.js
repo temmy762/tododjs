@@ -24,6 +24,10 @@ const mashupSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  tonalityNeedsReview: {
+    type: Boolean,
+    default: false
+  },
   coverArt: {
     type: String,
     default: ''

@@ -60,6 +60,7 @@ export async function analyzeAudio(mp3Buffer) {
   const essentia = await getEssentia();
 
   if (typeof essentia.KeyExtractor !== 'function') {
+    console.warn('   ⚠ Essentia KeyExtractor not available — WASM may not be fully initialised');
     return { key: null, scale: null, camelot: null, bpm: null, confidence: 0 };
   }
 

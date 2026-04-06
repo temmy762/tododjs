@@ -15,6 +15,7 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
   const [activeTab, setActiveTab] = useState('trending');
   const [period, setPeriod] = useState('7d');
   const [loading, setLoading] = useState(false);
+  const [isFallback, setIsFallback] = useState(false);
 
   useEffect(() => {
     fetchTrendingTracks();
@@ -32,6 +33,7 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
         const data = await response.json();
         if (data.success && data.data?.length > 0) {
           setTrendingTracks(data.data);
+          setIsFallback(false);
           return;
         }
       }
@@ -39,7 +41,10 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
       const fallback = await fetch(`${API_URL}/tracks/browse?limit=10&sort=-downloads`);
       if (fallback.ok) {
         const fbData = await fallback.json();
-        if (fbData.success) setTrendingTracks(fbData.data || []);
+        if (fbData.success) {
+          setTrendingTracks(fbData.data || []);
+          setIsFallback(true);
+        }
       }
     } catch (error) {
       console.error('Error fetching trending tracks:', error.message || error);
@@ -99,6 +104,13 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
             <span>Latest Uploads</span>
           </button>
         </div>
+
+        {/* Fallback notice */}
+        {activeTab === 'trending' && isFallback && (
+          <span className="text-[10px] text-brand-text-tertiary/60 bg-white/[0.04] border border-white/[0.06] px-2.5 py-1 rounded-full">
+            Based on all-time downloads
+          </span>
+        )}
 
         {/* Period Chips */}
         {activeTab === 'trending' && (
