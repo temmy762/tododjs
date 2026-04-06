@@ -970,6 +970,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
         const album = await Album.create({
           collectionId: collection._id,
           datePackId: datePack._id,
+          sourceId: collection.sourceId || undefined,
           name: key,
           genre: genre,
           year: collection.year,
@@ -1141,6 +1142,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
               collectionId: collection._id,
               datePackId: datePack._id,
               albumId: album._id,
+              sourceId: collection.sourceId || undefined,
               title: metadata.title,
               artist: metadata.artist,
               genre: genreResult.genre || album.genre || 'Others',
