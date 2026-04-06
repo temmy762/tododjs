@@ -646,7 +646,7 @@ export const uploadCollection = async (req, res) => {
     console.log('Request body:', Object.keys(req.body));
     console.log('Request files:', req.files ? Object.keys(req.files) : 'none');
     
-    const { name, year, month, thumbnail, scanResult } = req.body;
+    const { name, year, month, thumbnail, scanResult, sourceId } = req.body;
     const zipFile = req.files?.zipFile?.[0];
     const thumbnailFile = req.files?.thumbnailFile?.[0];
 
@@ -702,6 +702,7 @@ export const uploadCollection = async (req, res) => {
       month: finalMonth,
       thumbnail: thumbnailUrl,
       uploadedBy: req.user.id,
+      sourceId: sourceId || undefined,
       status: 'pending', // Start as pending until cards are created
       processingProgress: 0,
       uploadDate: now,

@@ -11,6 +11,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [dragActive, setDragActive] = useState(false);
+  const [sources, setSources] = useState([]);
 
   const [expandedDatePacks, setExpandedDatePacks] = useState(new Set());
   const [failedTracks, setFailedTracks] = useState([]);
@@ -23,6 +24,13 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   
   // New state for 3-phase workflow
   const [uploadPhase, setUploadPhase] = useState('upload'); // 'upload' | 'cards'
+
+  useEffect(() => {
+    fetch(`${API_URL}/sources`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setSources(d.data || []); })
+      .catch(() => {});
+  }, []);
 
   const activeItem = uploadItems[activeItemIndex] || null;
   const activeFile = activeItem?.file || null;
@@ -450,7 +458,8 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
         scanResult: null,
         scanError: '',
         overrides: {
-          collectionName: ''
+          collectionName: '',
+          sourceId: ''
         },
         uploadStatus: 'idle',
         uploadError: '',
@@ -475,6 +484,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
       );
       formData.append('year', new Date().getFullYear().toString());
       formData.append('month', (new Date().getMonth() + 1).toString().padStart(2, '0'));
+      if (item.overrides?.sourceId) formData.append('sourceId', item.overrides.sourceId);
 
       if (item.scanResult) {
         formData.append(
@@ -1177,6 +1187,22 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                           onChange={(e) => updateItem(activeItemIndex, { overrides: { ...activeItem.overrides, collectionName: e.target.value } })}
                           className="w-full bg-dark-bg border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-accent"
                         />
+                        {sources.length > 0 && (
+                          <div className="mt-3">
+                            <div className="text-xs text-brand-text-tertiary mb-1">Assign to Pool (Source) <span className="text-accent">*</span></div>
+                            <select
+                              value={activeItem.overrides?.sourceId || ''}
+                              onChange={(e) => updateItem(activeItemIndex, { overrides: { ...activeItem.overrides, sourceId: e.target.value } })}
+                              className="w-full bg-dark-bg border border-white/10 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-accent text-sm"
+                            >
+                              <option value="">— No pool assigned —</option>
+                              {sources.map(s => (
+                                <option key={s._id} value={s._id}>{s.name}</option>
+                              ))}
+                            </select>
+                            <div className="text-xs text-brand-text-tertiary mt-1">Albums from this collection will appear under the selected pool's genre tab.</div>
+                          </div>
+                        )}
                         <div className="text-xs text-brand-text-tertiary mt-2">
                           {extractedStructure.totalDatePacks} DatePacks
                           {' • '}
