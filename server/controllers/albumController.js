@@ -447,7 +447,7 @@ export const getAlbums = async (req, res) => {
     if (year) query.year = year;
     if (genre) query.genre = { $regex: genre, $options: 'i' };
 
-    // category filter: match against source names first, fall back to album name/genre
+    // category filter: match against source names → track categories → album genre/name
     if (category && !sourceId) {
       const matchedSources = await Source.find({
         name: { $regex: category, $options: 'i' }
@@ -456,11 +456,19 @@ export const getAlbums = async (req, res) => {
       if (matchedSources.length > 0) {
         query.sourceId = { $in: matchedSources.map(s => s._id) };
       } else {
-        // fallback: match album name or genre field
-        query.$or = [
-          { genre: { $regex: category, $options: 'i' } },
-          { name:  { $regex: category, $options: 'i' } }
-        ];
+        // Find albums that have tracks tagged with this category
+        const albumIdsFromTracks = await Track.distinct('albumId', {
+          category: { $regex: `^${category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' }
+        });
+        if (albumIdsFromTracks.length > 0) {
+          query._id = { $in: albumIdsFromTracks };
+        } else {
+          // Final fallback: match album name or genre field
+          query.$or = [
+            { genre: { $regex: category, $options: 'i' } },
+            { name:  { $regex: category, $options: 'i' } }
+          ];
+        }
       }
     }
 
