@@ -222,8 +222,20 @@ export const getUncategorizedTracks = async (req, res) => {
   try {
     const { page = 1, limit = 50, rawLabel } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const match = { category: 'Others', categoryVerified: false };
-    if (rawLabel) match.categoryRaw = rawLabel;
+    let match;
+    if (rawLabel) {
+      // Regex prefix match: the stored categoryRaw may have a date suffix that was
+      // stripped when building the cleaned label shown in the UI, so we match anything
+      // that STARTS WITH the cleaned label (case-insensitive).
+      const escaped = rawLabel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      match = {
+        category: 'Others',
+        categoryRaw: { $regex: `^${escaped}`, $options: 'i' },
+      };
+    } else {
+      // No label filter — show all unverified 'Others' tracks
+      match = { category: 'Others', categoryVerified: false };
+    }
     const [total, tracks] = await Promise.all([
       Track.countDocuments(match),
       Track.find(match)
