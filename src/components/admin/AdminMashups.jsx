@@ -252,14 +252,16 @@ export default function AdminMashups() {
   const handleSaveEdit = async (id) => {
     try {
       const token = localStorage.getItem('token');
+      const payload = { ...editForm };
+      if (editForm.tonality) payload.tonalityNeedsReview = false;
       const res = await fetch(`${API}/mashups/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify(editForm)
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (data.success) {
-        setMashups(prev => prev.map(m => m._id === id ? { ...m, ...editForm } : m));
+        setMashups(prev => prev.map(m => m._id === id ? { ...m, ...editForm, tonalityNeedsReview: editForm.tonality ? false : m.tonalityNeedsReview } : m));
         setEditingId(null);
         setMessage({ type: 'success', text: 'Mashup updated' });
       }
@@ -721,6 +723,37 @@ export default function AdminMashups() {
         </div>
       )}
 
+      {/* ── Needs Manual Review ── */}
+      {(() => {
+        const needsReview = mashups.filter(m => m.tonalityNeedsReview && !m.tonality);
+        if (!needsReview.length) return null;
+        return (
+          <div className="p-4 md:p-5 rounded-xl bg-orange-500/[0.07] border border-orange-500/25">
+            <h3 className="text-sm font-semibold text-orange-300 mb-1 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4" />
+              {needsReview.length} Mashup{needsReview.length > 1 ? 's' : ''} Need Manual Tonality
+            </h3>
+            <p className="text-xs text-orange-300/70 mb-3">Auto-detection couldn&apos;t find the key. Click the edit (✏️) icon on each track below and type the Camelot key (e.g. <span className="font-mono bg-orange-500/20 px-1 rounded">5A</span>, <span className="font-mono bg-orange-500/20 px-1 rounded">10B</span>) then save.</p>
+            <div className="space-y-1.5">
+              {needsReview.map(m => (
+                <div key={m._id} className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg bg-orange-500/10">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-white truncate">{m.title}</p>
+                    <p className="text-xs text-orange-300/70">{m.bpm > 0 ? `${m.bpm} BPM` : 'No BPM'} &middot; No key detected</p>
+                  </div>
+                  <button
+                    onClick={() => startEdit(m)}
+                    className="flex-shrink-0 px-3 py-1.5 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 border border-orange-500/30 text-orange-300 text-xs font-medium transition-colors flex items-center gap-1.5"
+                  >
+                    <Edit3 size={12} /> Assign Key
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Mashup List ── */}
       <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
         <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
@@ -812,9 +845,13 @@ export default function AdminMashups() {
                       {mashup.bpm > 0 && (
                         <span className="text-[9px] text-brand-text-tertiary">{mashup.bpm} BPM</span>
                       )}
-                      {mashup.tonality && (
+                      {mashup.tonality ? (
                         <span className="text-[9px] text-brand-text-tertiary">{mashup.tonality}</span>
-                      )}
+                      ) : mashup.tonalityNeedsReview ? (
+                        <span className="flex items-center gap-0.5 text-[9px] text-orange-400 bg-orange-500/10 px-1.5 py-0.5 rounded">
+                          <AlertTriangle size={9} /> No key
+                        </span>
+                      ) : null}
                       <span className="text-[9px] text-brand-text-tertiary">
                         {new Date(mashup.createdAt).toLocaleDateString()}
                       </span>

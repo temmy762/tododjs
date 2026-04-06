@@ -234,7 +234,7 @@ export const createMashup = async (req, res) => {
 // @access  Private/Admin
 export const updateMashup = async (req, res) => {
   try {
-    const { title, artist, genre, bpm, tonality, isPublished } = req.body;
+    const { title, artist, genre, bpm, tonality, isPublished, tonalityNeedsReview } = req.body;
     const mashup = await Mashup.findById(req.params.id);
 
     if (!mashup) {
@@ -245,7 +245,12 @@ export const updateMashup = async (req, res) => {
     if (artist !== undefined) mashup.artist = artist;
     if (genre !== undefined) mashup.genre = genre;
     if (bpm !== undefined) mashup.bpm = parseInt(bpm);
-    if (tonality !== undefined) mashup.tonality = tonality;
+    if (tonality !== undefined) {
+      mashup.tonality = tonality;
+      // Automatically clear the review flag when a tonality is assigned
+      if (tonality) mashup.tonalityNeedsReview = false;
+    }
+    if (tonalityNeedsReview !== undefined) mashup.tonalityNeedsReview = tonalityNeedsReview;
     if (isPublished !== undefined) mashup.isPublished = isPublished;
 
     // Update cover art if provided
