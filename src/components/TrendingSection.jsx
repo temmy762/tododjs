@@ -4,9 +4,9 @@ import GenericCoverArt from './GenericCoverArt';
 import API_URL from '../config/api';
 
 const PERIOD_OPTIONS = [
-  { value: '24h', label: '24h', labelFull: '24 Horas' },
-  { value: '7d', label: '7d', labelFull: '7 Días' },
-  { value: '30d', label: '30d', labelFull: '30 Días' },
+  { value: '24h', label: '24h', labelFull: 'Last 24h' },
+  { value: '7d',  label: '7d',  labelFull: 'Last 7 Days' },
+  { value: '30d', label: '30d', labelFull: 'Last 30 Days' },
 ];
 
 export default function TrendingSection({ onTrackInteraction, activeGenre = 'all' }) {
@@ -35,8 +35,8 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
           return;
         }
       }
-      // Fall back to newest tracks when no download data exists
-      const fallback = await fetch(`${API_URL}/tracks/browse?limit=10&sort=-dateAdded`);
+      // Fall back to tracks sorted by total downloads counter
+      const fallback = await fetch(`${API_URL}/tracks/browse?limit=10&sort=-downloads`);
       if (fallback.ok) {
         const fbData = await fallback.json();
         if (fbData.success) setTrendingTracks(fbData.data || []);
@@ -155,9 +155,9 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
             )}
           </div>
           <p className="text-sm text-brand-text-tertiary font-medium">
-            {activeTab === 'trending' ? 'No hay pistas en tendencia aún' : 'No hay subidas recientes aún'}
+            {activeTab === 'trending' ? 'No trending tracks yet' : 'No recent uploads yet'}
           </p>
-          <p className="text-xs text-brand-text-tertiary/50 mt-1">Vuelve pronto para actualizaciones</p>
+          <p className="text-xs text-brand-text-tertiary/50 mt-1">Check back soon for updates</p>
         </div>
       )}
     </div>

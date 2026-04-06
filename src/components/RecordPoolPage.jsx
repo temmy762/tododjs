@@ -135,6 +135,20 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
     return list;
   }, [poolAlbums, search, sort]);
 
+  // Map category name → album count from matching source.totalAlbums
+  const categoryAlbumCount = useMemo(() => {
+    const sources = poolItems.filter(i => i._type === 'source');
+    const map = {};
+    for (const cat of categories) {
+      const match = sources.find(s =>
+        s.name?.toLowerCase().includes(cat.name?.toLowerCase()) ||
+        cat.name?.toLowerCase().includes(s.name?.toLowerCase())
+      );
+      if (match) map[cat._id] = match.totalAlbums || 0;
+    }
+    return map;
+  }, [poolItems, categories]);
+
   // By Pool view: only show Sources (actual record pool brands), not upload Collections
   const filteredPools = useMemo(() => {
     const sources = poolItems.filter(i => i._type === 'source');
@@ -274,9 +288,9 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
                       ? <img src={cat.thumbnail} alt="" className="w-4 h-4 rounded-full object-cover" onError={e => e.target.style.display='none'} />
                       : <Disc size={12} />}
                     {cat.name}
-                    {cat.trackCount > 0 && (
+                    {categoryAlbumCount[cat._id] > 0 && (
                       <span className={`rounded-full px-1.5 py-0.5 text-[9px] font-bold ${isActive ? 'bg-white/20' : 'bg-white/10 text-brand-text-tertiary'}`}>
-                        {cat.trackCount.toLocaleString()}
+                        {categoryAlbumCount[cat._id].toLocaleString()} albums
                       </span>
                     )}
                   </button>
