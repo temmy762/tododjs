@@ -117,14 +117,17 @@ async function main() {
     }
 
     if (!thumb) {
-      console.log(`  ⚠ No cover found for collection "${col.name}"`);
+      console.log(`  ⚠ No cover found for collection "${col.name}" — flagging missingThumbnail`);
+      if (!DRY_RUN) {
+        await Collection.findByIdAndUpdate(col._id, { missingThumbnail: true });
+      }
       continue;
     }
 
     console.log(`  ✅ Collection "${col.name}" → ${thumb.substring(0, 60)}…`);
 
     if (!DRY_RUN) {
-      await Collection.findByIdAndUpdate(col._id, { thumbnail: thumb });
+      await Collection.findByIdAndUpdate(col._id, { thumbnail: thumb, missingThumbnail: false });
     }
     collectionsFixed++;
   }

@@ -111,6 +111,11 @@ const collectionSchema = new mongoose.Schema({
     type: String,
     trim: true,
     index: true,
+  },
+  missingThumbnail: {
+    type: Boolean,
+    default: false,
+    index: true,
   }
 }, {
   timestamps: true
