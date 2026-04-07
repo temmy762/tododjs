@@ -19,11 +19,15 @@ import API_URL from '../../config/api';
 const API_BASE = API_URL;
 
 function formatTime(date) {
-  return new Date(date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  if (!date) return '--:--';
+  const d = new Date(date);
+  return isNaN(d.getTime()) ? '--:--' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDate(date) {
-  return new Date(date).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  if (!date) return 'Unknown date';
+  const d = new Date(date);
+  return isNaN(d.getTime()) ? 'Unknown date' : d.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function ProgressBar({ value, color = 'accent' }) {

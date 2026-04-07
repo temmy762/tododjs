@@ -363,13 +363,15 @@ function CollectionCard({ item, index, onClick }) {
     ? (item.platform ? item.platform : null)
     : (item.year ? String(item.year) : null);
   const packCount = !isSource && item.collections?.length > 1 ? `${item.collections.length} packs` : null;
+  const entranceDelay = `${Math.min(index * 60, 480)}ms`;
+  const glowDelay     = `${(index % 8) * 0.8}s`;
   return (
     <div
       onClick={onClick}
-      className="group cursor-pointer rounded-2xl overflow-hidden bg-dark-elevated border border-white/5 hover:border-accent/30 transition-all duration-500 hover:shadow-xl hover:shadow-accent/5 hover:-translate-y-1 animate-in fade-in slide-in-from-bottom-4"
-      style={{ animationDelay: `${Math.min(index * 50, 400)}ms`, animationFillMode: 'both' }}
+      className="neon-card group cursor-pointer rounded-2xl overflow-hidden bg-dark-elevated"
+      style={{ '--entrance-delay': entranceDelay, '--neon-delay': glowDelay }}
     >
-      <div className="relative aspect-[4/3] overflow-hidden bg-dark-surface">
+      <div className="relative aspect-square overflow-hidden bg-dark-surface">
         {item.thumbnail && !imgError ? (
           <img src={item.thumbnail} alt={item.name} onError={() => setImgError(true)}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
