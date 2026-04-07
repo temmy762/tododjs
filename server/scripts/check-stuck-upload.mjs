@@ -22,9 +22,9 @@ await mongoose.connect(process.env.MONGODB_URI);
 console.log('✅ Connected\n');
 
 const now = new Date();
+// Find ALL in-flight collections (no time filter — stuck check is just for display)
 const stuckCols = await Collection.find({
   status: { $in: ['processing', 'uploading', 'pending', 'queued'] },
-  updatedAt: { $lt: new Date(now - STUCK_THRESHOLD_MS) },
 }).select('_id name status processingProgress createdAt updatedAt').lean();
 
 if (stuckCols.length === 0) {

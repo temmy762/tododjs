@@ -17,7 +17,7 @@ router.get('/', protect, authorize('admin'), async (req, res) => {
     const completedRecent = await Collection.find({
       status: 'completed',
       updatedAt: { $gte: new Date(Date.now() - 3600000) } // Last hour
-    }).select('name status totalDatePacks totalAlbums totalTracks updatedAt');
+    }).select('name status totalDatePacks totalAlbums totalTracks createdAt updatedAt');
 
     // Get recent mashup uploads (last hour)
     const recentMashups = await Mashup.find({
