@@ -1490,6 +1490,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
     const datePackMap = new Map();
     for (const dp of finalDatePacks) {
       datePackMap.set(dp.name, dp._id.toString());
+      const cleaned = cleanDatePackName(dp.name);
+      if (cleaned && cleaned !== dp.name) datePackMap.set(cleaned, dp._id.toString());
     }
 
     console.log(` Found MP3s in ${mp3FilesByDatePack.size} date packs`);
@@ -1553,6 +1555,18 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
     collection.totalAlbums = totalAlbums;
     collection.totalTracks = totalTracks;
     collection.totalSize = totalSize;
+
+    if (totalTracks === 0) {
+      collection.status = 'failed';
+      collection.processingProgress = 0;
+      collection.errorMessage = 'No MP3 tracks were extracted from the ZIP. The file may contain no MP3 files, use an unsupported folder structure, or have a date-pack name mismatch.';
+      await collection.save();
+      try { zipfile.close(); } catch { /* ignore */ }
+      console.log(' Processing complete but 0 tracks extracted — marking collection as failed.');
+      if (fs.existsSync(zipFilePath)) fs.unlinkSync(zipFilePath);
+      return;
+    }
+
     collection.status = 'completed';
     collection.processingProgress = 100;
     await collection.save();

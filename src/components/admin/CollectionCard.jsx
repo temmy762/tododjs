@@ -1,6 +1,7 @@
-import { FolderOpen, Calendar, Music, HardDrive, Download, Edit2, Trash2, Loader, AlertCircle } from 'lucide-react';
+import { useState } from 'react';
+import { FolderOpen, Calendar, Music, HardDrive, Download, Edit2, Trash2, Loader, AlertCircle, RotateCcw } from 'lucide-react';
 
-export default function CollectionCard({ collection, onView, onEdit, onDelete }) {
+export default function CollectionCard({ collection, onView, onEdit, onDelete, onReprocess }) {
   const formatSize = (bytes) => {
     if (!bytes) return '0 GB';
     return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
@@ -22,7 +23,25 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete })
     return null;
   };
 
+  const [reprocessing, setReprocessing] = useState(false);
+  const [reprocessError, setReprocessError] = useState('');
+
+  const handleReprocess = async (e) => {
+    e.stopPropagation();
+    if (reprocessing) return;
+    setReprocessing(true);
+    setReprocessError('');
+    try {
+      await onReprocess(collection._id);
+    } catch (err) {
+      setReprocessError(err.message || 'Reprocess failed');
+    } finally {
+      setReprocessing(false);
+    }
+  };
+
   const isMissingCover = collection.missingThumbnail;
+  const isFailed = collection.status === 'failed';
   return (
     <div className={`bg-white/5 rounded-lg overflow-hidden transition-all group ${
       isMissingCover
@@ -57,6 +76,19 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete })
               >
                 <FolderOpen size={16} />
                 View Date Packs
+              </button>
+            )}
+            {isFailed && onReprocess && (
+              <button
+                onClick={handleReprocess}
+                disabled={reprocessing}
+                title={collection.errorMessage || 'Retry processing from stored ZIP'}
+                className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 border border-yellow-500 rounded-lg font-medium transition-colors text-sm disabled:opacity-50"
+              >
+                {reprocessing
+                  ? <><Loader size={14} className="animate-spin" /> Retrying…</>
+                  : <><RotateCcw size={14} /> Retry ZIP</>
+                }
               </button>
             )}
             <button
@@ -94,8 +126,11 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete })
           </div>
         )}
 
-        {collection.status === 'failed' && (
-          <div className="absolute top-3 right-3 px-3 py-1 rounded-full bg-red-500/20 border border-red-500">
+        {isFailed && (
+          <div
+            className="absolute top-3 right-3 px-3 py-1 rounded-full bg-red-500/20 border border-red-500 cursor-help"
+            title={collection.errorMessage || 'Processing failed'}
+          >
             <span className="text-xs font-medium">Failed</span>
           </div>
         )}
@@ -140,6 +175,11 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete })
           </div>
         </div>
 
+        {reprocessError && (
+          <p className="mt-2 text-xs text-red-400 flex items-center gap-1">
+            <AlertCircle size={11} />{reprocessError}
+          </p>
+        )}
         <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between text-xs">
           <div className="flex items-center gap-1 text-brand-text-tertiary">
             <Download size={12} />

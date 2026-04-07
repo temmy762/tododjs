@@ -26,6 +26,16 @@ export default function AdminRecordPool() {
   // Derived: which parent type is currently active when drilling down
   const activeParentType = selectedSource ? 'source' : 'collection';
 
+  const handleReprocess = async (collectionId) => {
+    const res = await fetch(`${API}/collections/${collectionId}/reprocess`, {
+      method: 'POST',
+      headers: authHeaders()
+    });
+    const data = await res.json();
+    if (!data.success) throw new Error(data.message || 'Reprocess failed');
+    setTimeout(fetchAll, 1500);
+  };
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
@@ -235,6 +245,7 @@ export default function AdminRecordPool() {
                       onView={(col) => navigateToCollection(col)}
                       onEdit={(col) => { setEditItem(col); setModal('editCollection'); }}
                       onDelete={(col) => handleDeleteCollection(col)}
+                      onReprocess={handleReprocess}
                     />
                   ))}
                   {sources.map(s => (
