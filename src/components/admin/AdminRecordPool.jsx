@@ -30,7 +30,7 @@ export default function AdminRecordPool() {
     setLoading(true);
     try {
       const [colRes, srcRes] = await Promise.all([
-        fetch(`${API}/collections`),
+        fetch(`${API}/collections`, { headers: authHeaders() }),
         fetch(`${API}/sources`, { headers: authHeaders() })
       ]);
       const [colData, srcData] = await Promise.all([colRes.json(), srcRes.json()]);
@@ -200,9 +200,19 @@ export default function AdminRecordPool() {
 
         {/* Unified List View */}
         {view === 'list' && (() => {
-          const missingThumb = [...collections, ...sources].filter(i => !i.thumbnail);
+          const hiddenFromPublic = collections.filter(i => i.missingThumbnail);
+          const missingThumb    = [...collections, ...sources].filter(i => !i.thumbnail && !i.missingThumbnail);
           return (
             <div>
+              {hiddenFromPublic.length > 0 && (
+                <div className="mb-3 flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl">
+                  <AlertCircle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
+                  <p className="text-red-300 text-sm">
+                    <span className="font-semibold">{hiddenFromPublic.length} collection{hiddenFromPublic.length > 1 ? 's are' : ' is'} hidden from public</span>{' '}— no cover art was found in the ZIP.
+                    Use the edit (pencil) button on each red-outlined card to upload a thumbnail.
+                  </p>
+                </div>
+              )}
               {missingThumb.length > 0 && (
                 <div className="mb-5 flex items-start gap-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
                   <AlertCircle size={18} className="text-yellow-400 flex-shrink-0 mt-0.5" />

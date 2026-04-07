@@ -1,4 +1,4 @@
-import { FolderOpen, Calendar, Music, HardDrive, Download, Edit2, Trash2, Loader } from 'lucide-react';
+import { FolderOpen, Calendar, Music, HardDrive, Download, Edit2, Trash2, Loader, AlertCircle } from 'lucide-react';
 
 export default function CollectionCard({ collection, onView, onEdit, onDelete }) {
   const formatSize = (bytes) => {
@@ -22,8 +22,13 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete })
     return null;
   };
 
+  const isMissingCover = collection.missingThumbnail;
   return (
-    <div className="bg-white/5 rounded-lg border border-white/10 overflow-hidden hover:border-accent/50 transition-all group">
+    <div className={`bg-white/5 rounded-lg overflow-hidden transition-all group ${
+      isMissingCover
+        ? 'border-2 border-red-500/60 hover:border-red-400'
+        : 'border border-white/10 hover:border-accent/50'
+    }`}>
       <div 
         onClick={() => collection.status === 'completed' && onView(collection)}
         className={`relative aspect-video bg-gradient-to-br from-accent/20 to-purple-500/20 ${collection.status === 'completed' ? 'cursor-pointer' : ''}`}
@@ -92,6 +97,12 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete })
         {collection.status === 'failed' && (
           <div className="absolute top-3 right-3 px-3 py-1 rounded-full bg-red-500/20 border border-red-500">
             <span className="text-xs font-medium">Failed</span>
+          </div>
+        )}
+        {isMissingCover && (
+          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-red-600/90 border border-red-400 flex items-center gap-1.5 shadow-lg">
+            <AlertCircle size={11} className="text-white" />
+            <span className="text-[10px] font-bold text-white uppercase tracking-wide">Hidden – No Cover</span>
           </div>
         )}
       </div>
