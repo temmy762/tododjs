@@ -64,7 +64,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
     })();
   }, []);
 
-  // ─── derived: sources ────────────────────────────────────────────────────────
+  // ─── derived: sources (treated as collection cards) ──────────────────────────
   const sources = useMemo(() => poolItems.filter(i => i._type === 'source'), [poolItems]);
 
   // ─── derived: collection series grouped by (seriesName, year) ────────────────
@@ -79,6 +79,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
         map.set(key, {
           _id: key, _type: 'series', name: seriesName, year,
           collections: [], thumbnail: null, totalAlbums: 0, totalTracks: 0,
+          createdAt: col.createdAt,
         });
       }
       const entry = map.get(key);
@@ -86,9 +87,25 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
       entry.totalAlbums  += col.totalAlbums  || 0;
       entry.totalTracks  += col.totalTracks  || 0;
       if (!entry.thumbnail && col.thumbnail) entry.thumbnail = col.thumbnail;
+      if (col.createdAt && (!entry.createdAt || col.createdAt > entry.createdAt)) entry.createdAt = col.createdAt;
     }
-    return [...map.values()].sort((a, b) => b.year - a.year || a.name.localeCompare(b.name));
+    return [...map.values()];
   }, [poolItems]);
+
+  // ─── derived: all items merged + sorted ───────────────────────────────────────
+  const allItems = useMemo(() => {
+    const items = [
+      ...sources.map(s => ({ ...s, _itemType: 'source' })),
+      ...collectionSeries.map(s => ({ ...s, _itemType: 'series' })),
+    ];
+    switch (sort) {
+      case 'oldest': items.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0)); break;
+      case 'name':   items.sort((a, b) => (a.name || '').localeCompare(b.name || '')); break;
+      case 'tracks': items.sort((a, b) => (b.totalTracks || 0) - (a.totalTracks || 0)); break;
+      default:       items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)); break;
+    }
+    return items;
+  }, [sources, collectionSeries, sort]);
 
   // ─── fetch pool/series detail albums ─────────────────────────────────────────
   const openPool = useCallback(async (item) => {
@@ -144,6 +161,12 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
     return collectionSeries.filter(s => s.name?.toLowerCase().includes(q));
   }, [collectionSeries, search]);
 
+  const filteredAllItems = useMemo(() => {
+    if (!search.trim()) return allItems;
+    const q = search.toLowerCase();
+    return allItems.filter(i => i.name?.toLowerCase().includes(q));
+  }, [allItems, search]);
+
   // ─── helpers ──────────────────────────────────────────────────────────────────
   const goBack = () => {
     setMode('pools');
@@ -167,12 +190,12 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
             )}
             <div>
               <h1 className="text-xl font-bold text-white leading-tight">
-                {mode === 'pool-detail' && selectedPool ? selectedPool.name : 'Record Pools'}
+                {mode === 'pool-detail' && selectedPool ? selectedPool.name : 'Collections'}
               </h1>
               <p className="text-[11px] text-brand-text-tertiary mt-0.5">
                 {mode === 'pool-detail'
                   ? `${filteredPoolAlbums.length} albums`
-                  : `${filteredSources.length} pools · ${filteredSeries.length} collections`}
+                  : `${filteredAllItems.length} collections`}
               </p>
             </div>
           </div>
@@ -234,44 +257,29 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
           {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-text-tertiary hover:text-white"><X size={11} /></button>}
         </div>
 
-        {/* ── POOLS: Sources + Collection Series ───────────────────────────── */}
+        {/* ── POOLS: All Collections (sources + series merged) ────────────── */}
         {mode === 'pools' && (
           loadingMeta ? <LoadingState /> : (
-            <div className="space-y-10">
-              {/* Record Pool Sources */}
-              {filteredSources.length > 0 && (
-                <section>
-                  <div className="flex items-center gap-2 mb-4">
-                    <Disc size={15} className="text-accent" />
-                    <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Record Pools</h2>
-                    <span className="text-xs text-brand-text-tertiary">({filteredSources.length})</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                    {filteredSources.map((item, i) => (
-                      <PoolCard key={item._id} item={item} index={i} onClick={() => openPool(item)} />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {/* Collection Series */}
-              {filteredSeries.length > 0 && (
-                <section>
-                  <div className="flex items-center gap-2 mb-4">
-                    <Layers2 size={15} className="text-accent" />
-                    <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Collections</h2>
-                    <span className="text-xs text-brand-text-tertiary">({filteredSeries.length})</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-                    {filteredSeries.map((item, i) => (
-                      <SeriesCard key={item._id} item={item} index={i} onClick={() => openPool(item)} />
-                    ))}
-                  </div>
-                </section>
-              )}
-
-              {filteredSources.length === 0 && filteredSeries.length === 0 && (
-                <EmptyState icon={Disc} text="No pools or collections match your search" />
+            <div>
+              <div className="flex items-center gap-2 mb-4">
+                <Layers2 size={15} className="text-accent" />
+                <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Collections</h2>
+                <span className="text-xs text-brand-text-tertiary">({filteredAllItems.length})</span>
+              </div>
+              {filteredAllItems.length === 0 ? (
+                <EmptyState icon={Layers2} text="No collections match your search" />
+              ) : viewMode === 'grid' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                  {filteredAllItems.map((item, i) => (
+                    <CollectionCard key={item._id} item={item} index={i} onClick={() => openPool(item)} />
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {filteredAllItems.map((item, i) => (
+                    <CollectionRow key={item._id} item={item} index={i} onClick={() => openPool(item)} />
+                  ))}
+                </div>
               )}
             </div>
           )
@@ -346,15 +354,20 @@ function CollectionHeader({ collection, albumCount }) {
   );
 }
 
-// Series card for grouped Collections
-function SeriesCard({ item, index, onClick }) {
+// Unified card for any collection (source or series)
+function CollectionCard({ item, index, onClick }) {
   const gradient = GRADIENTS[index % GRADIENTS.length];
   const [imgError, setImgError] = useState(false);
+  const isSource = item._itemType === 'source' || item._type === 'source';
+  const subtitle = isSource
+    ? (item.platform ? item.platform : null)
+    : (item.year ? String(item.year) : null);
+  const packCount = !isSource && item.collections?.length > 1 ? `${item.collections.length} packs` : null;
   return (
     <div
       onClick={onClick}
       className="group cursor-pointer rounded-2xl overflow-hidden bg-dark-elevated border border-white/5 hover:border-accent/30 transition-all duration-500 hover:shadow-xl hover:shadow-accent/5 hover:-translate-y-1 animate-in fade-in slide-in-from-bottom-4"
-      style={{ animationDelay: `${index * 60}ms`, animationFillMode: 'both' }}
+      style={{ animationDelay: `${Math.min(index * 50, 400)}ms`, animationFillMode: 'both' }}
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-dark-surface">
         {item.thumbnail && !imgError ? (
@@ -366,25 +379,23 @@ function SeriesCard({ item, index, onClick }) {
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-        <div className="absolute top-3 right-3">
-          <span className="bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full">
-            {item.year}
-          </span>
-        </div>
+        {subtitle && (
+          <div className="absolute top-3 right-3">
+            <span className="bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full">{subtitle}</span>
+          </div>
+        )}
         <div className="absolute bottom-0 left-0 right-0 p-4">
           <h3 className="text-lg font-bold text-white mb-0.5 drop-shadow-lg line-clamp-2">{item.name}</h3>
-          {item.collections?.length > 1 && (
-            <p className="text-white/60 text-xs">{item.collections.length} packs</p>
-          )}
+          {packCount && <p className="text-white/60 text-xs">{packCount}</p>}
         </div>
       </div>
       <div className="px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4 text-sm">
           <span className="text-brand-text-tertiary flex items-center gap-1">
-            <Disc size={12} className="text-accent" />{item.totalAlbums} albums
+            <Disc size={12} className="text-accent" />{item.totalAlbums || 0} albums
           </span>
           <span className="text-brand-text-tertiary flex items-center gap-1">
-            <Music size={12} className="text-accent" />{item.totalTracks} tracks
+            <Music size={12} className="text-accent" />{item.totalTracks || 0} tracks
           </span>
         </div>
         <ChevronRight size={16} className="text-brand-text-tertiary group-hover:text-accent group-hover:translate-x-1 transition-all duration-300" />
@@ -393,49 +404,32 @@ function SeriesCard({ item, index, onClick }) {
   );
 }
 
-// Mother card for a collection
-function PoolCard({ item, index, onClick }) {
+// List-view row for any collection
+function CollectionRow({ item, index, onClick }) {
   const gradient = GRADIENTS[index % GRADIENTS.length];
   const [imgError, setImgError] = useState(false);
+  const isSource = item._itemType === 'source' || item._type === 'source';
+  const badge = isSource ? item.platform : item.year ? String(item.year) : null;
   return (
     <div
       onClick={onClick}
-      className="group cursor-pointer rounded-2xl overflow-hidden bg-dark-elevated border border-white/5 hover:border-accent/30 transition-all duration-500 hover:shadow-xl hover:shadow-accent/5 hover:-translate-y-1 animate-in fade-in slide-in-from-bottom-4"
-      style={{ animationDelay: `${index * 60}ms`, animationFillMode: 'both' }}
+      className="group flex items-center gap-3 p-2.5 rounded-xl bg-dark-elevated border border-white/[0.05] hover:border-accent/20 cursor-pointer transition-all duration-200 hover:bg-white/[0.03] animate-in fade-in"
+      style={{ animationDelay: `${Math.min(index * 20, 300)}ms`, animationFillMode: 'both' }}
     >
-      {/* Cover */}
-      <div className="relative aspect-[4/3] overflow-hidden bg-dark-surface">
-        {item.thumbnail && !imgError ? (
-          <img
-            src={item.thumbnail}
-            alt={item.name}
-            onError={() => setImgError(true)}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
-          />
-        ) : (
-          <div className={`w-full h-full bg-gradient-to-br ${gradient} flex items-center justify-center`}>
-            <Disc size={52} className="text-white/20" />
-          </div>
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 p-5">
-          <h3 className="text-xl font-bold text-white mb-1 drop-shadow-lg line-clamp-2">{item.name}</h3>
-          <p className="text-white/60 text-sm">{item.year}{item.platform && ` · ${item.platform}`}</p>
-        </div>
-        <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+      <div className="w-14 h-14 rounded-xl overflow-hidden bg-dark-surface flex-shrink-0">
+        {item.thumbnail && !imgError
+          ? <img src={item.thumbnail} alt={item.name} onError={() => setImgError(true)} className="w-full h-full object-cover" />
+          : <div className={`w-full h-full bg-gradient-to-br ${gradient} flex items-center justify-center`}><Layers2 size={20} className="text-white/30" /></div>}
       </div>
-      {/* Stats */}
-      <div className="px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-brand-text-tertiary flex items-center gap-1">
-            <Disc size={13} className="text-accent" />{item.totalAlbums || 0} albums
-          </span>
-          <span className="text-brand-text-tertiary flex items-center gap-1">
-            <Music size={13} className="text-accent" />{item.totalTracks || 0} tracks
-          </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-white text-sm font-semibold truncate group-hover:text-accent transition-colors">{item.name}</p>
+        <div className="flex items-center gap-3 mt-0.5 text-[10px] text-brand-text-tertiary">
+          <span className="flex items-center gap-1"><Disc size={10} className="text-accent" />{item.totalAlbums || 0} albums</span>
+          <span className="flex items-center gap-1"><Music size={10} className="text-accent" />{item.totalTracks || 0} tracks</span>
+          {badge && <span className="px-1.5 py-0.5 bg-white/10 rounded text-[9px] font-bold">{badge}</span>}
         </div>
-        <ChevronRight size={18} className="text-brand-text-tertiary group-hover:text-accent group-hover:translate-x-1 transition-all duration-300" />
       </div>
+      <ChevronRight size={15} className="text-white/20 group-hover:text-accent group-hover:translate-x-0.5 transition-all flex-shrink-0" />
     </div>
   );
 }

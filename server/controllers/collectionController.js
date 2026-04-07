@@ -105,38 +105,62 @@ async function notifyAdminUncategorized(collectionId, collectionName) {
 // ─── Auto-assign cover art to Albums, DatePacks, and Collection ──────────────
 async function autoAssignThumbnails(collectionId) {
   try {
-    // 1. Albums — pick a random track cover per album
-    const albums = await Album.find({ collectionId, $or: [{ coverArt: null }, { coverArt: '' }, { coverArt: { $exists: false } }] });
+    // 1. Albums — pick the best track cover (prefer coverArtKey) per album
+    const albums = await Album.find({
+      collectionId,
+      $or: [
+        { coverArtKey: { $in: [null, ''] } },
+        { coverArtKey: { $exists: false } },
+        { coverArt: { $in: [null, ''] } },
+      ]
+    });
     for (const album of albums) {
-      const track = await Track.findOne({ albumId: album._id, coverArt: { $nin: [null, ''] } });
-      if (track?.coverArt) {
-        album.coverArt = track.coverArt;
-        await album.save();
+      // Prefer a track that has a coverArtKey (stable S3 key)
+      const track = await Track.findOne({
+        albumId: album._id,
+        $or: [{ coverArtKey: { $nin: [null, ''] } }, { coverArt: { $nin: [null, ''] } }]
+      }).sort({ coverArtKey: -1 });
+      if (track) {
+        const updates = {};
+        if (track.coverArtKey) updates.coverArtKey = track.coverArtKey;
+        if (track.coverArt)    updates.coverArt    = track.coverArt;
+        if (Object.keys(updates).length) {
+          await Album.findByIdAndUpdate(album._id, updates);
+        }
       }
     }
 
-    // 2. DatePacks — pick a random track cover from any track in the pack
-    const datePacks = await DatePack.find({ collectionId, $or: [{ thumbnail: null }, { thumbnail: '' }, { thumbnail: { $exists: false } }] });
+    // 2. DatePacks — pick the best track cover per pack
+    const datePacks = await DatePack.find({
+      collectionId,
+      $or: [{ thumbnail: { $in: [null, ''] } }, { thumbnail: { $exists: false } }]
+    });
     for (const dp of datePacks) {
-      const track = await Track.findOne({ datePackId: dp._id, coverArt: { $nin: [null, ''] } });
-      if (track?.coverArt) {
-        dp.thumbnail = track.coverArt;
+      const track = await Track.findOne({
+        datePackId: dp._id,
+        $or: [{ coverArtKey: { $nin: [null, ''] } }, { coverArt: { $nin: [null, ''] } }]
+      }).sort({ coverArtKey: -1 });
+      if (track) {
+        dp.thumbnail = track.coverArtKey || track.coverArt;
         await dp.save();
       }
     }
 
-    // 3. Collection — pick a random track cover from any track
+    // 3. Collection — prefer a track with coverArtKey, fall back to coverArt
     const collection = await Collection.findById(collectionId);
     if (collection && !collection.thumbnail) {
-      const track = await Track.findOne({ collectionId, coverArt: { $nin: [null, ''] } });
-      if (track?.coverArt) {
-        collection.thumbnail = track.coverArt;
+      const track = await Track.findOne({
+        collectionId,
+        $or: [{ coverArtKey: { $nin: [null, ''] } }, { coverArt: { $nin: [null, ''] } }]
+      }).sort({ coverArtKey: -1 });
+      if (track) {
+        collection.thumbnail = track.coverArtKey || track.coverArt;
         await collection.save();
       } else {
-        // No cover art found at all — notify admin via a flag
+        // No cover art found at all — flag for admin review
         collection.missingThumbnail = true;
         await collection.save();
-        console.log(`⚠ No cover art found for collection "${collection.name}" — admin notified via banner`);
+        console.log(`⚠ No cover art found for collection "${collection.name}" — flagged for admin`);
       }
     }
 
