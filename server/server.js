@@ -181,9 +181,16 @@ server.keepAliveTimeout = 0;
 server.headersTimeout = 0;
 server.requestTimeout = 0;
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err, promise) => {
-  console.log(`Error: ${err.message}`);
+// Handle unhandled promise rejections — log but do NOT crash in production
+process.on('unhandledRejection', (err) => {
+  console.error('[unhandledRejection]', err?.stack || err?.message || err);
+  if (process.env.NODE_ENV !== 'production') {
+    server.close(() => process.exit(1));
+  }
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err?.stack || err?.message || err);
   server.close(() => process.exit(1));
 });
 
