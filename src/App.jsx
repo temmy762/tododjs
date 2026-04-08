@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import TopBar from './components/TopBar';
 import Sidebar from './components/Sidebar';
@@ -49,7 +50,7 @@ const PATH_TO_PAGE = {
 const PAGE_TO_PATH = Object.fromEntries(Object.entries(PATH_TO_PAGE).map(([k, v]) => [v, k]));
 
 function App() {
-  console.log('App component rendering...');
+  const { i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -159,16 +160,13 @@ function App() {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        console.log('Checking authentication...');
         const currentUser = await authService.getCurrentUser();
-        console.log('Current user:', currentUser);
         setUser(currentUser);
       } catch (error) {
         console.error('Auth check failed:', error);
         setUser(null);
       } finally {
         setAuthLoading(false);
-        console.log('Auth loading complete');
       }
     };
     checkAuth();
@@ -178,11 +176,15 @@ function App() {
   useEffect(() => {
     if (user) {
       startTokenRefreshScheduler();
+      // Force Spanish for admin users if no explicit language choice was made
+      if (user.role === 'admin' && !localStorage.getItem('i18nextLng')) {
+        i18n.changeLanguage('es');
+      }
     } else {
       stopTokenRefreshScheduler();
     }
     return () => stopTokenRefreshScheduler();
-  }, [user]);
+  }, [user, i18n]);
 
   useEffect(() => {
     if (!searchQuery.trim()) {

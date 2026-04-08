@@ -12,15 +12,24 @@ i18n
       en: { translation: en },
       es: { translation: es }
     },
-    fallbackLng: 'en',
+    fallbackLng: 'es',
+    lng: 'es',
     debug: false,
     interpolation: {
       escapeValue: false
     },
     detection: {
       order: ['localStorage', 'navigator'],
-      caches: ['localStorage']
-    }
+      caches: ['localStorage'],
+      lookupLocalStorage: 'i18nextLng',
+      convertDetectedLanguage: (lng) => {
+        if (lng && lng.startsWith('es')) return 'es';
+        if (lng && lng.startsWith('en')) return 'en';
+        return 'es';
+      }
+    },
+    supportedLngs: ['en', 'es'],
+    nonExplicitSupportedLngs: true
   });
 
 export default i18n;

@@ -1,19 +1,9 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Music, Users, Download, CreditCard, TrendingUp, Upload, UserPlus, Activity, Loader, RefreshCw } from 'lucide-react';
 import API_URL from '../../config/api';
 
 const API = API_URL;
-
-const timeAgo = (date) => {
-  const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
-  if (seconds < 60) return 'just now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-};
 
 const activityIcon = (type) => {
   switch (type) {
@@ -26,9 +16,21 @@ const activityIcon = (type) => {
 };
 
 export default function AdminOverview({ onNavigate }) {
+  const { t } = useTranslation();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const timeAgo = (date) => {
+    const seconds = Math.floor((Date.now() - new Date(date).getTime()) / 1000);
+    if (seconds < 60) return t('timeAgo.justNow');
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return t('timeAgo.minutesAgo', { count: minutes });
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return t('timeAgo.hoursAgo', { count: hours });
+    const days = Math.floor(hours / 24);
+    return t('timeAgo.daysAgo', { count: days });
+  };
 
   const fetchOverview = async () => {
     try {
@@ -70,7 +72,7 @@ export default function AdminOverview({ onNavigate }) {
       <div className="flex flex-col items-center justify-center h-64 gap-4">
         <p className="text-red-400 text-sm">{error}</p>
         <button onClick={fetchOverview} className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium">
-          Retry
+          {t('admin.retry')}
         </button>
       </div>
     );
@@ -79,17 +81,17 @@ export default function AdminOverview({ onNavigate }) {
   const { stats, recentActivity, systemStatus } = data;
 
   const statCards = [
-    { label: 'Total Tracks', value: stats.totalTracks.toLocaleString(), icon: Music, change: stats.tracksChange, color: 'from-blue-500 to-cyan-500' },
-    { label: 'Total Users', value: stats.totalUsers.toLocaleString(), icon: Users, change: stats.usersChange, color: 'from-purple-500 to-pink-500' },
-    { label: 'Downloads Today', value: stats.downloadsToday.toLocaleString(), icon: Download, change: stats.downloadsChange, color: 'from-green-500 to-emerald-500' },
-    { label: 'Active Subscriptions', value: stats.activeSubscriptions.toLocaleString(), icon: CreditCard, change: stats.subscriptionsChange, color: 'from-orange-500 to-red-500' },
+    { label: t('admin.totalTracks'), value: stats.totalTracks.toLocaleString(), icon: Music, change: stats.tracksChange, color: 'from-blue-500 to-cyan-500' },
+    { label: t('admin.totalUsers'), value: stats.totalUsers.toLocaleString(), icon: Users, change: stats.usersChange, color: 'from-purple-500 to-pink-500' },
+    { label: t('admin.downloadsToday'), value: stats.downloadsToday.toLocaleString(), icon: Download, change: stats.downloadsChange, color: 'from-green-500 to-emerald-500' },
+    { label: t('admin.activeSubscriptions'), value: stats.activeSubscriptions.toLocaleString(), icon: CreditCard, change: stats.subscriptionsChange, color: 'from-orange-500 to-red-500' },
   ];
 
   const quickActions = [
-    { label: 'Upload Track', icon: Upload, color: 'bg-accent', section: 'tracks' },
-    { label: 'Create Album', icon: Music, color: 'bg-purple-500', section: 'recordpool' },
-    { label: 'Add User', icon: UserPlus, color: 'bg-green-500', section: 'users' },
-    { label: 'View Reports', icon: Activity, color: 'bg-orange-500', section: 'analytics' },
+    { label: t('admin.uploadTrack'), icon: Upload, color: 'bg-accent', section: 'tracks' },
+    { label: t('admin.createAlbum'), icon: Music, color: 'bg-purple-500', section: 'recordpool' },
+    { label: t('admin.addUser'), icon: UserPlus, color: 'bg-green-500', section: 'users' },
+    { label: t('admin.viewReports'), icon: Activity, color: 'bg-orange-500', section: 'analytics' },
   ];
 
   const memPct = systemStatus.memoryTotalMB > 0
@@ -110,8 +112,8 @@ export default function AdminOverview({ onNavigate }) {
       {/* Page Header */}
       <div className="flex items-center justify-between mb-6 md:mb-8">
         <div>
-          <h2 className="text-xl md:text-3xl font-bold text-white mb-1 md:mb-2">Dashboard Overview</h2>
-          <p className="text-xs md:text-base text-brand-text-tertiary">Welcome back! Here's what's happening today.</p>
+          <h2 className="text-xl md:text-3xl font-bold text-white mb-1 md:mb-2">{t('admin.dashboardOverview')}</h2>
+          <p className="text-xs md:text-base text-brand-text-tertiary">{t('admin.welcomeToday')}</p>
         </div>
         <button
           onClick={fetchOverview}
@@ -154,11 +156,11 @@ export default function AdminOverview({ onNavigate }) {
         {/* Recent Activity */}
         <div className="lg:col-span-2 bg-dark-elevated rounded-2xl p-4 md:p-6 border border-white/10">
           <div className="flex items-center justify-between mb-4 md:mb-6">
-            <h3 className="text-base md:text-xl font-bold text-white">Recent Activity</h3>
-            <span className="text-[10px] md:text-xs text-brand-text-tertiary">Live</span>
+            <h3 className="text-base md:text-xl font-bold text-white">{t('admin.recentActivity')}</h3>
+            <span className="text-[10px] md:text-xs text-brand-text-tertiary">{t('admin.live')}</span>
           </div>
           {recentActivity.length === 0 ? (
-            <p className="text-sm text-brand-text-tertiary text-center py-8">No recent activity</p>
+            <p className="text-sm text-brand-text-tertiary text-center py-8">{t('admin.noRecentActivity')}</p>
           ) : (
             <div className="space-y-2 md:space-y-4">
               {recentActivity.map((item, index) => {
@@ -186,7 +188,7 @@ export default function AdminOverview({ onNavigate }) {
 
         {/* Quick Actions */}
         <div className="bg-dark-elevated rounded-2xl p-4 md:p-6 border border-white/10">
-          <h3 className="text-base md:text-xl font-bold text-white mb-4 md:mb-6">Quick Actions</h3>
+          <h3 className="text-base md:text-xl font-bold text-white mb-4 md:mb-6">{t('admin.quickActions')}</h3>
           <div className="space-y-2 md:space-y-3">
             {quickActions.map((action, index) => {
               const Icon = action.icon;
@@ -205,23 +207,23 @@ export default function AdminOverview({ onNavigate }) {
 
           {/* System Status */}
           <div className="mt-5 md:mt-6 pt-5 md:pt-6 border-t border-white/10">
-            <h4 className="text-sm font-semibold text-white mb-3">System Status</h4>
+            <h4 className="text-sm font-semibold text-white mb-3">{t('admin.systemStatus')}</h4>
             <div className="space-y-2">
               <div className="flex items-center justify-between text-xs">
-                <span className="text-brand-text-tertiary">Server</span>
-                <span className="text-green-400 font-medium">● {systemStatus.server === 'online' ? 'Online' : 'Offline'}</span>
+                <span className="text-brand-text-tertiary">{t('admin.server')}</span>
+                <span className="text-green-400 font-medium">● {systemStatus.server === 'online' ? t('admin.online') : t('admin.offline')}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-brand-text-tertiary">Memory</span>
+                <span className="text-brand-text-tertiary">{t('admin.memory')}</span>
                 <span className="text-white font-medium">{systemStatus.memoryUsedMB}MB / {systemStatus.memoryTotalMB}MB ({memPct}%)</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-brand-text-tertiary">Uptime</span>
+                <span className="text-brand-text-tertiary">{t('admin.uptime')}</span>
                 <span className="text-white font-medium">{formatUptime(systemStatus.uptime)}</span>
               </div>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-brand-text-tertiary">API</span>
-                <span className="text-green-400 font-medium">● Healthy</span>
+                <span className="text-brand-text-tertiary">{t('admin.api')}</span>
+                <span className="text-green-400 font-medium">● {t('admin.healthy')}</span>
               </div>
             </div>
           </div>

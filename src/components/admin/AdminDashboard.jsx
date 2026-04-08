@@ -105,10 +105,10 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
     { id: 'downloads', label: t('library.downloads'), icon: TrendingUp },
     { id: 'tracks', label: t('admin.tracks'), icon: Music },
     { id: 'users', label: t('admin.users'), icon: Users },
-    { id: 'devices', label: 'Devices & Sessions', icon: Monitor },
+    { id: 'devices', label: t('admin.devicesAndSessions'), icon: Monitor },
     { id: 'subscriptions', label: t('admin.subscriptions'), icon: CreditCard },
     { id: 'analytics', label: t('admin.analytics'), icon: Database },
-    { id: 'categories', label: 'Categories', icon: Tag },
+    { id: 'categories', label: t('admin.categories'), icon: Tag },
     { id: 'genres', label: t('admin.genres'), icon: Palette },
     { id: 'settings', label: t('admin.settings'), icon: Settings },
     { id: 'security', label: t('admin.security'), icon: Shield },
@@ -167,7 +167,7 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
             <Menu className="w-5 h-5" />
           </button>
           <Shield className="w-5 h-5 md:w-6 md:h-6 text-accent" />
-          <h1 className="text-base md:text-xl font-bold text-white">Admin Dashboard</h1>
+          <h1 className="text-base md:text-xl font-bold text-white">{t('admin.adminDashboard')}</h1>
         </div>
         <button
           onClick={onClose}
@@ -227,16 +227,14 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
             <div className="flex items-center justify-between gap-3 px-5 py-3 bg-blue-500/10 border-b border-blue-500/20">
               <div className="flex items-center gap-2 text-blue-400 text-sm">
                 <span className="font-bold text-base">🖼</span>
-                <span>
-                  <strong>{missingThumbnailCollections.length} collection{missingThumbnailCollections.length !== 1 ? 's' : ''}</strong> {missingThumbnailCollections.length === 1 ? 'has' : 'have'} no cover art — no track cover found in ZIP
-                </span>
+                <span>{t('admin.missingThumbnailBanner', { count: missingThumbnailCollections.length })}</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => { setActiveSection('recordpool'); setThumbBannerDismissed(true); }}
                   className="px-3 py-1 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-xs font-semibold rounded-lg transition-all"
                 >
-                  Go to Record Pool
+                  {t('admin.goToRecordPool')}
                 </button>
                 <button onClick={() => setThumbBannerDismissed(true)} className="text-blue-400/60 hover:text-blue-400 transition-all">
                   <X size={14} />
@@ -250,16 +248,14 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
             <div className="flex items-center justify-between gap-3 px-5 py-3 bg-amber-500/10 border-b border-amber-500/20">
               <div className="flex items-center gap-2 text-amber-400 text-sm">
                 <span className="font-bold text-base">⚠</span>
-                <span>
-                  <strong>{uncategorizedCount.toLocaleString()} track{uncategorizedCount !== 1 ? 's' : ''}</strong> need category assignment
-                </span>
+                <span>{t('admin.uncategorizedBanner', { count: uncategorizedCount })}</span>
               </div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => { setActiveSection('categories'); setBannerDismissed(true); }}
                   className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 text-xs font-semibold rounded-lg transition-all"
                 >
-                  Review Now
+                  {t('admin.reviewNow')}
                 </button>
                 <button onClick={() => setBannerDismissed(true)} className="text-amber-400/60 hover:text-amber-400 transition-all">
                   <X size={14} />
