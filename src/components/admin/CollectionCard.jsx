@@ -41,7 +41,8 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete, o
   };
 
   const isMissingCover = collection.missingThumbnail;
-  const isFailed = collection.status === 'failed';
+  const isFailed = collection.status === 'failed' ||
+    (collection.status === 'completed' && (collection.totalTracks ?? 0) === 0);
   return (
     <div className={`bg-white/5 rounded-lg overflow-hidden transition-all group ${
       isMissingCover
