@@ -118,7 +118,7 @@ export default function MusicControlPanel({
     if (!audio || !audioUrl) return;
 
     if (isPlaying) {
-      audio.play().catch(err => console.log('Playback blocked:', err.message));
+      audio.play().catch(err => console.warn('Playback blocked:', err.message));
     } else {
       audio.pause();
     }
