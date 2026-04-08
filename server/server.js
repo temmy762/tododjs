@@ -117,15 +117,17 @@ app.use((req, res, next) => {
   next();
 });
 
-// Request logging middleware
-app.use((req, res, next) => {
-  console.log(`\n📨 ${req.method} ${req.originalUrl}`);
-  console.log('Headers:', {
-    'content-type': req.headers['content-type'],
-    'authorization': req.headers['authorization'] ? 'Bearer ***' : 'none'
+// Request logging middleware (dev only)
+if (process.env.NODE_ENV !== 'production') {
+  app.use((req, res, next) => {
+    console.log(`\n📨 ${req.method} ${req.originalUrl}`);
+    console.log('Headers:', {
+      'content-type': req.headers['content-type'],
+      'authorization': req.headers['authorization'] ? 'Bearer ***' : 'none'
+    });
+    next();
   });
-  next();
-});
+}
 
 // Mount routers
 app.use('/api/auth', authRoutes);
