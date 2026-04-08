@@ -148,13 +148,14 @@ async function autoAssignThumbnails(collectionId) {
 
     // 3. Collection — prefer a track with coverArtKey, fall back to coverArt
     const collection = await Collection.findById(collectionId);
-    if (collection && !collection.thumbnail) {
+    if (collection && (!collection.thumbnail || collection.missingThumbnail)) {
       const track = await Track.findOne({
         collectionId,
         $or: [{ coverArtKey: { $nin: [null, ''] } }, { coverArt: { $nin: [null, ''] } }]
       }).sort({ coverArtKey: -1 });
       if (track) {
         collection.thumbnail = track.coverArtKey || track.coverArt;
+        collection.missingThumbnail = false;
         await collection.save();
       } else {
         // No cover art found at all — flag for admin review
@@ -201,6 +202,7 @@ export const reprocessCollection = async (req, res) => {
     collection.totalTracks = 0;
     collection.totalSize = 0;
     collection.errorMessage = null;
+    collection.missingThumbnail = false;
     await collection.save();
 
     const tempDir = path.join(process.cwd(), 'uploads', 'temp');
