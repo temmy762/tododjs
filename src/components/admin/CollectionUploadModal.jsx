@@ -88,13 +88,6 @@ export default function CollectionUploadModal({ sources, onClose, onSuccess }) {
 
       const token = localStorage.getItem('token');
       
-      console.log('Upload attempt:', {
-        hasToken: !!token,
-        tokenPreview: token ? `${token.substring(0, 20)}...` : 'none',
-        fileSize: file.size,
-        platform: formData.platform
-      });
-
       // Use XMLHttpRequest for upload progress tracking (keeps connection alive for large files)
       const data = await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
@@ -113,7 +106,6 @@ export default function CollectionUploadModal({ sources, onClose, onSuccess }) {
         };
 
         xhr.onload = () => {
-          console.log('XHR response status:', xhr.status);
           try {
             const responseData = JSON.parse(xhr.responseText);
             if (xhr.status >= 200 && xhr.status < 300 && responseData.success) {
@@ -146,11 +138,9 @@ export default function CollectionUploadModal({ sources, onClose, onSuccess }) {
           reject(new Error('Upload timed out'));
         };
 
-        console.log('XHR sending FormData...');
         xhr.send(uploadFormData);
       });
 
-      console.log('Response data:', data);
       setProgress(100);
       setSuccess('Collection upload started! Processing in background...');
       setProcessingStatus('Extracting date packs and albums. This may take several minutes.');
