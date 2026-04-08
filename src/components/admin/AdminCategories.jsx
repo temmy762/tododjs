@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Plus, Pencil, Trash2, Save, X, Tag,
   Loader, AlertCircle, CheckCircle, RefreshCw, Hash,
@@ -17,6 +18,7 @@ const DEFAULT_FORM = {
 };
 
 export default function AdminCategories() {
+  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState('manage'); // 'manage' | 'review'
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -73,7 +75,7 @@ export default function AdminCategories() {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim()) { flash('Name is required', 'error'); return; }
+    if (!form.name.trim()) { flash(t('categories.nameRequired'), 'error'); return; }
     setSaving(true);
     try {
       const token = localStorage.getItem('token');
@@ -88,7 +90,7 @@ export default function AdminCategories() {
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
-      flash(editingId ? 'Category updated' : 'Category created');
+      flash(editingId ? t('categories.updated') : t('categories.created'));
       setShowForm(false);
       if (editingId) {
         setCategories(prev => prev.map(c => c._id === editingId ? { ...c, ...data.data } : c));
@@ -112,7 +114,7 @@ export default function AdminCategories() {
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
-      flash('Category deleted');
+      flash(t('categories.deleted'));
       setDeleteConfirm(null);
       fetchCategories();
     } catch (e) {
@@ -130,7 +132,7 @@ export default function AdminCategories() {
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.message);
-      flash(`${data.created} default categories seeded`);
+      flash(t('categories.seeded', { count: data.created }));
       fetchCategories();
     } catch (e) {
       flash(e.message, 'error');
@@ -157,10 +159,10 @@ export default function AdminCategories() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Tag className="text-accent" size={24} /> Categories
+            <Tag className="text-accent" size={24} /> {t('categories.title')}
           </h1>
           <p className="text-brand-text-tertiary text-sm mt-1">
-            Manage home page category tabs and review uncategorized tracks.
+            {t('categories.subtitle')}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -168,13 +170,13 @@ export default function AdminCategories() {
             <button onClick={handleSeed} disabled={seeding}
               className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/15 text-white text-sm rounded-lg transition-all">
               {seeding ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              Seed Defaults
+              {t('categories.seedDefaults')}
             </button>
           )}
           {activeTab === 'manage' && (
             <button onClick={openCreate}
               className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/80 text-white text-sm font-medium rounded-lg transition-all">
-              <Plus size={16} /> New Category
+              <Plus size={16} /> {t('categories.newCategory')}
             </button>
           )}
         </div>
@@ -183,8 +185,8 @@ export default function AdminCategories() {
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-dark-surface p-1 rounded-xl w-fit">
         {[
-          { id: 'manage', label: 'Manage', icon: Tag },
-          { id: 'review', label: 'Review Queue', icon: Inbox },
+          { id: 'manage', label: t('categories.manage'), icon: Tag },
+          { id: 'review', label: t('categories.reviewQueue'), icon: Inbox },
         ].map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setActiveTab(id)}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
@@ -214,11 +216,11 @@ export default function AdminCategories() {
       {showForm && (
         <div className="mb-6 bg-dark-elevated border border-white/10 rounded-2xl p-6">
           <h2 className="text-lg font-semibold text-white mb-4">
-            {editingId ? 'Edit Category' : 'New Category'}
+            {editingId ? t('categories.editCategory') : t('categories.newCategory')}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs text-brand-text-tertiary mb-1">Name *</label>
+              <label className="block text-xs text-brand-text-tertiary mb-1">{t('categories.name')} *</label>
               <input
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -227,7 +229,7 @@ export default function AdminCategories() {
               />
             </div>
             <div>
-              <label className="block text-xs text-brand-text-tertiary mb-1">Sort Order</label>
+              <label className="block text-xs text-brand-text-tertiary mb-1">{t('categories.sortOrder')}</label>
               <input
                 type="number"
                 value={form.sortOrder}
@@ -236,16 +238,16 @@ export default function AdminCategories() {
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-xs text-brand-text-tertiary mb-1">Description</label>
+              <label className="block text-xs text-brand-text-tertiary mb-1">{t('categories.description')}</label>
               <input
                 value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                placeholder="Short description for this category"
+                placeholder={t('categories.descriptionPlaceholder')}
                 className="w-full bg-dark-surface text-white px-3 py-2 rounded-lg border border-white/10 focus:border-accent focus:outline-none text-sm"
               />
             </div>
             <div>
-              <label className="block text-xs text-brand-text-tertiary mb-1">Thumbnail URL</label>
+              <label className="block text-xs text-brand-text-tertiary mb-1">{t('categories.thumbnailUrl')}</label>
               <input
                 value={form.thumbnail}
                 onChange={e => setForm(f => ({ ...f, thumbnail: e.target.value }))}
@@ -254,7 +256,7 @@ export default function AdminCategories() {
               />
             </div>
             <div>
-              <label className="block text-xs text-brand-text-tertiary mb-2">Accent Color</label>
+              <label className="block text-xs text-brand-text-tertiary mb-2">{t('categories.accentColor')}</label>
               <div className="flex items-center gap-2 flex-wrap">
                 {PRESET_COLORS.map(c => (
                   <button
@@ -274,7 +276,7 @@ export default function AdminCategories() {
               </div>
             </div>
             <div className="flex items-center gap-2 mt-1">
-              <label className="text-xs text-brand-text-tertiary">Active (visible on home page)</label>
+              <label className="text-xs text-brand-text-tertiary">{t('categories.activeVisible')}</label>
               <button
                 onClick={() => setForm(f => ({ ...f, isActive: !f.isActive }))}
                 className={`relative w-10 h-5 rounded-full transition-colors ${form.isActive ? 'bg-accent' : 'bg-white/20'}`}
@@ -290,13 +292,13 @@ export default function AdminCategories() {
               className="flex items-center gap-2 px-5 py-2 bg-accent hover:bg-accent/80 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50"
             >
               {saving ? <Loader size={14} className="animate-spin" /> : <Save size={14} />}
-              {editingId ? 'Update' : 'Create'}
+              {editingId ? t('categories.update') : t('categories.create')}
             </button>
             <button
               onClick={() => setShowForm(false)}
               className="flex items-center gap-2 px-5 py-2 bg-white/10 hover:bg-white/15 text-white text-sm rounded-lg transition-all"
             >
-              <X size={14} /> Cancel
+              <X size={14} /> {t('common.cancel')}
             </button>
           </div>
         </div>
@@ -310,9 +312,9 @@ export default function AdminCategories() {
       ) : categories.length === 0 ? (
         <div className="text-center py-16 bg-dark-elevated rounded-2xl border border-white/5">
           <Tag size={40} className="mx-auto text-white/20 mb-3" />
-          <p className="text-brand-text-tertiary mb-2">No categories yet</p>
+          <p className="text-brand-text-tertiary mb-2">{t('categories.noCategories')}</p>
           <p className="text-xs text-brand-text-tertiary/60 mb-4">
-            Click "Seed Defaults" to start with the preset categories, or create your own.
+            {t('categories.noCategoriesHint')}
           </p>
         </div>
       ) : (
@@ -338,7 +340,7 @@ export default function AdminCategories() {
                 <div className="flex items-center gap-2">
                   <span className="text-white font-semibold text-sm">{cat.name}</span>
                   {!cat.isActive && (
-                    <span className="px-1.5 py-0.5 bg-white/10 text-white/40 text-xs rounded">hidden</span>
+                    <span className="px-1.5 py-0.5 bg-white/10 text-white/40 text-xs rounded">{t('categories.hidden')}</span>
                   )}
                 </div>
                 <div className="flex items-center gap-3 mt-0.5">
@@ -346,7 +348,7 @@ export default function AdminCategories() {
                     <Hash size={10} /> {cat.slug}
                   </span>
                   <span className="text-brand-text-tertiary text-xs">
-                    {(cat.trackCount || 0).toLocaleString()} tracks
+                    {(cat.trackCount || 0).toLocaleString()} {t('admin.tracks')}
                   </span>
                   {cat.description && (
                     <span className="text-brand-text-tertiary/60 text-xs truncate max-w-xs">{cat.description}</span>
@@ -359,7 +361,7 @@ export default function AdminCategories() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => toggleActive(cat)}
-                  title={cat.isActive ? 'Hide from home page' : 'Show on home page'}
+                  title={cat.isActive ? t('categories.hideFromHome') : t('categories.showOnHome')}
                   className={`p-2 rounded-lg text-xs transition-all ${
                     cat.isActive ? 'text-green-400 hover:bg-green-500/10' : 'text-white/30 hover:bg-white/10'
                   }`}
@@ -388,22 +390,22 @@ export default function AdminCategories() {
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
           <div className="bg-dark-elevated border border-white/10 rounded-2xl p-6 max-w-sm w-full mx-4">
-            <h3 className="text-white font-semibold mb-2">Delete "{deleteConfirm.name}"?</h3>
+            <h3 className="text-white font-semibold mb-2">{t('categories.deleteConfirmTitle', { name: deleteConfirm.name })}</h3>
             <p className="text-brand-text-tertiary text-sm mb-5">
-              This will unlink the category from all tracks. The tracks themselves won't be deleted.
+              {t('categories.deleteConfirmDesc')}
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => handleDelete(deleteConfirm._id)}
                 className="flex-1 py-2 bg-red-500 hover:bg-red-600 text-white text-sm font-medium rounded-lg transition-all"
               >
-                Delete
+                {t('common.delete')}
               </button>
               <button
                 onClick={() => setDeleteConfirm(null)}
                 className="flex-1 py-2 bg-white/10 hover:bg-white/15 text-white text-sm rounded-lg transition-all"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
             </div>
           </div>
@@ -436,6 +438,7 @@ function TrackThumb({ src, alt }) {
 
 // ─── Review Queue sub-component ─────────────────────────────────────────────
 function ReviewQueue({ categories, flash }) {
+  const { t } = useTranslation();
   const [stats, setStats] = useState(null);
   const [tracks, setTracks] = useState([]);
   const [page, setPage] = useState(1);
@@ -489,8 +492,8 @@ function ReviewQueue({ categories, flash }) {
   const clearSelect = () => setSelected(new Set());
 
   const handleBulkAssign = async () => {
-    if (!assignTarget) { flash('Select a target category', 'error'); return; }
-    if (!selected.size) { flash('Select at least one track', 'error'); return; }
+    if (!assignTarget) { flash(t('categories.selectTargetCategory'), 'error'); return; }
+    if (!selected.size) { flash(t('categories.selectAtLeastOne'), 'error'); return; }
     setAssigning(true);
     try {
       const res = await fetch(`${API_URL}/categories/bulk-assign`, {
@@ -500,7 +503,7 @@ function ReviewQueue({ categories, flash }) {
       });
       const d = await res.json();
       if (!d.success) throw new Error(d.message);
-      flash(`${d.updated} tracks assigned to "${assignTarget}"`);
+      flash(t('categories.tracksAssigned', { count: d.updated, name: assignTarget }));
       setSelected(new Set());
       setAssignTarget('');
       fetchStats();
@@ -516,11 +519,11 @@ function ReviewQueue({ categories, flash }) {
       {/* Stats row */}
       <div className="grid grid-cols-2 gap-4">
         <div className="bg-dark-elevated border border-white/10 rounded-xl p-4">
-          <p className="text-xs text-brand-text-tertiary mb-1">Tracks needing assignment</p>
+          <p className="text-xs text-brand-text-tertiary mb-1">{t('categories.tracksNeedingAssignment')}</p>
           <p className="text-3xl font-bold text-amber-400">{stats.count.toLocaleString()}</p>
         </div>
         <div className="bg-dark-elevated border border-white/10 rounded-xl p-4">
-          <p className="text-xs text-brand-text-tertiary mb-1">Unique detected labels</p>
+          <p className="text-xs text-brand-text-tertiary mb-1">{t('categories.uniqueLabels')}</p>
           <p className="text-3xl font-bold text-white">{stats.rawLabels?.length || 0}</p>
         </div>
       </div>
@@ -528,11 +531,11 @@ function ReviewQueue({ categories, flash }) {
       {/* Detected raw labels */}
       {stats.rawLabels?.length > 0 && (
         <div className="bg-dark-elevated border border-white/10 rounded-xl p-4">
-          <p className="text-xs text-brand-text-tertiary mb-3 font-semibold uppercase tracking-wider">Labels Detected in Titles (not yet in your category list)</p>
+          <p className="text-xs text-brand-text-tertiary mb-3 font-semibold uppercase tracking-wider">{t('categories.labelsDetected')}</p>
           <div className="flex flex-wrap gap-2">
             <button onClick={() => setSelectedLabel(null)}
               className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${!selectedLabel ? 'bg-accent text-white' : 'bg-white/10 text-brand-text-tertiary hover:text-white'}`}>
-              All
+              {t('common.all')}
             </button>
             {stats.rawLabels.map(({ _id, count }) => (
               <button key={_id} onClick={() => { setSelectedLabel(_id === selectedLabel ? null : _id); setPage(1); }}
@@ -543,7 +546,7 @@ function ReviewQueue({ categories, flash }) {
             ))}
           </div>
           <p className="text-xs text-brand-text-tertiary/60 mt-3">
-            💡 Create a category with one of these names and it will auto-assign on the next upload.
+            {t('categories.autoAssignHint')}
           </p>
         </div>
       )}
@@ -551,19 +554,19 @@ function ReviewQueue({ categories, flash }) {
       {/* Bulk assign bar */}
       {selected.size > 0 && (
         <div className="flex items-center gap-3 p-3 bg-accent/10 border border-accent/20 rounded-xl">
-          <span className="text-sm text-white font-medium">{selected.size} selected</span>
+          <span className="text-sm text-white font-medium">{t('categories.selectedCount', { count: selected.size })}</span>
           <select
             value={assignTarget}
             onChange={e => setAssignTarget(e.target.value)}
             className="flex-1 bg-dark-surface text-white text-sm px-3 py-2 rounded-lg border border-white/10 focus:border-accent focus:outline-none"
           >
-            <option value="">— Choose category —</option>
+            <option value="">{t('categories.chooseCategory')}</option>
             {categories.map(c => <option key={c._id} value={c.name}>{c.name}</option>)}
           </select>
           <button onClick={handleBulkAssign} disabled={assigning}
             className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/80 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50">
             {assigning ? <Loader size={13} className="animate-spin" /> : <CheckCircle size={13} />}
-            Assign
+            {t('categories.assign')}
           </button>
           <button onClick={clearSelect} className="p-2 text-brand-text-tertiary hover:text-white rounded-lg transition-all">
             <X size={14} />
@@ -575,17 +578,17 @@ function ReviewQueue({ categories, flash }) {
       <div className="bg-dark-elevated border border-white/10 rounded-xl overflow-hidden">
         <div className="flex items-center justify-between p-3 border-b border-white/5">
           <span className="text-xs text-brand-text-tertiary">
-            {selectedLabel ? `Showing tracks with label "${selectedLabel}"` : 'All uncategorized tracks'}
+            {selectedLabel ? t('categories.showingLabel', { label: selectedLabel }) : t('categories.allUncategorized')}
           </span>
-          <button onClick={selectAll} className="text-xs text-accent hover:text-accent/80 transition-all">Select all</button>
+          <button onClick={selectAll} className="text-xs text-accent hover:text-accent/80 transition-all">{t('common.selectAll')}</button>
         </div>
         {loadingTracks ? (
           <div className="flex items-center justify-center py-12"><Loader size={24} className="animate-spin text-accent" /></div>
         ) : tracks.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-center">
             <CheckCircle size={36} className="text-green-400 mb-2" />
-            <p className="text-white font-medium">All caught up!</p>
-            <p className="text-xs text-brand-text-tertiary mt-1">No uncategorized tracks in the queue.</p>
+            <p className="text-white font-medium">{t('categories.allCaughtUp')}</p>
+            <p className="text-xs text-brand-text-tertiary mt-1">{t('categories.noUncategorized')}</p>
           </div>
         ) : (
           <div className="divide-y divide-white/5">
@@ -611,10 +614,10 @@ function ReviewQueue({ categories, flash }) {
         {totalPages > 1 && (
           <div className="flex items-center justify-between p-3 border-t border-white/5">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-              className="text-xs text-brand-text-tertiary hover:text-white disabled:opacity-30 transition-all">← Prev</button>
+              className="text-xs text-brand-text-tertiary hover:text-white disabled:opacity-30 transition-all">← {t('actions.back')}</button>
             <span className="text-xs text-brand-text-tertiary">{page} / {totalPages}</span>
             <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}
-              className="text-xs text-brand-text-tertiary hover:text-white disabled:opacity-30 transition-all">Next →</button>
+              className="text-xs text-brand-text-tertiary hover:text-white disabled:opacity-30 transition-all">{t('actions.next')} →</button>
           </div>
         )}
       </div>
