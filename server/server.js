@@ -89,8 +89,7 @@ app.use(cors({
 // Body parser (except for webhook and file upload routes)
 app.use((req, res, next) => {
   // Skip body parser for routes that handle multipart/form-data (file uploads) or raw body (webhooks)
-  if (req.originalUrl === '/api/payment/webhook' || 
-      req.originalUrl === '/api/stripe/webhook' ||
+  if (req.originalUrl === '/api/stripe/webhook' ||
       req.originalUrl.includes('/api/collections') ||
       req.originalUrl.includes('/api/albums') ||
       req.originalUrl.startsWith('/api/tracks/upload') ||
