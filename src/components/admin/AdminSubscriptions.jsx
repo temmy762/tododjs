@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   Edit, TrendingUp, Users, DollarSign, Loader, CreditCard,
   Search, RefreshCw, ChevronUp, ChevronDown, CheckCircle,
@@ -17,16 +18,6 @@ const authHeaders = () => {
 };
 
 const fmt = (date) => date ? new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
-const timeAgo = (date) => {
-  if (!date) return 'Never';
-  const diff = Date.now() - new Date(date).getTime();
-  const days = Math.floor(diff / 86400000);
-  if (days === 0) return 'Today';
-  if (days === 1) return 'Yesterday';
-  if (days < 30) return `${days}d ago`;
-  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
-  return `${Math.floor(days / 365)}y ago`;
-};
 
 const StatusBadge = ({ status }) => {
   const map = {
@@ -65,6 +56,18 @@ const PlanBadge = ({ plan }) => {
 };
 
 export default function AdminSubscriptions() {
+  const { t } = useTranslation();
+
+  const timeAgo = (date) => {
+    if (!date) return t('timeAgo.never');
+    const diff = Date.now() - new Date(date).getTime();
+    const days = Math.floor(diff / 86400000);
+    if (days === 0) return t('timeAgo.today');
+    if (days === 1) return t('timeAgo.yesterday');
+    if (days < 30) return t('timeAgo.daysAgo', { count: days });
+    if (days < 365) return t('timeAgo.monthsAgo', { count: Math.floor(days / 30) });
+    return t('timeAgo.yearsAgo', { count: Math.floor(days / 365) });
+  };
   const [tab, setTab] = useState('overview');
   const [loading, setLoading] = useState(true);
   const [customersLoading, setCustomersLoading] = useState(false);
@@ -182,14 +185,14 @@ export default function AdminSubscriptions() {
     <div className="p-4 md:p-8">
       {/* Header + Tabs */}
       <div className="mb-6">
-        <h2 className="text-2xl md:text-3xl font-bold text-white mb-1">Membership Management</h2>
-        <p className="text-brand-text-tertiary text-sm mb-5">Manage pricing plans, memberships and customer leads</p>
+        <h2 className="text-2xl md:text-3xl font-bold text-white mb-1">{t('admin.membershipManagement')}</h2>
+        <p className="text-brand-text-tertiary text-sm mb-5">{t('admin.membershipDesc')}</p>
         <div className="flex rounded-xl border border-white/10 overflow-hidden p-1 bg-dark-elevated w-fit gap-1">
           <button onClick={() => setTab('overview')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${ tab === 'overview' ? 'bg-accent text-white shadow-lg' : 'text-brand-text-secondary hover:text-white' }`}>
-            <TrendingUp className="w-4 h-4" /> Overview & Plans
+            <TrendingUp className="w-4 h-4" /> {t('admin.overviewAndPlans')}
           </button>
           <button onClick={() => setTab('customers')} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${ tab === 'customers' ? 'bg-accent text-white shadow-lg' : 'text-brand-text-secondary hover:text-white' }`}>
-            <Users className="w-4 h-4" /> Customers & Leads
+            <Users className="w-4 h-4" /> {t('admin.customersAndLeads')}
             {pagination.total > 0 && <span className="bg-white/10 text-xs px-1.5 py-0.5 rounded-full">{pagination.total}</span>}
           </button>
         </div>
@@ -204,34 +207,34 @@ export default function AdminSubscriptions() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-tertiary" />
               <input
                 type="text" value={search} onChange={e => setSearch(e.target.value)}
-                placeholder="Search name or email..."
+                placeholder={t('admin.searchMembers')}
                 className="w-full pl-9 pr-4 py-2.5 bg-dark-elevated border border-white/10 rounded-xl text-sm focus:outline-none focus:border-accent"
               />
             </div>
             <select value={filterPlan} onChange={e => { setFilterPlan(e.target.value); }}
               className="px-3 py-2.5 bg-dark-elevated border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-accent">
-              <option value="">All Plans</option>
-              <option value="individual-monthly">Individual Monthly</option>
-              <option value="individual-quarterly">Individual Quarterly</option>
-              <option value="shared-monthly">Shared Monthly</option>
-              <option value="shared-quarterly">Shared Quarterly</option>
+              <option value="">{t('admin.allPlans')}</option>
+              <option value="individual-monthly">{t('admin.indivMonthly')}</option>
+              <option value="individual-quarterly">{t('admin.indivQuarterly')}</option>
+              <option value="shared-monthly">{t('admin.sharedMonthly')}</option>
+              <option value="shared-quarterly">{t('admin.sharedQuarterly')}</option>
             </select>
             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
               className="px-3 py-2.5 bg-dark-elevated border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-accent">
-              <option value="">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
-              <option value="expired">Expired</option>
-              <option value="cancelled">Cancelled</option>
-              <option value="past_due">Past Due</option>
+              <option value="">{t('admin.allStatuses')}</option>
+              <option value="active">{t('subscription.active')}</option>
+              <option value="inactive">{t('subscription.inactive')}</option>
+              <option value="expired">{t('subscription.expired')}</option>
+              <option value="cancelled">{t('subscription.cancelled')}</option>
+              <option value="past_due">{t('admin.pastDue')}</option>
             </select>
             <button onClick={() => fetchCustomers(1)}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-dark-elevated border border-white/10 text-sm text-brand-text-secondary hover:text-white transition-colors">
-              <RefreshCw className={`w-4 h-4 ${customersLoading ? 'animate-spin' : ''}`} /> Refresh
+              <RefreshCw className={`w-4 h-4 ${customersLoading ? 'animate-spin' : ''}`} /> {t('actions.refresh')}
             </button>
             <button onClick={exportCSV}
               className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-green-500/10 border border-green-500/20 text-green-400 hover:bg-green-500/20 text-sm font-medium transition-colors">
-              <Download className="w-4 h-4" /> Export CSV
+              <Download className="w-4 h-4" /> {t('admin.exportCsv')}
             </button>
           </div>
 
@@ -243,34 +246,34 @@ export default function AdminSubscriptions() {
                   <tr className="border-b border-white/10 bg-dark-surface">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide w-52">
                       <button onClick={() => toggleSort('name')} className="flex items-center gap-1 hover:text-white">
-                        Customer <SortIcon field="name" />
+                        {t('admin.customer')} <SortIcon field="name" />
                       </button>
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide">
                       <button onClick={() => toggleSort('subscription.plan')} className="flex items-center gap-1 hover:text-white">
-                        Plan <SortIcon field="subscription.plan" />
+                        {t('admin.plan')} <SortIcon field="subscription.plan" />
                       </button>
                     </th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide">Status</th>
+                    <th className="text-left px-4 py-3 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide">{t('admin.status')}</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide">
                       <button onClick={() => toggleSort('subscription.startDate')} className="flex items-center gap-1 hover:text-white">
-                        Start <SortIcon field="subscription.startDate" />
+                        {t('admin.startDate')} <SortIcon field="subscription.startDate" />
                       </button>
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide">
                       <button onClick={() => toggleSort('subscription.endDate')} className="flex items-center gap-1 hover:text-white">
-                        Expires <SortIcon field="subscription.endDate" />
+                        {t('admin.expires')} <SortIcon field="subscription.endDate" />
                       </button>
                     </th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide">Devices</th>
+                    <th className="text-center px-4 py-3 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide">{t('subscription.devices')}</th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide">
                       <button onClick={() => toggleSort('lastLogin')} className="flex items-center gap-1 hover:text-white">
-                        Last Login <SortIcon field="lastLogin" />
+                        {t('admin.lastLogin')} <SortIcon field="lastLogin" />
                       </button>
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide">
                       <button onClick={() => toggleSort('createdAt')} className="flex items-center gap-1 hover:text-white">
-                        Joined <SortIcon field="createdAt" />
+                        {t('admin.joined')} <SortIcon field="createdAt" />
                       </button>
                     </th>
                     <th className="text-center px-4 py-3 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide w-8"></th>
@@ -283,7 +286,7 @@ export default function AdminSubscriptions() {
                     </td></tr>
                   )}
                   {!customersLoading && customers.length === 0 && (
-                    <tr><td colSpan={9} className="text-center py-12 text-brand-text-tertiary">No customers found</td></tr>
+                    <tr><td colSpan={9} className="text-center py-12 text-brand-text-tertiary">{t('admin.noCustomers')}</td></tr>
                   )}
                   {!customersLoading && customers.map(u => (
                     <Fragment key={u._id}>
@@ -341,7 +344,7 @@ export default function AdminSubscriptions() {
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                               {/* Contact */}
                               <div className="space-y-2">
-                                <p className="text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide mb-2">Contact</p>
+                                <p className="text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide mb-2">{t('admin.contact')}</p>
                                 <div className="flex items-center gap-2 text-xs">
                                   <Mail className="w-3 h-3 text-brand-text-tertiary" />
                                   <span className="text-white break-all">{u.email}</span>
@@ -354,25 +357,25 @@ export default function AdminSubscriptions() {
                                 )}
                                 <div className="flex items-center gap-2 text-xs">
                                   <Calendar className="w-3 h-3 text-brand-text-tertiary" />
-                                  <span className="text-brand-text-secondary">Joined {fmt(u.createdAt)}</span>
+                                  <span className="text-brand-text-secondary">{t('admin.joined')} {fmt(u.createdAt)}</span>
                                 </div>
                               </div>
 
                               {/* Subscription */}
                               <div className="space-y-2">
-                                <p className="text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide mb-2">Subscription</p>
+                                <p className="text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide mb-2">{t('admin.subscriptions')}</p>
                                 <div className="flex items-center gap-2 text-xs">
-                                  <span className="text-brand-text-tertiary w-16">Auto Renew</span>
+                                  <span className="text-brand-text-tertiary w-16">{t('admin.autoRenew')}</span>
                                   <span className={u.subscription?.autoRenew ? 'text-green-400' : 'text-brand-text-tertiary'}>
                                     {u.subscription?.autoRenew ? '✓ Yes' : '✗ No'}
                                   </span>
                                 </div>
                                 <div className="flex items-center gap-2 text-xs">
-                                  <span className="text-brand-text-tertiary w-16">Start</span>
+                                  <span className="text-brand-text-tertiary w-16">{t('admin.startDate')}</span>
                                   <span className="text-white">{fmt(u.subscription?.startDate)}</span>
                                 </div>
                                 <div className="flex items-center gap-2 text-xs">
-                                  <span className="text-brand-text-tertiary w-16">End</span>
+                                  <span className="text-brand-text-tertiary w-16">{t('admin.endDate')}</span>
                                   <span className={`${ u.subscription?.endDate && new Date(u.subscription.endDate) < new Date() ? 'text-red-400' : 'text-white' }`}>
                                     {fmt(u.subscription?.endDate)}
                                   </span>
@@ -385,11 +388,11 @@ export default function AdminSubscriptions() {
                                   <CreditCard className="w-3 h-3" /> Stripe
                                 </p>
                                 <div>
-                                  <p className="text-xs text-brand-text-tertiary">Customer ID</p>
+                                  <p className="text-xs text-brand-text-tertiary">{t('admin.customerId')}</p>
                                   <p className="text-xs font-mono text-white break-all">{u.subscription?.stripeCustomerId || '—'}</p>
                                 </div>
                                 <div>
-                                  <p className="text-xs text-brand-text-tertiary">Subscription ID</p>
+                                  <p className="text-xs text-brand-text-tertiary">{t('admin.subscriptionId')}</p>
                                   <p className="text-xs font-mono text-white break-all">{u.subscription?.stripeSubscriptionId || '—'}</p>
                                 </div>
                               </div>
@@ -397,19 +400,19 @@ export default function AdminSubscriptions() {
                               {/* Devices summary */}
                               <div className="space-y-2">
                                 <p className="text-xs font-semibold text-brand-text-tertiary uppercase tracking-wide mb-2 flex items-center gap-1">
-                                  <Monitor className="w-3 h-3" /> Devices ({u.subscription?.devices?.length || 0})
+                                  <Monitor className="w-3 h-3" /> {t('subscription.devices')} ({u.subscription?.devices?.length || 0})
                                 </p>
                                 {(u.subscription?.devices || []).slice(0, 3).map(d => (
                                   <div key={d.deviceId} className="text-xs">
                                     <p className="text-white">{d.deviceName || `${d.browser} / ${d.os}`}</p>
-                                    <p className="text-brand-text-tertiary font-mono">{d.ipAddress || 'No IP'}</p>
+                                    <p className="text-brand-text-tertiary font-mono">{d.ipAddress || t('admin.noIp')}</p>
                                   </div>
                                 ))}
                                 {(u.subscription?.devices?.length || 0) > 3 && (
-                                  <p className="text-xs text-brand-text-tertiary">+{u.subscription.devices.length - 3} more</p>
+                                  <p className="text-xs text-brand-text-tertiary">+{u.subscription.devices.length - 3} {t('common.more')}</p>
                                 )}
                                 {(u.subscription?.devices?.length || 0) === 0 && (
-                                  <p className="text-xs text-brand-text-tertiary">No devices registered</p>
+                                  <p className="text-xs text-brand-text-tertiary">{t('admin.noDevices')}</p>
                                 )}
                               </div>
                             </div>
@@ -425,7 +428,7 @@ export default function AdminSubscriptions() {
             {/* Pagination */}
             {pagination.pages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-white/10">
-                <p className="text-xs text-brand-text-tertiary">{pagination.total} total customers</p>
+                <p className="text-xs text-brand-text-tertiary">{pagination.total} {t('admin.totalCustomers')}</p>
                 <div className="flex gap-1">
                   {Array.from({ length: Math.min(pagination.pages, 8) }, (_, i) => i + 1).map(p => (
                     <button key={p} onClick={() => fetchCustomers(p)}
@@ -456,42 +459,42 @@ export default function AdminSubscriptions() {
                 <DollarSign className="w-8 h-8 text-accent" strokeWidth={2} />
               </div>
               <h3 className="text-2xl font-bold text-white mb-1">€{Number(estimatedRevenue).toLocaleString()}</h3>
-              <p className="text-sm text-brand-text-tertiary">Est. Monthly Revenue</p>
+              <p className="text-sm text-brand-text-tertiary">{t('admin.estMonthlyRevenue')}</p>
             </div>
             <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
               <div className="flex items-center justify-between mb-3">
                 <Users className="w-8 h-8 text-accent" strokeWidth={2} />
               </div>
               <h3 className="text-2xl font-bold text-white mb-1">{(stats.totalUsers || 0).toLocaleString()}</h3>
-              <p className="text-sm text-brand-text-tertiary">Total Members</p>
+              <p className="text-sm text-brand-text-tertiary">{t('admin.totalMembers')}</p>
             </div>
             <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
               <div className="flex items-center justify-between mb-3">
                 <TrendingUp className="w-8 h-8 text-accent" strokeWidth={2} />
               </div>
               <h3 className="text-2xl font-bold text-white mb-1">{paidPercent}%</h3>
-              <p className="text-sm text-brand-text-tertiary">Paid Conversion</p>
+              <p className="text-sm text-brand-text-tertiary">{t('admin.paidConversion')}</p>
             </div>
             <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
               <div className="flex items-center justify-between mb-3">
                 <CreditCard className="w-8 h-8 text-accent" strokeWidth={2} />
               </div>
               <h3 className="text-2xl font-bold text-white mb-1">{(stats.newThisMonth || 0).toLocaleString()}</h3>
-              <p className="text-sm text-brand-text-tertiary">New This Month</p>
+              <p className="text-sm text-brand-text-tertiary">{t('admin.newThisMonth')}</p>
             </div>
           </div>
 
           {/* Subscription Usage Breakdown */}
           <div className="mb-8">
-            <h3 className="text-xl font-bold text-white mb-6">Subscription Usage</h3>
+            <h3 className="text-xl font-bold text-white mb-6">{t('admin.subscriptionUsage')}</h3>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {[
-                { label: 'No Plan', count: stats.freeCount, color: 'bg-gray-500' },
-                { label: 'Active Subs', count: stats.activeCount, color: 'bg-green-500' },
-                { label: 'Indiv. Monthly', count: stats.individualMonthlyCount, color: 'bg-blue-500' },
-                { label: 'Indiv. Quarterly', count: stats.individualQuarterlyCount, color: 'bg-indigo-500' },
-                { label: 'Shared Monthly', count: stats.sharedMonthlyCount, color: 'bg-purple-500' },
-                { label: 'Shared Quarterly', count: stats.sharedQuarterlyCount, color: 'bg-pink-500' },
+                { label: t('admin.noPlan'), count: stats.freeCount, color: 'bg-gray-500' },
+                { label: t('admin.activeSubs'), count: stats.activeCount, color: 'bg-green-500' },
+                { label: t('admin.indivMonthly'), count: stats.individualMonthlyCount, color: 'bg-blue-500' },
+                { label: t('admin.indivQuarterly'), count: stats.individualQuarterlyCount, color: 'bg-indigo-500' },
+                { label: t('admin.sharedMonthly'), count: stats.sharedMonthlyCount, color: 'bg-purple-500' },
+                { label: t('admin.sharedQuarterly'), count: stats.sharedQuarterlyCount, color: 'bg-pink-500' },
               ].map(({ label, count, color }) => (
                 <div key={label} className="bg-dark-elevated rounded-xl p-5 border border-white/10">
                   <div className="flex items-center justify-between mb-3">
@@ -500,7 +503,7 @@ export default function AdminSubscriptions() {
                   </div>
                   <div className="text-2xl font-bold text-white mb-1">{(count || 0).toLocaleString()}</div>
                   <div className="text-xs text-brand-text-tertiary">
-                    {stats.totalUsers > 0 ? (((count || 0) / stats.totalUsers) * 100).toFixed(1) : '0'}% of members
+                    {stats.totalUsers > 0 ? (((count || 0) / stats.totalUsers) * 100).toFixed(1) : '0'}% {t('admin.ofMembers')}
                   </div>
                 </div>
               ))}
@@ -510,7 +513,7 @@ export default function AdminSubscriptions() {
           {/* Subscription Plans */}
           <div>
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-white">Membership Plans</h3>
+              <h3 className="text-xl font-bold text-white">{t('admin.membershipPlans')}</h3>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -530,43 +533,43 @@ export default function AdminSubscriptions() {
                   <div className="p-6">
                     <div className="flex items-center justify-between mb-4 pb-4 border-b border-white/10">
                       <div>
-                        <p className="text-xs text-brand-text-tertiary">Duration</p>
-                        <p className="text-lg font-bold text-white">{plan.durationDays} days</p>
+                        <p className="text-xs text-brand-text-tertiary">{t('admin.duration')}</p>
+                        <p className="text-lg font-bold text-white">{plan.durationDays} {t('admin.days')}</p>
                       </div>
                       <div className="px-3 py-1 rounded-full text-xs font-semibold bg-green-500/20 text-green-400 border border-green-500/30">
-                        Active
+                        {t('admin.activeStatus')}
                       </div>
                     </div>
 
                     <div className="space-y-2 mb-6">
-                      <p className="text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider mb-3">Features</p>
+                      <p className="text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider mb-3">{t('admin.features')}</p>
                       {plan.features.unlimitedDownloads && (
                         <div className="flex items-center gap-2 text-xs text-white">
                           <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>
-                          <span>Unlimited Downloads</span>
+                          <span>{t('subscription.unlimitedDownloads')}</span>
                         </div>
                       )}
                       {plan.features.fullWebAccess && (
                         <div className="flex items-center gap-2 text-xs text-white">
                           <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>
-                          <span>Full Web Access</span>
+                          <span>{t('subscription.fullWebAccess')}</span>
                         </div>
                       )}
                       {plan.features.whatsappSupport && (
                         <div className="flex items-center gap-2 text-xs text-white">
                           <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>
-                          <span>WhatsApp Support</span>
+                          <span>{t('subscription.whatsappSupport')}</span>
                         </div>
                       )}
                       {plan.type === 'shared' && (
                         <>
                           <div className="flex items-center gap-2 text-xs text-white">
                             <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>
-                            <span>2 Users</span>
+                            <span>{t('subscription.twoUsers')}</span>
                           </div>
                           <div className="flex items-center gap-2 text-xs text-white">
                             <div className="w-1.5 h-1.5 rounded-full bg-accent"></div>
-                            <span>2 Devices/IP</span>
+                            <span>{t('subscription.twoDevices')}</span>
                           </div>
                         </>
                       )}
@@ -577,7 +580,7 @@ export default function AdminSubscriptions() {
                       className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-dark-surface hover:bg-dark-elevated border border-white/10 text-white font-medium transition-all duration-200"
                     >
                       <Edit className="w-4 h-4" />
-                      <span>Edit Plan</span>
+                      <span>{t('admin.editPlan')}</span>
                     </button>
                   </div>
                 </div>
@@ -592,13 +595,13 @@ export default function AdminSubscriptions() {
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-dark-elevated rounded-2xl border border-white/10 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-white/10">
-              <h3 className="text-2xl font-bold text-white">Edit {editingPlan.name} Plan</h3>
+              <h3 className="text-2xl font-bold text-white">{t('admin.editPlanTitle', { name: editingPlan.name })}</h3>
               <p className="text-sm text-brand-text-tertiary mt-1">Plan ID: {editingPlan.planId}</p>
             </div>
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-white mb-2">Price (€)</label>
+                  <label className="block text-sm font-medium text-white mb-2">{t('admin.price')} (€)</label>
                   <input
                     type="number"
                     step="0.01"
@@ -607,7 +610,7 @@ export default function AdminSubscriptions() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-white mb-2">Duration (days)</label>
+                  <label className="block text-sm font-medium text-white mb-2">{t('admin.durationDays')}</label>
                   <input
                     type="number"
                     defaultValue={editingPlan.durationDays}
@@ -617,28 +620,28 @@ export default function AdminSubscriptions() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-white mb-2">Type</label>
+                  <label className="block text-sm font-medium text-white mb-2">{t('admin.planType')}</label>
                   <select
                     defaultValue={editingPlan.type}
                     className="w-full px-4 py-2.5 bg-dark-surface border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent"
                   >
-                    <option value="individual">Individual</option>
-                    <option value="shared">Shared</option>
+                    <option value="individual">{t('subscription.individual')}</option>
+                    <option value="shared">{t('subscription.shared')}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-white mb-2">Duration Type</label>
+                  <label className="block text-sm font-medium text-white mb-2">{t('admin.durationType')}</label>
                   <select
                     defaultValue={editingPlan.duration}
                     className="w-full px-4 py-2.5 bg-dark-surface border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent"
                   >
-                    <option value="monthly">Monthly</option>
-                    <option value="quarterly">Quarterly</option>
+                    <option value="monthly">{t('subscription.monthly')}</option>
+                    <option value="quarterly">{t('subscription.quarterly')}</option>
                   </select>
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-white mb-3">Features</label>
+                <label className="block text-sm font-medium text-white mb-3">{t('admin.features')}</label>
                 <div className="space-y-3">
                   <label className="flex items-center gap-3">
                     <input
@@ -646,7 +649,7 @@ export default function AdminSubscriptions() {
                       defaultChecked={editingPlan.features?.unlimitedDownloads}
                       className="w-4 h-4 rounded border-white/20 bg-dark-surface"
                     />
-                    <span className="text-sm text-white">Unlimited Downloads</span>
+                    <span className="text-sm text-white">{t('subscription.unlimitedDownloads')}</span>
                   </label>
                   <label className="flex items-center gap-3">
                     <input
@@ -654,7 +657,7 @@ export default function AdminSubscriptions() {
                       defaultChecked={editingPlan.features?.fullWebAccess}
                       className="w-4 h-4 rounded border-white/20 bg-dark-surface"
                     />
-                    <span className="text-sm text-white">Full Web Access</span>
+                    <span className="text-sm text-white">{t('subscription.fullWebAccess')}</span>
                   </label>
                   <label className="flex items-center gap-3">
                     <input
@@ -662,7 +665,7 @@ export default function AdminSubscriptions() {
                       defaultChecked={editingPlan.features?.whatsappSupport}
                       className="w-4 h-4 rounded border-white/20 bg-dark-surface"
                     />
-                    <span className="text-sm text-white">WhatsApp Support</span>
+                    <span className="text-sm text-white">{t('subscription.whatsappSupport')}</span>
                   </label>
                   <label className="flex items-center gap-3">
                     <input
@@ -670,7 +673,7 @@ export default function AdminSubscriptions() {
                       defaultChecked={editingPlan.features?.noCommitment}
                       className="w-4 h-4 rounded border-white/20 bg-dark-surface"
                     />
-                    <span className="text-sm text-white">No Commitment</span>
+                    <span className="text-sm text-white">{t('subscription.noCommitment')}</span>
                   </label>
                 </div>
               </div>
@@ -680,13 +683,13 @@ export default function AdminSubscriptions() {
                 onClick={() => setEditingPlan(null)}
                 className="px-4 py-2.5 rounded-lg bg-dark-surface hover:bg-dark-elevated border border-white/10 text-white font-medium transition-all duration-200"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={() => setEditingPlan(null)}
                 className="px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-all duration-200"
               >
-                Save Changes
+                {t('admin.saveChanges')}
               </button>
             </div>
           </div>

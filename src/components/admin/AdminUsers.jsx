@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Search, UserPlus, Edit, Trash2, Shield, Crown, User, Loader, X, ChevronLeft, ChevronRight, Users } from 'lucide-react';
 import API_URL from '../../config/api';
 
@@ -13,6 +14,7 @@ const authHeaders = (json = false) => {
 };
 
 export default function AdminUsers() {
+  const { t, i18n } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [users, setUsers] = useState([]);
@@ -86,8 +88,9 @@ export default function AdminUsers() {
   };
 
   const getPlanLabel = (u) => {
-    if (u.role === 'admin') return 'Admin';
-    return (u.subscription?.plan || 'free').charAt(0).toUpperCase() + (u.subscription?.plan || 'free').slice(1);
+    if (u.role === 'admin') return t('admin.adminRole');
+    const plan = u.subscription?.plan || 'free';
+    return t(`subscription.${plan}`, plan.charAt(0).toUpperCase() + plan.slice(1));
   };
 
   const getRoleColor = (u) => {
@@ -102,12 +105,12 @@ export default function AdminUsers() {
     if (!date) return '—';
     const diff = Date.now() - new Date(date).getTime();
     const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
+    if (mins < 1) return t('timeAgo.justNow');
+    if (mins < 60) return t('timeAgo.minutesAgo', { count: mins });
     const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
+    if (hrs < 24) return t('timeAgo.hoursAgo', { count: hrs });
     const days = Math.floor(hrs / 24);
-    return `${days}d ago`;
+    return t('timeAgo.daysAgo', { count: days });
   };
 
   const startIdx = (pagination.page - 1) * pagination.limit + 1;
@@ -118,8 +121,8 @@ export default function AdminUsers() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">Member Management</h2>
-          <p className="text-brand-text-tertiary">Manage all members and their permissions</p>
+          <h2 className="text-3xl font-bold text-white mb-2">{t('admin.memberManagement')}</h2>
+          <p className="text-brand-text-tertiary">{t('admin.managePermissions')}</p>
         </div>
       </div>
 
@@ -127,19 +130,19 @@ export default function AdminUsers() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
           <div className="text-3xl font-bold text-white mb-1">{(stats?.totalUsers ?? 0).toLocaleString()}</div>
-          <p className="text-sm text-brand-text-tertiary">Total Members</p>
+          <p className="text-sm text-brand-text-tertiary">{t('admin.totalMembers')}</p>
         </div>
         <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
           <div className="text-3xl font-bold text-white mb-1">{(stats?.premiumCount ?? 0).toLocaleString()}</div>
-          <p className="text-sm text-brand-text-tertiary">Premium Members</p>
+          <p className="text-sm text-brand-text-tertiary">{t('admin.premiumMembers')}</p>
         </div>
         <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
           <div className="text-3xl font-bold text-white mb-1">{(stats?.proCount ?? 0).toLocaleString()}</div>
-          <p className="text-sm text-brand-text-tertiary">Pro Members</p>
+          <p className="text-sm text-brand-text-tertiary">{t('admin.proMembers')}</p>
         </div>
         <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
           <div className="text-3xl font-bold text-white mb-1">{(stats?.newThisMonth ?? 0).toLocaleString()}</div>
-          <p className="text-sm text-brand-text-tertiary">New This Month</p>
+          <p className="text-sm text-brand-text-tertiary">{t('admin.newThisMonth')}</p>
         </div>
       </div>
 
@@ -149,7 +152,7 @@ export default function AdminUsers() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-text-tertiary" />
           <input
             type="text"
-            placeholder="Search members by name or email..."
+            placeholder={t('admin.searchMembers')}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 bg-dark-surface border border-white/10 rounded-lg text-white placeholder-brand-text-tertiary focus:outline-none focus:border-accent transition-colors"
@@ -171,14 +174,14 @@ export default function AdminUsers() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-white/10 bg-dark-surface">
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">Member</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">Phone</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">Role / Plan</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">Joined</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">Last Login</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">Downloads</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">Status</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">Actions</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('admin.member')}</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('admin.phone')}</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('admin.rolePlan')}</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('admin.joined')}</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('admin.lastLogin')}</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('library.downloads')}</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('admin.status')}</th>
+                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('admin.actions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/5">
@@ -207,7 +210,7 @@ export default function AdminUsers() {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-brand-text-tertiary">
-                        {new Date(user.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        {new Date(user.createdAt).toLocaleDateString(i18n.language, { month: 'short', day: 'numeric', year: 'numeric' })}
                       </td>
                       <td className="px-6 py-4 text-sm text-brand-text-tertiary">{timeAgo(user.lastLogin)}</td>
                       <td className="px-6 py-4 text-sm text-white">{user.downloads?.total || 0}</td>
@@ -217,7 +220,7 @@ export default function AdminUsers() {
                             ? 'bg-green-500/20 text-green-400 border border-green-500/30'
                             : 'bg-red-500/20 text-red-400 border border-red-500/30'
                         }`}>
-                          {user.isActive !== false ? 'Active' : 'Inactive'}
+                          {user.isActive !== false ? t('admin.activeStatus') : t('admin.inactiveStatus')}
                         </span>
                       </td>
                       <td className="px-6 py-4">
@@ -242,7 +245,7 @@ export default function AdminUsers() {
           {/* Pagination */}
           <div className="px-6 py-4 border-t border-white/10 flex items-center justify-between">
             <div className="text-sm text-brand-text-tertiary">
-              Showing <span className="font-semibold text-white">{startIdx}-{endIdx}</span> of <span className="font-semibold text-white">{pagination.total.toLocaleString()}</span> members
+              {t('admin.showing')} <span className="font-semibold text-white">{startIdx}-{endIdx}</span> {t('common.of')} <span className="font-semibold text-white">{pagination.total.toLocaleString()}</span> {t('admin.members')}
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -250,7 +253,7 @@ export default function AdminUsers() {
                 disabled={pagination.page <= 1}
                 className="px-3 py-1.5 rounded-lg bg-dark-surface hover:bg-dark-elevated border border-white/10 text-white text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
               >
-                <ChevronLeft className="w-4 h-4" /> Prev
+                <ChevronLeft className="w-4 h-4" /> {t('actions.back')}
               </button>
               <span className="text-sm text-white font-medium px-2">{pagination.page} / {pagination.pages}</span>
               <button
@@ -258,7 +261,7 @@ export default function AdminUsers() {
                 disabled={pagination.page >= pagination.pages}
                 className="px-3 py-1.5 rounded-lg bg-dark-surface hover:bg-dark-elevated border border-white/10 text-white text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1"
               >
-                Next <ChevronRight className="w-4 h-4" />
+                {t('actions.next')} <ChevronRight className="w-4 h-4" />
               </button>
             </div>
           </div>
@@ -269,7 +272,7 @@ export default function AdminUsers() {
       {!loading && users.length === 0 && (
         <div className="text-center py-20">
           <Users className="w-16 h-16 mx-auto mb-4 text-brand-text-tertiary opacity-30" />
-          <p className="text-brand-text-tertiary text-lg">{debouncedSearch ? 'No members match your search' : 'No members yet'}</p>
+          <p className="text-brand-text-tertiary text-lg">{debouncedSearch ? t('admin.noMembersSearch') : t('admin.noMembers')}</p>
         </div>
       )}
 
@@ -277,12 +280,12 @@ export default function AdminUsers() {
       {deleteConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
           <div className="bg-dark-surface rounded-2xl border border-white/10 p-8 max-w-md w-full mx-4">
-            <h3 className="text-xl font-bold text-white mb-2">Delete Member</h3>
-            <p className="text-brand-text-tertiary mb-1">Are you sure you want to delete:</p>
+            <h3 className="text-xl font-bold text-white mb-2">{t('admin.deleteMember')}</h3>
+            <p className="text-brand-text-tertiary mb-1">{t('admin.deleteConfirm')}</p>
             <p className="text-white font-semibold mb-6">{deleteConfirm.name} ({deleteConfirm.email})</p>
             <div className="flex gap-3">
-              <button onClick={() => setDeleteConfirm(null)} className="flex-1 px-4 py-2.5 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white font-medium transition-colors">Cancel</button>
-              <button onClick={() => handleDelete(deleteConfirm._id)} className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition-colors">Delete</button>
+              <button onClick={() => setDeleteConfirm(null)} className="flex-1 px-4 py-2.5 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white font-medium transition-colors">{t('common.cancel')}</button>
+              <button onClick={() => handleDelete(deleteConfirm._id)} className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition-colors">{t('common.delete')}</button>
             </div>
           </div>
         </div>
@@ -297,6 +300,7 @@ export default function AdminUsers() {
 }
 
 function EditUserModal({ user, onClose, onSave }) {
+  const { t } = useTranslation();
   const [role, setRole] = useState(user.role || 'user');
   const [plan, setPlan] = useState(user.subscription?.plan || 'free');
   const [isActive, setIsActive] = useState(user.isActive !== false);
@@ -305,7 +309,7 @@ function EditUserModal({ user, onClose, onSave }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
       <div className="bg-dark-surface rounded-2xl border border-white/10 p-8 max-w-lg w-full mx-4">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold text-white">Edit Member</h3>
+          <h3 className="text-xl font-bold text-white">{t('admin.editMember')}</h3>
           <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors"><X className="w-5 h-5 text-white" /></button>
         </div>
         <div className="mb-4">
@@ -314,22 +318,22 @@ function EditUserModal({ user, onClose, onSave }) {
         </div>
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-brand-text-tertiary mb-1">Role</label>
+            <label className="block text-sm font-medium text-brand-text-tertiary mb-1">{t('admin.roleLabel')}</label>
             <select value={role} onChange={e => setRole(e.target.value)} className="w-full px-4 py-2.5 bg-dark-elevated border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent">
-              <option value="user">User</option>
-              <option value="admin">Admin</option>
+              <option value="user">{t('admin.userRole')}</option>
+              <option value="admin">{t('admin.adminRole')}</option>
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-brand-text-tertiary mb-1">Subscription Plan</label>
+            <label className="block text-sm font-medium text-brand-text-tertiary mb-1">{t('admin.subscriptionPlan')}</label>
             <select value={plan} onChange={e => setPlan(e.target.value)} className="w-full px-4 py-2.5 bg-dark-elevated border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent">
-              <option value="free">Free</option>
-              <option value="premium">Premium</option>
-              <option value="pro">Pro</option>
+              <option value="free">{t('subscription.free')}</option>
+              <option value="premium">{t('subscription.premium')}</option>
+              <option value="pro">{t('subscription.pro')}</option>
             </select>
           </div>
           <div className="flex items-center gap-3">
-            <label className="text-sm font-medium text-brand-text-tertiary">Active</label>
+            <label className="text-sm font-medium text-brand-text-tertiary">{t('admin.activeStatus')}</label>
             <button
               onClick={() => setIsActive(!isActive)}
               className={`w-12 h-6 rounded-full transition-colors relative ${isActive ? 'bg-green-500' : 'bg-gray-600'}`}
@@ -339,8 +343,8 @@ function EditUserModal({ user, onClose, onSave }) {
           </div>
         </div>
         <div className="flex gap-3 mt-6">
-          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white font-medium transition-colors">Cancel</button>
-          <button onClick={() => onSave(user._id, { role, plan, isActive })} className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-colors">Save</button>
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white font-medium transition-colors">{t('common.cancel')}</button>
+          <button onClick={() => onSave(user._id, { role, plan, isActive })} className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-colors">{t('common.save')}</button>
         </div>
       </div>
     </div>
