@@ -127,7 +127,7 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete, o
           </div>
         )}
 
-        {isFailed && (
+        {collection.status === 'failed' && (
           <div
             className="absolute top-3 right-3 px-3 py-1 rounded-full bg-red-500/20 border border-red-500 cursor-help"
             title={collection.errorMessage || 'Processing failed'}
