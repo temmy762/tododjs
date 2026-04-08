@@ -6,9 +6,7 @@ import { sendEmail } from '../services/emailService.js';
 // Check if user has active subscription
 export const requireSubscription = async (req, res, next) => {
   try {
-    console.log('   🔒 requireSubscription middleware');
     if (!req.user) {
-      console.log('   ❌ No user on request');
       return res.status(401).json({
         success: false,
         message: 'Please login to access this resource'
@@ -16,11 +14,9 @@ export const requireSubscription = async (req, res, next) => {
     }
 
     const user = await User.findById(req.user.id);
-    console.log(`   🔒 User: ${user?.email}, role: ${user?.role}`);
 
     // Admin bypasses all subscription restrictions
     if (user.role === 'admin') {
-      console.log('   ✅ Admin bypass - skipping subscription check');
       return next();
     }
 
@@ -56,13 +52,10 @@ export const requireSubscription = async (req, res, next) => {
 // Check device limit for shared plans
 export const checkDeviceLimit = async (req, res, next) => {
   try {
-    console.log('   🔒 checkDeviceLimit middleware');
     const user = await User.findById(req.user.id);
-    console.log(`   🔒 User: ${user?.email}, role: ${user?.role}`);
 
     // Admin bypasses device limit checks
     if (user.role === 'admin') {
-      console.log('   ✅ Admin bypass - skipping device limit check');
       return next();
     }
 
@@ -179,7 +172,7 @@ export const checkDeviceLimit = async (req, res, next) => {
           <ul>
             <li><strong>Device:</strong> ${deviceInfo.deviceName}</li>
             <li><strong>Type:</strong> ${deviceInfo.deviceType}</li>
-            <li><strong>IP Address:</strong> ${ipAddress}</li>
+            <li><strong>IP Address:</strong> ${ipAddress2}</li>
             <li><strong>Time:</strong> ${new Date().toLocaleString()}</li>
           </ul>
           <p>If this wasn't you, please sign out all devices immediately from your account settings.</p>
