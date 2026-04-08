@@ -559,13 +559,6 @@ function extractEntryToFileByName(zipPath, targetFileName, outputPath, timeoutMs
             done = true;
             cleanup();
             try { zipfile.close(); } catch { /* ignore */ }
-            const elapsedMs = Date.now() - startedAt;
-            try {
-              const st = fs.statSync(outputPath);
-              console.log(`   ✅ Extracted inner ZIP entry to file (${st.size} bytes, ${elapsedMs}ms): ${targetFileName}`);
-            } catch {
-              console.log(`   ✅ Extracted inner ZIP entry to file (${elapsedMs}ms): ${targetFileName}`);
-            }
             resolve(outputPath);
           });
 
@@ -651,8 +644,6 @@ function extractEntryToBufferByName(zipPath, targetFileName, timeoutMs = 120000)
             done = true;
             cleanup();
             try { zipfile.close(); } catch { /* ignore */ }
-            const elapsedMs = Date.now() - startedAt;
-            console.log(`   ✅ Extracted ZIP entry to buffer (${Buffer.concat(chunks).length} bytes, ${elapsedMs}ms): ${targetFileName}`);
             resolve(Buffer.concat(chunks));
           });
         });
