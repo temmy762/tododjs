@@ -164,13 +164,12 @@ async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverA
             const coverUploadResult = await uploadToWasabi(pic.data, coverKey, pic.format);
             embeddedCoverUrl = coverUploadResult.location;
             embeddedCoverKey = coverUploadResult.key;
-            console.log(`   🖼 Extracted cover art for ${mp3Name}`);
           } catch (coverErr) {
-            console.log(`   ⚠ Failed to upload embedded cover for ${mp3Name}:`, coverErr.message);
+            console.warn(`   ⚠ Failed to upload embedded cover for ${mp3Name}:`, coverErr.message);
           }
         }
       } catch (err) {
-        console.log(`   ⚠ Metadata parsing failed for ${mp3Name}`);
+        console.warn(`   ⚠ Metadata parsing failed for ${mp3Name}`);
       }
 
       // Tonality + BPM detection (ID3 → Essentia.js audio analysis → AI fallback)
@@ -310,13 +309,12 @@ export const uploadTrackToAlbum = async (req, res) => {
           const coverUploadResult = await uploadToWasabi(pic.data, coverKey, pic.format);
           embeddedCoverUrl = coverUploadResult.location;
           embeddedCoverKey = coverUploadResult.key;
-          console.log(`   🖼 Extracted cover art for ${mp3File.originalname}`);
-        } catch (coverErr) {
-          console.log(`   ⚠ Failed to upload embedded cover:`, coverErr.message);
+          } catch (coverErr) {
+          console.warn(`   ⚠ Failed to upload embedded cover:`, coverErr.message);
         }
       }
     } catch (err) {
-      console.log(`⚠ Metadata parsing failed for ${mp3File.originalname}`);
+      console.warn(`⚠ Metadata parsing failed for ${mp3File.originalname}`);
     }
 
     const { tonality, detectedBpm } = await detectTonality(mp3File.buffer, metadata);
@@ -582,27 +580,8 @@ export const getAlbum = async (req, res) => {
     const albumWithUrl = await resolveSignedUrl(album, ['coverArt']);
 
     // Get tracks for this album
-    console.log(`🔍 Fetching tracks for album ID: ${album._id}`);
-    console.log(`   Album ID type: ${typeof album._id}, value: ${album._id}`);
-    
-    // Check total tracks in database
-    const totalTracks = await Track.countDocuments({});
-    console.log(`   Total tracks in DB: ${totalTracks}`);
-    
-    // Try to find any tracks for this album
     const tracks = await Track.find({ albumId: album._id })
       .sort({ title: 1 });
-    console.log(`📊 Found ${tracks.length} tracks for album "${album.name}"`);
-    
-    // If no tracks found, check if tracks exist with string albumId
-    if (tracks.length === 0) {
-      const tracksWithStringId = await Track.find({ albumId: album._id.toString() });
-      console.log(`   Tracks with string albumId: ${tracksWithStringId.length}`);
-      
-      // Check sample tracks to see their albumId format
-      const sampleTracks = await Track.find({}).limit(3).select('title albumId');
-      console.log(`   Sample tracks:`, sampleTracks.map(t => ({ title: t.title, albumId: t.albumId, type: typeof t.albumId })));
-    }
 
     // Resolve signed URLs for track cover art and audio files
     const tracksWithUrls = await Promise.all(tracks.map(async (track) => {
