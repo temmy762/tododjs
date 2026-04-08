@@ -495,7 +495,7 @@ export const uploadTrackThumbnail = async (req, res) => {
       try {
         await deleteFromWasabi(track.coverArtKey);
       } catch (err) {
-        console.log('Failed to delete old cover art:', err.message);
+        console.warn('Failed to delete old cover art:', err.message);
       }
     }
 
@@ -538,14 +538,14 @@ export const deleteTrack = async (req, res) => {
     // Delete audio file from Wasabi
     if (track.audioFile?.key) {
       try { await deleteFromWasabi(track.audioFile.key); } catch (err) {
-        console.log('Failed to delete audio from Wasabi:', err.message);
+        console.warn('Failed to delete audio from Wasabi:', err.message);
       }
     }
 
     // Delete cover art from Wasabi
     if (track.coverArtKey) {
       try { await deleteFromWasabi(track.coverArtKey); } catch (err) {
-        console.log('Failed to delete cover art from Wasabi:', err.message);
+        console.warn('Failed to delete cover art from Wasabi:', err.message);
       }
     }
 
@@ -681,11 +681,11 @@ async function processOneTrack(mp3Buffer, mp3Name, basePath, userId) {
         embeddedCoverUrl = coverUpload.location;
         embeddedCoverKey = coverUpload.key;
       } catch (coverErr) {
-        console.log(`   ⚠ Cover art upload failed for ${mp3Name}:`, coverErr.message);
+        console.warn(`   ⚠ Cover art upload failed for ${mp3Name}:`, coverErr.message);
       }
     }
   } catch (err) {
-    console.log(`   ⚠ Metadata parsing failed for ${mp3Name}`);
+    console.warn(`   ⚠ Metadata parsing failed for ${mp3Name}`);
   }
 
   const { tonality, detectedBpm } = await detectTonality(mp3Buffer, metadata);

@@ -65,7 +65,6 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
       // Free users cannot register devices
       if (maxDevices === 0) {
         // Don't register device for free users
-        console.log('Free user - no device registration');
       } else if (user.subscription.devices.length >= maxDevices) {
         // Device limit reached — BLOCK the new device and notify the account owner
         const ipAddress = req?.ip || req?.connection?.remoteAddress || 'unknown';
@@ -296,7 +295,7 @@ export const logout = async (req, res) => {
         }
       }
     } catch (err) {
-      console.log('Failed to clear device session on logout:', err.message);
+      console.warn('Failed to clear device session on logout:', err.message);
     }
   }
 

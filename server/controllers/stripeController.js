@@ -199,7 +199,7 @@ export const handleWebhook = async (req, res) => {
 
       case 'payment_intent.payment_failed':
         const failedPayment = event.data.object;
-        console.log('Payment failed:', failedPayment.id);
+        console.warn('Payment failed:', failedPayment.id);
         await handlePaymentFailed(failedPayment);
         break;
 
@@ -209,7 +209,7 @@ export const handleWebhook = async (req, res) => {
         break;
 
       default:
-        console.log(`Unhandled event type: ${event.type}`);
+        console.warn(`Unhandled Stripe event type: ${event.type}`);
     }
 
     res.json({ received: true });
@@ -320,7 +320,7 @@ async function handleCheckoutCompleted(session) {
 
 // Helper function to handle payment failures
 async function handlePaymentFailed(paymentIntent) {
-  console.log('Payment failed for:', paymentIntent.customer);
+  console.warn('Payment failed for customer:', paymentIntent.customer);
   
   if (paymentIntent.customer) {
     try {
