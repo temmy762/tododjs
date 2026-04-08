@@ -250,7 +250,7 @@ export const createMashup = async (req, res) => {
           mashupData.coverArtKey = coverKey;
         }
       } catch (err) {
-        console.log('   ⚠ No embedded cover art found or extraction failed');
+        console.warn('   ⚠ No embedded cover art found or extraction failed');
       }
     }
 
