@@ -288,20 +288,15 @@ export const downloadAlbum = async (req, res) => {
 // @access  Private
 export const downloadAlbumFile = async (req, res) => {
   try {
-    console.log(`📥 downloadAlbumFile called for album: ${req.params.id}`);
     const album = await Album.findById(req.params.id);
 
     if (!album) {
-      console.log('   ❌ Album not found');
       return res.status(404).json({
         success: false,
         message: 'Album not found'
       });
     }
-    console.log(`   ✓ Album found: "${album.name}", zipKey: ${album.zipKey || 'NONE'}`);
-
     const user = await User.findById(req.user.id);
-    console.log(`   ✓ User: ${user.email}, role: ${user.role}`);
 
     // Check subscription (bulk downloads require at least premium)
     if (user.role !== 'admin' && user.subscription.plan === 'free') {
@@ -334,9 +329,7 @@ export const downloadAlbumFile = async (req, res) => {
     }
 
     // If a pre-built ZIP exists on Wasabi, redirect to a signed URL for fast direct download
-    console.log(`   📦 Checking for pre-built ZIP...`);
     if (album.zipKey) {
-      console.log(`   📦 Generating signed URL for direct download: ${album.zipKey}`);
       const zipFilename = buildSafeFilename(`${album.name || 'Album'}.zip`);
       const command = new GetObjectCommand({
         Bucket: process.env.WASABI_BUCKET_NAME,
@@ -344,7 +337,6 @@ export const downloadAlbumFile = async (req, res) => {
         ResponseContentDisposition: `attachment; filename="${zipFilename}"`
       });
       const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-      console.log(`   ✅ Redirecting to signed URL`);
       return res.status(200).json({
         success: true,
         downloadUrl: signedUrl,
@@ -353,9 +345,7 @@ export const downloadAlbumFile = async (req, res) => {
     }
 
     // No pre-built ZIP — build one on-the-fly from the album's tracks
-    console.log(`   🔧 No pre-built ZIP, building on-the-fly...`);
     const tracks = await Track.find({ albumId: album._id });
-    console.log(`   📊 Found ${tracks.length} tracks to zip`);
 
     if (!tracks || tracks.length === 0) {
       return res.status(400).json({

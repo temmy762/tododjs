@@ -668,15 +668,9 @@ function extractEntryToBufferByName(zipPath, targetFileName, timeoutMs = 120000)
 // @access  Private/Admin
 export const uploadCollection = async (req, res) => {
   try {
-    console.log('\n📥 Collection upload request received');
-    console.log('Request body:', Object.keys(req.body));
-    console.log('Request files:', req.files ? Object.keys(req.files) : 'none');
-    
     const { name, year, month, thumbnail, scanResult, sourceId } = req.body;
     const zipFile = req.files?.zipFile?.[0];
     const thumbnailFile = req.files?.thumbnailFile?.[0];
-
-    console.log('ZIP file:', zipFile ? `${zipFile.originalname} (${(zipFile.size / 1024 / 1024).toFixed(2)} MB) - saved to: ${zipFile.path}` : 'missing');
 
     if (!zipFile) {
       console.error('❌ No ZIP file in request');
@@ -689,7 +683,6 @@ export const uploadCollection = async (req, res) => {
     let thumbnailUrl = thumbnail;
 
     if (thumbnailFile) {
-      console.log('📸 Uploading thumbnail to Wasabi...');
       const thumbnailBuffer = fs.readFileSync(thumbnailFile.path);
       const thumbnailKey = `collections/${name || path.parse(zipFile.originalname).name}/thumbnail${path.extname(thumbnailFile.originalname)}`;
       const thumbnailUpload = await uploadToWasabi(
@@ -698,7 +691,6 @@ export const uploadCollection = async (req, res) => {
         thumbnailFile.mimetype
       );
       thumbnailUrl = thumbnailUpload.location;
-      console.log('✅ Thumbnail uploaded');
       fs.unlinkSync(thumbnailFile.path);
     }
 
@@ -708,7 +700,7 @@ export const uploadCollection = async (req, res) => {
       try {
         parsedScanResult = typeof scanResult === 'string' ? JSON.parse(scanResult) : scanResult;
       } catch (e) {
-        console.log('⚠️ Could not parse scanResult:', e.message);
+        console.warn('⚠️ Could not parse scanResult:', e.message);
       }
     }
 
@@ -725,7 +717,6 @@ export const uploadCollection = async (req, res) => {
       .replace(/[\s_\-]+(?:vol(?:ume)?\.?\s*\d+|ep\.?\s*\d+|n[o°]\.?\s*\d+|#\s*\d+|(?:part|pt)\.?\s*\d+|\b\d{1,2}(?:st|nd|rd|th)?\b)[\s.,:\-]*$/i, '')
       .trim() || collectionName;
 
-    console.log('💾 Creating collection record in database...');
     const collection = await Collection.create({
       name: collectionName,
       platform: 'PlayList Pro', // Fixed platform name
@@ -746,14 +737,11 @@ export const uploadCollection = async (req, res) => {
       collectionNameSource: name ? 'userEdited' : 'motherFolder',
       seriesName: detectedSeriesName,
     });
-    console.log(`✅ Collection created: ${collection._id}`);
-
     // Create DatePack and Album cards immediately based on scan result
     const createdDatePacks = [];
     const createdAlbums = [];
 
     if (parsedScanResult?.datePacks && parsedScanResult.datePacks.length > 0) {
-      console.log(`📦 Creating ${parsedScanResult.datePacks.length} date pack cards...`);
       
       for (const dp of parsedScanResult.datePacks) {
         // Extract date from date pack name
@@ -802,7 +790,6 @@ export const uploadCollection = async (req, res) => {
           }
         }
       }
-      console.log(` Created ${createdDatePacks.length} date packs and ${createdAlbums.length} albums`);
     }
 
     // Update collection status to processing
@@ -833,7 +820,6 @@ export const uploadCollection = async (req, res) => {
     });
 
     // Background: process the ZIP file via queue (prevents concurrent stalling)
-    console.log(` Queuing background processing for collection: ${collection._id}`);
     enqueueCollection(
       () => processCollectionAsync(collection._id, zipFile.path, collection, createdDatePacks, createdAlbums),
       collection._id
