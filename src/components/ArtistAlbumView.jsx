@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Play, Pause, X, Clock, Heart, Download, MoreHorizontal, Music, Building2 } from 'lucide-react';
 
 export default function ArtistAlbumView({ profile, onClose }) {
+  const { t } = useTranslation();
   const [isPlaying, setIsPlaying] = useState(false);
   const [playingTrackId, setPlayingTrackId] = useState(null);
   const [likedTracks, setLikedTracks] = useState(new Set());
@@ -92,11 +94,11 @@ export default function ArtistAlbumView({ profile, onClose }) {
               <div className="flex-1 pb-4">
                 <div className="inline-flex items-center gap-2 mb-3">
                   <span className="text-xs font-semibold text-white/80 uppercase tracking-wider">
-                    {profile.type === 'label' ? 'Record Label' : 'Artist'}
+                    {profile.type === 'label' ? t('artist.recordLabel') : t('artist.artistType')}
                   </span>
                   {profile.hasNewContent && (
                     <span className="px-2 py-0.5 rounded-full bg-accent text-white text-[10px] font-bold uppercase tracking-wide">
-                      New
+                      {t('artist.newBadge')}
                     </span>
                   )}
                 </div>
@@ -106,7 +108,7 @@ export default function ArtistAlbumView({ profile, onClose }) {
                 </h1>
                 
                 <div className="flex items-center gap-2 text-sm text-white/70">
-                  <span className="font-semibold">{profile.trackCount} tracks</span>
+                  <span className="font-semibold">{profile.trackCount} {t('common.tracks')}</span>
                   <span>•</span>
                   <span>12.5M monthly listeners</span>
                 </div>
@@ -140,8 +142,8 @@ export default function ArtistAlbumView({ profile, onClose }) {
           <div className="bg-dark-surface/30 backdrop-blur-sm rounded-2xl border border-white/5 overflow-hidden">
             <div className="hidden md:grid grid-cols-[auto_1fr_auto_auto_auto] gap-4 px-6 py-3 border-b border-white/5 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">
               <div className="w-10 text-center">#</div>
-              <div>Title</div>
-              <div className="w-24 text-center">Plays</div>
+              <div>{t('artist.titleColumn')}</div>
+              <div className="w-24 text-center">{t('artist.playsColumn')}</div>
               <div className="w-20 text-center">
                 <Clock className="w-4 h-4 mx-auto" />
               </div>
@@ -216,12 +218,12 @@ export default function ArtistAlbumView({ profile, onClose }) {
 
           <div className="mt-8 text-sm text-brand-text-tertiary">
             <p className="mb-2">
-              <span className="text-white font-semibold">About {profile.name}</span>
+              <span className="text-white font-semibold">{t('artist.about')} {profile.name}</span>
             </p>
             <p className="leading-relaxed">
-              {profile.type === 'label' 
-                ? `${profile.name} is a leading record label known for discovering and promoting exceptional talent across multiple genres. With a roster of innovative artists and a commitment to quality music production.`
-                : `${profile.name} is a talented artist pushing the boundaries of modern music. Known for their unique sound and captivating performances, they continue to inspire fans worldwide.`
+              {profile.type === 'label'
+                ? t('artist.labelDescription', { name: profile.name })
+                : t('artist.artistDescription', { name: profile.name })
               }
             </p>
           </div>

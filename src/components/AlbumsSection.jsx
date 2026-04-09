@@ -16,8 +16,8 @@ export default function AlbumsSection({ albums, onAlbumClick, activeGenre = 'all
   return (
     <div className="my-8 md:my-12 px-4 md:px-10">
       <div className="mb-4 md:mb-6">
-        <h2 className="text-lg md:text-2xl font-bold text-white">{t('tracks.newReleases')} {t('nav.albums')}</h2>
-        <p className="text-xs md:text-sm text-brand-text-tertiary mt-1">{t('common.fresh')} {t('common.releases')} {t('common.from')} {t('common.your')} {t('common.favorite')} {t('common.artists')}</p>
+        <h2 className="text-lg md:text-2xl font-bold text-white">{t('albumsSection.title')}</h2>
+        <p className="text-xs md:text-sm text-brand-text-tertiary mt-1">{t('albumsSection.subtitle')}</p>
       </div>
       
       <div className="relative">
@@ -59,7 +59,7 @@ export default function AlbumsSection({ albums, onAlbumClick, activeGenre = 'all
                   {album.artist}
                 </p>
                 <p className="text-[10px] text-brand-text-tertiary/60 mt-0.5">
-                  {album.trackCount} tracks • {album.year}
+                  {album.trackCount} {t('album.tracks')} • {album.year}
                 </p>
               </div>
             </div>

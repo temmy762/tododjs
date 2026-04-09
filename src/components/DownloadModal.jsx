@@ -96,7 +96,7 @@ export default function DownloadModal({ isOpen, onClose, track, onDownload }) {
                 className="mt-0.5 w-4 h-4 rounded border-white/20 bg-white/5 text-accent focus:ring-accent focus:ring-offset-0"
               />
               <span className="text-xs text-brand-text-tertiary leading-relaxed group-hover:text-brand-text-secondary transition-colors duration-150">
-                I agree to the <span className="text-accent font-semibold">license terms</span> and will use this track according to the permitted usage rights. This download is for personal/commercial use as per my subscription plan.
+                {t('downloadModal.licenseAgreement')}
               </span>
             </label>
           </div>
@@ -123,7 +123,7 @@ export default function DownloadModal({ isOpen, onClose, track, onDownload }) {
           </div>
 
           <p className="text-center text-xs text-brand-text-tertiary/70 mt-4">
-            Downloads remaining this month: <span className="text-white font-semibold">47</span>
+            {t('downloadModal.downloadsRemaining')} <span className="text-white font-semibold">47</span>
           </p>
         </div>
       </div>

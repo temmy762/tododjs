@@ -1,8 +1,10 @@
 import { useState } from 'react';
 import { User, Download, Music, Settings, LogOut, Heart, TrendingUp, Phone, Mail, Save, X, CheckCircle, AlertCircle, Pencil } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import API_URL from '../config/api';
 
 export default function ProfilePage({ user, onLogout, onUserUpdate }) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
@@ -15,9 +17,9 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
   const planLabel = user?.subscription?.plan === 'pro' ? 'Pro' : user?.subscription?.plan === 'premium' ? 'Premium' : 'Free';
 
   const userStats = [
-    { label: 'Downloads', value: user?.downloads?.total?.toString() || '0', icon: Download },
-    { label: 'Playlists', value: user?.playlists?.length?.toString() || '0', icon: Music },
-    { label: 'Favorites', value: user?.favorites?.length?.toString() || '0', icon: Heart },
+    { label: t('userDashboard.statDownloads'), value: user?.downloads?.total?.toString() || '0', icon: Download },
+    { label: t('userDashboard.statPlaylists'), value: user?.playlists?.length?.toString() || '0', icon: Music },
+    { label: t('userDashboard.statFavorites'), value: user?.favorites?.length?.toString() || '0', icon: Heart },
   ];
 
 
@@ -40,7 +42,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     if (formData.phoneNumber) {
       const cleaned = formData.phoneNumber.replace(/[\s\-\(\)]/g, '');
       if (!/^\+?[1-9]\d{6,14}$/.test(cleaned)) {
-        setMessage({ type: 'error', text: 'Please enter a valid phone number (e.g. +1234567890)' });
+        setMessage({ type: 'error', text: t('userDashboard.invalidPhone') });
         return;
       }
     }
@@ -67,16 +69,16 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
       const data = await response.json();
 
       if (data.success) {
-        setMessage({ type: 'success', text: 'Profile updated successfully!' });
+        setMessage({ type: 'success', text: t('userDashboard.profileUpdated') });
         setEditing(false);
         if (onUserUpdate) {
           onUserUpdate({ ...user, name: formData.name, email: formData.email, phoneNumber: formData.phoneNumber });
         }
       } else {
-        setMessage({ type: 'error', text: data.message || 'Failed to update profile' });
+        setMessage({ type: 'error', text: data.message || t('messages.saveError') });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'Network error. Please try again.' });
+      setMessage({ type: 'error', text: t('messages.networkError') });
     } finally {
       setSaving(false);
     }
@@ -85,7 +87,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
   if (!user) {
     return (
       <div className="min-h-screen bg-dark-bg pt-20 pb-10 flex items-center justify-center">
-        <p className="text-brand-text-tertiary">Please log in to view your profile.</p>
+        <p className="text-brand-text-tertiary">{t('auth.login')}</p>
       </div>
     );
   }
@@ -116,7 +118,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
               )}
               <div className="inline-flex items-center gap-2 mt-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20">
                 <TrendingUp className="w-3 h-3 text-accent" strokeWidth={2} />
-                <span className="text-xs font-bold text-accent uppercase tracking-wider">{planLabel} Member</span>
+                <span className="text-xs font-bold text-accent uppercase tracking-wider">{planLabel} {t('admin.member')}</span>
               </div>
             </div>
           </div>
@@ -127,14 +129,14 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
               className="px-4 py-2 rounded-lg bg-white hover:bg-brand-text-secondary border border-brand-black/10 hover:border-brand-black/20 text-black text-sm font-semibold transition-all duration-150 flex items-center gap-2"
             >
               <Settings className="w-4 h-4" strokeWidth={2} />
-              Settings
+              {t('settingsPage.title')}
             </button>
             <button
               onClick={onLogout}
               className="px-4 py-2 rounded-lg bg-white hover:bg-brand-text-secondary border border-brand-black/10 hover:border-brand-black/20 text-black text-sm font-semibold transition-all duration-150 flex items-center gap-2"
             >
               <LogOut className="w-4 h-4" strokeWidth={2} />
-              Logout
+              {t('auth.logout')}
             </button>
           </div>
         </div>
@@ -171,7 +173,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
                 <Pencil className="w-5 h-5 text-accent" />
-                Edit Profile
+                {t('userDashboard.editProfileTitle')}
               </h2>
               <button onClick={handleCancel} className="text-brand-text-tertiary hover:text-white">
                 <X size={20} />
@@ -180,7 +182,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
 
             <div className="space-y-4 max-w-lg">
               <div>
-                <label className="block text-sm font-medium mb-2 text-brand-text-secondary">Full Name</label>
+                <label className="block text-sm font-medium mb-2 text-brand-text-secondary">{t('userDashboard.fullName')}</label>
                 <div className="relative">
                   <User size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                   <input
@@ -194,7 +196,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2 text-brand-text-secondary">Email</label>
+                <label className="block text-sm font-medium mb-2 text-brand-text-secondary">{t('userDashboard.email')}</label>
                 <div className="relative">
                   <Mail size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                   <input
@@ -208,7 +210,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2 text-brand-text-secondary">Phone Number</label>
+                <label className="block text-sm font-medium mb-2 text-brand-text-secondary">{t('userDashboard.phoneNumber')}</label>
                 <div className="relative">
                   <Phone size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                   <input
@@ -219,7 +221,7 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
                     placeholder="+1234567890"
                   />
                 </div>
-                <p className="text-xs text-brand-text-tertiary mt-1">Format: +1234567890 (7-15 digits, optional + prefix)</p>
+                <p className="text-xs text-brand-text-tertiary mt-1">{t('userDashboard.optional')}</p>
               </div>
 
               <div className="flex gap-3 pt-2">
@@ -229,13 +231,13 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
                   className="px-6 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   <Save size={16} />
-                  {saving ? 'Saving...' : 'Save Changes'}
+                  {saving ? t('common.loading') : t('userDashboard.save')}
                 </button>
                 <button
                   onClick={handleCancel}
                   className="px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg font-medium text-brand-text-secondary transition-colors"
                 >
-                  Cancel
+                  {t('actions.cancel')}
                 </button>
               </div>
             </div>
@@ -246,35 +248,35 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
         {!editing && (
           <div className="mb-10 p-6 rounded-xl bg-white/[0.02] border border-white/10">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-bold text-white">Account Details</h2>
+              <h2 className="text-xl font-bold text-white">{t('userDashboard.accountDetails')}</h2>
               <button
                 onClick={handleEdit}
                 className="px-4 py-2 rounded-lg bg-accent/10 hover:bg-accent/20 text-accent text-sm font-medium transition-colors flex items-center gap-2"
               >
                 <Pencil size={14} />
-                Edit
+                {t('userDashboard.edit')}
               </button>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div>
-                <p className="text-xs text-brand-text-tertiary uppercase tracking-wider mb-1">Name</p>
+                <p className="text-xs text-brand-text-tertiary uppercase tracking-wider mb-1">{t('dashboard.name')}</p>
                 <p className="text-white font-medium">{user.name}</p>
               </div>
               <div>
-                <p className="text-xs text-brand-text-tertiary uppercase tracking-wider mb-1">Email</p>
+                <p className="text-xs text-brand-text-tertiary uppercase tracking-wider mb-1">{t('userDashboard.email')}</p>
                 <p className="text-white font-medium">{user.email}</p>
               </div>
               <div>
-                <p className="text-xs text-brand-text-tertiary uppercase tracking-wider mb-1">Phone Number</p>
-                <p className="text-white font-medium">{user.phoneNumber || <span className="text-brand-text-tertiary italic">Not set</span>}</p>
+                <p className="text-xs text-brand-text-tertiary uppercase tracking-wider mb-1">{t('userDashboard.phoneNumber')}</p>
+                <p className="text-white font-medium">{user.phoneNumber || <span className="text-brand-text-tertiary italic">-</span>}</p>
               </div>
               <div>
-                <p className="text-xs text-brand-text-tertiary uppercase tracking-wider mb-1">Subscription</p>
+                <p className="text-xs text-brand-text-tertiary uppercase tracking-wider mb-1">{t('userDashboard.currentPlan')}</p>
                 <p className="text-white font-medium capitalize">{user.subscription?.plan || 'Free'}</p>
               </div>
               <div>
-                <p className="text-xs text-brand-text-tertiary uppercase tracking-wider mb-1">Status</p>
+                <p className="text-xs text-brand-text-tertiary uppercase tracking-wider mb-1">{t('userDashboard.status')}</p>
                 <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
                   user.subscription?.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                 }`}>

@@ -4,6 +4,7 @@ import {
   Search, X, Grid3x3, List, ChevronLeft, ChevronRight as ChevronRightIcon,
   Calendar, Layers2
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import API_URL from '../config/api';
 
 const GRADIENTS = [
@@ -15,13 +16,7 @@ const GRADIENTS = [
   'from-yellow-600 to-amber-800',
 ];
 
-// Sort options
-const SORT_OPTIONS = [
-  { value: 'newest', label: 'Newest First' },
-  { value: 'oldest', label: 'Oldest First' },
-  { value: 'name',   label: 'Name A–Z'    },
-  { value: 'tracks', label: 'Most Tracks'  },
-];
+const SORT_VALUES = ['newest', 'oldest', 'name', 'tracks'];
 
 // Strip trailing vol/number/edition to get the series base name
 function getSeriesName(name) {
@@ -31,6 +26,13 @@ function getSeriesName(name) {
 }
 
 export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
+  const { t } = useTranslation();
+  const SORT_OPTIONS = useMemo(() => [
+    { value: 'newest', label: t('recordPool.newestFirst') },
+    { value: 'oldest', label: t('recordPool.oldestFirst') },
+    { value: 'name',   label: t('recordPool.nameAZ') },
+    { value: 'tracks', label: t('recordPool.mostTracks') },
+  ], [t]);
   // ─── mode: 'pools' | 'pool-detail' ──────────────────────────────────────────
   const [mode, setMode]             = useState('pools');
   const [poolItems, setPoolItems]   = useState([]);
@@ -190,12 +192,12 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
             )}
             <div>
               <h1 className="text-xl font-bold text-white leading-tight">
-                {mode === 'pool-detail' && selectedPool ? selectedPool.name : 'Collections'}
+                {mode === 'pool-detail' && selectedPool ? selectedPool.name : t('recordPool.title')}
               </h1>
               <p className="text-[11px] text-brand-text-tertiary mt-0.5">
                 {mode === 'pool-detail'
-                  ? `${filteredPoolAlbums.length} albums`
-                  : `${filteredAllItems.length} collections`}
+                  ? `${filteredPoolAlbums.length} ${t('recordPool.albums')}`
+                  : `${filteredAllItems.length} ${t('recordPool.collections')}`}
               </p>
             </div>
           </div>
@@ -208,7 +210,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
               <input
                 value={search}
                 onChange={e => setSearch(e.target.value)}
-                placeholder="Search…"
+                placeholder={t('recordPool.search')}
                 className="pl-7 pr-7 py-1.5 bg-white/[0.06] border border-white/10 rounded-lg text-xs text-white placeholder-brand-text-tertiary/60 focus:outline-none focus:border-accent/50 w-36"
               />
               {search && (
@@ -251,7 +253,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
         <div className="relative sm:hidden mb-4">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-brand-text-tertiary pointer-events-none" />
           <input value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search pools or collections…"
+            placeholder={t('recordPool.searchMobile')}
             className="w-full pl-7 pr-7 py-2 bg-white/[0.06] border border-white/10 rounded-lg text-xs text-white placeholder-brand-text-tertiary/60 focus:outline-none focus:border-accent/50"
           />
           {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-text-tertiary hover:text-white"><X size={11} /></button>}
@@ -263,11 +265,11 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
             <div>
               <div className="flex items-center gap-2 mb-4">
                 <Layers2 size={15} className="text-accent" />
-                <h2 className="text-sm font-semibold text-white uppercase tracking-wider">Collections</h2>
+                <h2 className="text-sm font-semibold text-white uppercase tracking-wider">{t('recordPool.title')}</h2>
                 <span className="text-xs text-brand-text-tertiary">({filteredAllItems.length})</span>
               </div>
               {filteredAllItems.length === 0 ? (
-                <EmptyState icon={Layers2} text="No collections match your search" />
+                <EmptyState icon={Layers2} text={t('recordPool.noCollectionsSearch')} />
               ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                   {filteredAllItems.map((item, i) => (
@@ -293,7 +295,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
             )}
             <div className="mt-5">
               {poolLoading ? <LoadingState /> : filteredPoolAlbums.length === 0 ? (
-                <EmptyState icon={Music} text="No albums in this pool yet" />
+                <EmptyState icon={Music} text={t('recordPool.noAlbumsYet')} />
               ) : viewMode === 'grid' ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
                   {filteredPoolAlbums.map((album, i) => (
@@ -324,6 +326,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
 
 // Collection/Pool header shown when albums view is open
 function CollectionHeader({ collection, albumCount }) {
+  const { t } = useTranslation();
   const [imgError, setImgError] = useState(false);
   const isSeries = collection._type === 'series';
   return (
@@ -335,19 +338,19 @@ function CollectionHeader({ collection, albumCount }) {
       </div>
       <div>
         <p className="text-xs text-accent font-semibold uppercase tracking-wider mb-1">
-          {isSeries ? 'Collection Series' : 'Record Pool'}
+          {isSeries ? t('recordPool.collectionSeries') : t('recordPool.recordPool')}
         </p>
         <h1 className="text-2xl sm:text-3xl font-bold text-white mb-1">{collection.name}</h1>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-brand-text-tertiary">
           {collection.year && <span className="flex items-center gap-1"><Calendar size={12} /> {collection.year}</span>}
           {isSeries && collection.collections?.length > 1 && (
             <><span className="text-white/20">·</span>
-            <span>{collection.collections.length} packs</span></>
+            <span>{t('recordPool.packs', { count: collection.collections.length })}</span></>
           )}
           <span className="text-white/20">·</span>
-          <span className="flex items-center gap-1"><Disc size={13} className="text-accent" />{albumCount ?? collection.totalAlbums ?? 0} albums</span>
+          <span className="flex items-center gap-1"><Disc size={13} className="text-accent" />{albumCount ?? collection.totalAlbums ?? 0} {t('recordPool.albums')}</span>
           <span className="text-white/20">·</span>
-          <span className="flex items-center gap-1"><Music size={13} className="text-accent" />{collection.totalTracks || 0} tracks</span>
+          <span className="flex items-center gap-1"><Music size={13} className="text-accent" />{collection.totalTracks || 0} {t('recordPool.tracks')}</span>
         </div>
       </div>
     </div>
@@ -356,13 +359,14 @@ function CollectionHeader({ collection, albumCount }) {
 
 // Unified card for any collection (source or series)
 function CollectionCard({ item, index, onClick }) {
+  const { t } = useTranslation();
   const gradient = GRADIENTS[index % GRADIENTS.length];
   const [imgError, setImgError] = useState(false);
   const isSource = item._itemType === 'source' || item._type === 'source';
   const subtitle = isSource
     ? (item.platform ? item.platform : null)
     : (item.year ? String(item.year) : null);
-  const packCount = !isSource && item.collections?.length > 1 ? `${item.collections.length} packs` : null;
+  const packCount = !isSource && item.collections?.length > 1 ? t('recordPool.packs', { count: item.collections.length }) : null;
   const entranceDelay = `${Math.min(index * 60, 480)}ms`;
   const glowDelay     = `${(index % 8) * 0.8}s`;
   return (
@@ -394,10 +398,10 @@ function CollectionCard({ item, index, onClick }) {
       <div className="px-4 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4 text-sm">
           <span className="text-brand-text-tertiary flex items-center gap-1">
-            <Disc size={12} className="text-accent" />{item.totalAlbums || 0} albums
+            <Disc size={12} className="text-accent" />{item.totalAlbums || 0} {t('recordPool.albums')}
           </span>
           <span className="text-brand-text-tertiary flex items-center gap-1">
-            <Music size={12} className="text-accent" />{item.totalTracks || 0} tracks
+            <Music size={12} className="text-accent" />{item.totalTracks || 0} {t('recordPool.tracks')}
           </span>
         </div>
         <ChevronRight size={16} className="text-brand-text-tertiary group-hover:text-accent group-hover:translate-x-1 transition-all duration-300" />
@@ -408,6 +412,7 @@ function CollectionCard({ item, index, onClick }) {
 
 // List-view row for any collection
 function CollectionRow({ item, index, onClick }) {
+  const { t } = useTranslation();
   const gradient = GRADIENTS[index % GRADIENTS.length];
   const [imgError, setImgError] = useState(false);
   const isSource = item._itemType === 'source' || item._type === 'source';
@@ -426,8 +431,8 @@ function CollectionRow({ item, index, onClick }) {
       <div className="flex-1 min-w-0">
         <p className="text-white text-sm font-semibold truncate group-hover:text-accent transition-colors">{item.name}</p>
         <div className="flex items-center gap-3 mt-0.5 text-[10px] text-brand-text-tertiary">
-          <span className="flex items-center gap-1"><Disc size={10} className="text-accent" />{item.totalAlbums || 0} albums</span>
-          <span className="flex items-center gap-1"><Music size={10} className="text-accent" />{item.totalTracks || 0} tracks</span>
+          <span className="flex items-center gap-1"><Disc size={10} className="text-accent" />{item.totalAlbums || 0} {t('recordPool.albums')}</span>
+          <span className="flex items-center gap-1"><Music size={10} className="text-accent" />{item.totalTracks || 0} {t('recordPool.tracks')}</span>
           {badge && <span className="px-1.5 py-0.5 bg-white/10 rounded text-[9px] font-bold">{badge}</span>}
         </div>
       </div>
@@ -443,6 +448,7 @@ function albumCover(album) {
 
 // Album Card with hover animation
 function AlbumCard({ album, index, onClick, onPlay, onDownload }) {
+  const { t } = useTranslation();
   const [imgError, setImgError] = useState(false);
   const cover = albumCover(album);
   const delay = Math.min(index * 50, 400);
@@ -479,13 +485,13 @@ function AlbumCard({ album, index, onClick, onPlay, onDownload }) {
         </div>
         {/* New badge for recent uploads */}
         {album.createdAt && (Date.now() - new Date(album.createdAt)) < 7 * 86400000 && (
-          <span className="absolute top-2 left-2 bg-accent text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide">New</span>
+          <span className="absolute top-2 left-2 bg-accent text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide">{t('recordPool.newBadge')}</span>
         )}
       </div>
       <div className="p-2.5">
         <h3 className="font-semibold text-white text-xs truncate mb-1 group-hover:text-accent transition-colors">{album.name}</h3>
         <div className="flex items-center justify-between">
-          <span className="text-brand-text-tertiary text-[10px]">{album.trackCount || 0} tracks</span>
+          <span className="text-brand-text-tertiary text-[10px]">{album.trackCount || 0} {t('recordPool.tracks')}</span>
           {album.genre && (
             <span className="px-1.5 py-0.5 bg-white/[0.08] text-brand-text-tertiary text-[9px] rounded font-medium truncate max-w-[70px]">{album.genre}</span>
           )}
@@ -497,6 +503,7 @@ function AlbumCard({ album, index, onClick, onPlay, onDownload }) {
 
 // Album list-view row
 function AlbumRow({ album, index, onClick, onDownload }) {
+  const { t } = useTranslation();
   const [imgError, setImgError] = useState(false);
   const cover = albumCover(album);
   return (
@@ -512,13 +519,13 @@ function AlbumRow({ album, index, onClick, onDownload }) {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-white text-sm font-medium truncate group-hover:text-accent transition-colors">{album.name}</p>
-        <p className="text-[10px] text-brand-text-tertiary mt-0.5">{album.trackCount || 0} tracks{album.genre ? ` · ${album.genre}` : ''}</p>
+        <p className="text-[10px] text-brand-text-tertiary mt-0.5">{album.trackCount || 0} {t('recordPool.tracks')}{album.genre ? ` · ${album.genre}` : ''}</p>
       </div>
       <button
         type="button"
         onClick={e => { e.stopPropagation(); onDownload?.(); }}
         className="p-2 rounded-lg bg-white/5 hover:bg-accent/20 hover:text-accent text-brand-text-tertiary transition-all opacity-0 group-hover:opacity-100"
-        title="Download"
+        title={t('actions.download')}
       >
         <Download size={15} />
       </button>

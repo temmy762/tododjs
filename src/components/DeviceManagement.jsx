@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Smartphone, Monitor, Tablet, Trash2, Edit2, LogOut, Loader, AlertTriangle, CheckCircle, X, Fingerprint } from 'lucide-react';
 import API_URL from '../config/api';
 import { verifyUserForAction, isPlatformAuthenticatorAvailable } from '../services/passkeyService';
@@ -14,6 +15,7 @@ const authHeaders = (json = false) => {
 };
 
 export default function DeviceManagement() {
+  const { t } = useTranslation();
   const [devices, setDevices] = useState([]);
   const [maxDevices, setMaxDevices] = useState(2);
   const [loading, setLoading] = useState(true);
@@ -45,7 +47,7 @@ export default function DeviceManagement() {
       }
     } catch (err) {
       console.error('Failed to fetch devices:', err);
-      showNotification('Failed to load devices', 'error');
+      showNotification(t('deviceMgmt.failedLoad'), 'error');
     } finally {
       setLoading(false);
     }
@@ -55,7 +57,7 @@ export default function DeviceManagement() {
     // Verify user with biometric authentication
     const verified = await verifyUserForAction('remove this device');
     if (!verified) {
-      showNotification('Authentication required to remove device', 'error');
+      showNotification(t('deviceMgmt.authRequired'), 'error');
       return;
     }
 
@@ -67,13 +69,13 @@ export default function DeviceManagement() {
       });
       const data = await res.json();
       if (data.success) {
-        showNotification('Device removed successfully', 'success');
+        showNotification(t('deviceMgmt.deviceRemoved'), 'success');
         fetchDevices();
       } else {
-        showNotification(data.message || 'Failed to remove device', 'error');
+        showNotification(data.message || t('deviceMgmt.failedRemove'), 'error');
       }
     } catch (err) {
-      showNotification('Failed to remove device', 'error');
+      showNotification(t('deviceMgmt.failedRemove'), 'error');
     } finally {
       setActionLoading(null);
     }
@@ -81,7 +83,7 @@ export default function DeviceManagement() {
 
   const handleRenameDevice = async (deviceId) => {
     if (!newDeviceName.trim()) {
-      showNotification('Device name cannot be empty', 'error');
+      showNotification(t('deviceMgmt.emptyName'), 'error');
       return;
     }
 
@@ -94,15 +96,15 @@ export default function DeviceManagement() {
       });
       const data = await res.json();
       if (data.success) {
-        showNotification('Device renamed successfully', 'success');
+        showNotification(t('deviceMgmt.deviceRenamed'), 'success');
         setEditingDevice(null);
         setNewDeviceName('');
         fetchDevices();
       } else {
-        showNotification(data.message || 'Failed to rename device', 'error');
+        showNotification(data.message || t('deviceMgmt.failedRename'), 'error');
       }
     } catch (err) {
-      showNotification('Failed to rename device', 'error');
+      showNotification(t('deviceMgmt.failedRename'), 'error');
     } finally {
       setActionLoading(null);
     }
@@ -112,7 +114,7 @@ export default function DeviceManagement() {
     // Verify user with biometric authentication
     const verified = await verifyUserForAction('sign out from all devices');
     if (!verified) {
-      showNotification('Authentication required to sign out all devices', 'error');
+      showNotification(t('deviceMgmt.authRequired'), 'error');
       setShowSignOutAll(false);
       return;
     }
@@ -125,14 +127,14 @@ export default function DeviceManagement() {
       });
       const data = await res.json();
       if (data.success) {
-        showNotification('Signed out from all devices', 'success');
+        showNotification(t('deviceMgmt.signedOutAll'), 'success');
         setShowSignOutAll(false);
         fetchDevices();
       } else {
-        showNotification(data.message || 'Failed to sign out', 'error');
+        showNotification(data.message || t('deviceMgmt.failedSignOut'), 'error');
       }
     } catch (err) {
-      showNotification('Failed to sign out from all devices', 'error');
+      showNotification(t('deviceMgmt.failedSignOut'), 'error');
     } finally {
       setActionLoading(null);
     }
@@ -150,10 +152,10 @@ export default function DeviceManagement() {
         showNotification(data.message, 'success');
         fetchDevices();
       } else {
-        showNotification(data.message || 'Failed to cleanup devices', 'error');
+        showNotification(data.message || t('deviceMgmt.failedCleanup'), 'error');
       }
     } catch (err) {
-      showNotification('Failed to cleanup devices', 'error');
+      showNotification(t('deviceMgmt.failedCleanup'), 'error');
     } finally {
       setActionLoading(null);
     }
@@ -181,10 +183,10 @@ export default function DeviceManagement() {
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 30) return `${days}d ago`;
+    if (minutes < 1) return t('deviceMgmt.justNow');
+    if (minutes < 60) return t('deviceMgmt.minutesAgo', { count: minutes });
+    if (hours < 24) return t('deviceMgmt.hoursAgo', { count: hours });
+    if (days < 30) return t('deviceMgmt.daysAgo', { count: days });
     return d.toLocaleDateString();
   };
 
@@ -203,12 +205,12 @@ export default function DeviceManagement() {
         <div className="mb-6 p-4 rounded-lg bg-dark-surface border border-white/10">
           <div className="flex items-center justify-between">
             <p className="text-sm text-brand-text-tertiary">
-              You're using <span className="font-semibold text-white">{devices.length}</span> of <span className="font-semibold text-white">{maxDevices}</span> available device{maxDevices !== 1 ? 's' : ''}
+              {t('deviceMgmt.usingDevices')} <span className="font-semibold text-white">{devices.length}</span> {t('deviceMgmt.ofDevices')} <span className="font-semibold text-white">{maxDevices}</span> {t('deviceMgmt.availableDevices')}
             </p>
             {biometricAvailable && (
               <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/30">
                 <Fingerprint className="w-4 h-4 text-green-400" />
-                <span className="text-xs font-semibold text-green-400">Biometric Enabled</span>
+                <span className="text-xs font-semibold text-green-400">{t('deviceMgmt.biometricEnabled')}</span>
               </div>
             )}
           </div>
@@ -238,7 +240,7 @@ export default function DeviceManagement() {
           className="px-4 py-2 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
         >
           {actionLoading === 'cleanup' ? <Loader className="w-4 h-4 animate-spin" /> : null}
-          Clean Up Inactive
+          {t('deviceMgmt.cleanUpInactive')}
         </button>
         <button
           onClick={() => setShowSignOutAll(true)}
@@ -246,7 +248,7 @@ export default function DeviceManagement() {
           className="px-4 py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 transition-all duration-200 disabled:opacity-50 flex items-center gap-2"
         >
           <LogOut className="w-4 h-4" />
-          Sign Out All Devices
+          {t('deviceMgmt.signOutAll')}
         </button>
       </div>
 
@@ -254,8 +256,8 @@ export default function DeviceManagement() {
       {devices.length === 0 ? (
         <div className="bg-dark-elevated rounded-xl border border-white/10 p-12 text-center">
           <Monitor className="w-16 h-16 text-brand-text-tertiary mx-auto mb-4" />
-          <h3 className="text-xl font-semibold text-white mb-2">No Devices Registered</h3>
-          <p className="text-brand-text-tertiary">Your devices will appear here once you start using the app</p>
+          <h3 className="text-xl font-semibold text-white mb-2">{t('deviceMgmt.noDevices')}</h3>
+          <p className="text-brand-text-tertiary">{t('deviceMgmt.noDevicesDesc')}</p>
         </div>
       ) : (
         <div className="space-y-4">
@@ -298,7 +300,7 @@ export default function DeviceManagement() {
                             disabled={actionLoading === device.deviceId}
                             className="px-3 py-2 rounded-lg bg-accent hover:bg-accent-hover text-white transition-all duration-200 disabled:opacity-50"
                           >
-                            {actionLoading === device.deviceId ? <Loader className="w-4 h-4 animate-spin" /> : 'Save'}
+                            {actionLoading === device.deviceId ? <Loader className="w-4 h-4 animate-spin" /> : t('actions.save')}
                           </button>
                           <button
                             onClick={() => {
@@ -307,7 +309,7 @@ export default function DeviceManagement() {
                             }}
                             className="px-3 py-2 rounded-lg bg-dark-surface hover:bg-dark-elevated border border-white/10 text-white transition-all duration-200"
                           >
-                            Cancel
+                            {t('actions.cancel')}
                           </button>
                         </div>
                       ) : (
@@ -317,7 +319,7 @@ export default function DeviceManagement() {
                           </h3>
                           {device.isCurrentDevice && (
                             <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-accent/20 text-accent border border-accent/30">
-                              This Device
+                              {t('deviceMgmt.thisDevice')}
                             </span>
                           )}
                         </div>
@@ -325,9 +327,9 @@ export default function DeviceManagement() {
 
                       <div className="space-y-1 text-sm text-brand-text-tertiary">
                         <p className="capitalize">{device.deviceType} • {device.browser}</p>
-                        <p>IP: {device.ipAddress || 'Unknown'}</p>
-                        <p>Last active: {formatDate(device.lastActive)}</p>
-                        <p className="text-xs">Added: {new Date(device.addedAt).toLocaleDateString()}</p>
+                        <p>{t('deviceMgmt.ip')}: {device.ipAddress || 'Unknown'}</p>
+                        <p>{t('deviceMgmt.lastActive')}: {formatDate(device.lastActive)}</p>
+                        <p className="text-xs">{t('deviceMgmt.added')}: {new Date(device.addedAt).toLocaleDateString()}</p>
                       </div>
                     </div>
 
@@ -340,7 +342,7 @@ export default function DeviceManagement() {
                             setNewDeviceName(device.deviceName || '');
                           }}
                           className="p-2 hover:bg-dark-surface rounded-lg transition-colors text-brand-text-tertiary hover:text-white"
-                          title="Rename device"
+                          title={t('deviceMgmt.renameDevice')}
                         >
                           <Edit2 className="w-4 h-4" />
                         </button>
@@ -348,7 +350,7 @@ export default function DeviceManagement() {
                           onClick={() => handleRemoveDevice(device.deviceId)}
                           disabled={actionLoading === device.deviceId}
                           className="p-2 hover:bg-red-500/10 rounded-lg transition-colors text-brand-text-tertiary hover:text-red-400 disabled:opacity-50"
-                          title="Remove device"
+                          title={t('deviceMgmt.removeDevice')}
                         >
                           {actionLoading === device.deviceId ? (
                             <Loader className="w-4 h-4 animate-spin" />
@@ -374,18 +376,17 @@ export default function DeviceManagement() {
               <div className="w-12 h-12 rounded-full bg-red-500/20 flex items-center justify-center">
                 <AlertTriangle className="w-6 h-6 text-red-400" />
               </div>
-              <h3 className="text-xl font-bold text-white">Sign Out All Devices?</h3>
+              <h3 className="text-xl font-bold text-white">{t('deviceMgmt.signOutAllConfirm')}</h3>
             </div>
             <p className="text-brand-text-tertiary mb-6">
-              This will sign you out from all {devices.length} device{devices.length !== 1 ? 's' : ''}, including this one. 
-              You'll need to sign in again on each device.
+              {t('deviceMgmt.signOutAllDesc')}
             </p>
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setShowSignOutAll(false)}
                 className="flex-1 px-4 py-2.5 rounded-lg bg-dark-surface hover:bg-dark-elevated border border-white/10 text-white font-medium transition-all duration-200"
               >
-                Cancel
+                {t('actions.cancel')}
               </button>
               <button
                 onClick={handleSignOutAll}
@@ -395,10 +396,10 @@ export default function DeviceManagement() {
                 {actionLoading === 'signout-all' ? (
                   <>
                     <Loader className="w-4 h-4 animate-spin" />
-                    Signing Out...
+                    {t('deviceMgmt.signingOut')}
                   </>
                 ) : (
-                  'Sign Out All'
+                  t('deviceMgmt.signOutAllBtn')
                 )}
               </button>
             </div>

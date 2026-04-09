@@ -106,7 +106,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
             onSuccess(data.user);
           }
         } else if (data.deviceLimitReached) {
-          setError(`Device limit reached for this account (${data.maxDevices} device${data.maxDevices > 1 ? 's' : ''} allowed). The account owner has been notified by email. If you are the account owner, please sign in on one of your registered devices and remove it from Settings → Devices to free up a slot.`);
+          setError(t('auth.deviceLimitReached', { max: data.maxDevices, plural: data.maxDevices > 1 ? 's' : '' }));
           return;
         } else {
           setError(data.message || t('auth.invalidCredentials'));
@@ -126,7 +126,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
       await verifyBiometric();
       const storedToken = localStorage.getItem('token');
       if (!storedToken) {
-        throw new Error('No saved session found. Please login with your password.');
+        throw new Error(t('auth.noSavedSession'));
       }
       const response = await fetch(`${API_URL}/auth/refresh`, {
         method: 'POST',
@@ -141,15 +141,15 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
         localStorage.setItem('token', data.token);
         onSuccess(data.user);
       } else {
-        setError('Session expired. Please login with your password.');
+        setError(t('auth.sessionExpired'));
         clearBiometric();
         setBiometricRegistered(false);
       }
     } catch (err) {
       if (err.name === 'NotAllowedError') {
-        setError('Biometric verification cancelled.');
+        setError(t('auth.biometricCancelled'));
       } else {
-        setError(err.message || 'Biometric login failed. Please use your password.');
+        setError(err.message || t('auth.biometricFailed'));
       }
     } finally {
       setBiometricLoading(false);
@@ -171,21 +171,21 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
           <div className="w-20 h-20 rounded-full bg-accent/10 border-2 border-accent/30 flex items-center justify-center mx-auto mb-5">
             <Fingerprint size={40} className="text-accent" />
           </div>
-          <h3 className="text-xl font-bold text-white mb-2">Enable Fingerprint Login</h3>
+          <h3 className="text-xl font-bold text-white mb-2">{t('auth.enableFingerprint')}</h3>
           <p className="text-brand-text-tertiary text-sm mb-6">
-            Log in faster next time using your device&apos;s biometric authentication — fingerprint, Face ID, or Windows Hello.
+            {t('auth.fingerprintDesc')}
           </p>
           <button
             onClick={handleEnableBiometric}
             className="w-full py-3 bg-accent hover:bg-accent/80 rounded-lg text-white font-semibold text-sm mb-3 transition-all flex items-center justify-center gap-2"
           >
-            <Fingerprint size={18} /> Enable Fingerprint Login
+            <Fingerprint size={18} /> {t('auth.enableFingerprint')}
           </button>
           <button
             onClick={() => onSuccess(lastLoginData.user)}
             className="w-full py-3 bg-white/5 hover:bg-white/10 rounded-lg text-brand-text-tertiary text-sm transition-all"
           >
-            Not now
+            {t('auth.notNow')}
           </button>
         </div>
       </div>
@@ -352,7 +352,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
           <>
             <div className="flex items-center gap-3 my-4">
               <div className="flex-1 h-px bg-white/10" />
-              <span className="text-xs text-brand-text-tertiary">or</span>
+              <span className="text-xs text-brand-text-tertiary">{t('auth.or')}</span>
               <div className="flex-1 h-px bg-white/10" />
             </div>
             <button
@@ -362,8 +362,8 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
               className="w-full py-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-accent/30 rounded-lg font-medium text-sm transition-all flex items-center justify-center gap-2.5 disabled:opacity-50"
             >
               {biometricLoading
-                ? <><Loader size={18} className="animate-spin" /> Verifying…</>
-                : <><Fingerprint size={18} className="text-accent" /> Login with Fingerprint</>}
+                ? <><Loader size={18} className="animate-spin" /> {t('auth.verifying')}</>
+                : <><Fingerprint size={18} className="text-accent" /> {t('auth.loginWithFingerprint')}</>}
             </button>
           </>
         )}

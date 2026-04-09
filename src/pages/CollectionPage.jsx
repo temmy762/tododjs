@@ -1,8 +1,10 @@
 import { Play, Download, Search, Filter, Grid, List, Clock, Music2 } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import TrackCard from '../components/TrackCard';
 
 export default function CollectionPage({ onTrackInteraction }) {
+  const { t } = useTranslation();
   const [viewMode, setViewMode] = useState('grid');
   const [sortBy, setSortBy] = useState('recent');
   const [searchQuery, setSearchQuery] = useState('');
@@ -27,19 +29,19 @@ export default function CollectionPage({ onTrackInteraction }) {
           <div className="relative h-full flex flex-col justify-end p-10">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 mb-4 w-fit">
               <Music2 className="w-3 h-3 text-white" strokeWidth={2} />
-              <span className="text-xs font-bold text-white uppercase tracking-wider">Collection</span>
+              <span className="text-xs font-bold text-white uppercase tracking-wider">{t('collectionPage.label')}</span>
             </div>
-            <h1 className="text-5xl font-bold text-white mb-3">My Downloads</h1>
+            <h1 className="text-5xl font-bold text-white mb-3">{t('collectionPage.myDownloads')}</h1>
             <p className="text-lg text-brand-text-secondary mb-4">127 tracks • 8.2 GB</p>
             
             <div className="flex items-center gap-3">
               <button className="flex items-center gap-2 px-6 py-3 bg-accent hover:bg-accent-hover rounded-lg text-white font-semibold transition-all duration-150 shadow-lg shadow-accent/30">
                 <Play className="w-4 h-4" fill="white" strokeWidth={0} />
-                Play All
+                {t('collectionPage.playAll')}
               </button>
               <button className="flex items-center gap-2 px-6 py-3 bg-white hover:bg-brand-text-secondary border border-brand-black/10 hover:border-brand-black/20 rounded-lg text-black font-semibold transition-all duration-150">
                 <Download className="w-4 h-4" strokeWidth={2} />
-                Download All
+                {t('album.downloadAll')}
               </button>
             </div>
           </div>
@@ -53,7 +55,7 @@ export default function CollectionPage({ onTrackInteraction }) {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search in collection..."
+                placeholder={t('collectionPage.searchInCollection')}
                 className="w-80 h-10 pl-10 pr-4 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-brand-text-tertiary/70 outline-none focus:border-accent/50 focus:bg-white/10 transition-all duration-150"
               />
             </div>
@@ -63,15 +65,15 @@ export default function CollectionPage({ onTrackInteraction }) {
               onChange={(e) => setSortBy(e.target.value)}
               className="h-10 px-4 bg-white/5 border border-white/10 rounded-lg text-sm text-white outline-none focus:border-accent/50 transition-all duration-150"
             >
-              <option value="recent">Recently Added</option>
-              <option value="title">Title A-Z</option>
-              <option value="artist">Artist A-Z</option>
-              <option value="bpm">BPM</option>
+              <option value="recent">{t('sort.recentlyAdded')}</option>
+              <option value="title">{t('sort.titleAZ')}</option>
+              <option value="artist">{t('sort.artistAZ')}</option>
+              <option value="bpm">{t('sort.bpm')}</option>
             </select>
 
             <button className="h-10 px-4 bg-white hover:bg-brand-text-secondary border border-brand-black/10 hover:border-brand-black/20 rounded-lg text-black transition-all duration-150 flex items-center gap-2">
               <Filter className="w-4 h-4" strokeWidth={2} />
-              <span className="text-sm font-semibold">Filters</span>
+              <span className="text-sm font-semibold">{t('collectionPage.filters')}</span>
             </button>
           </div>
 

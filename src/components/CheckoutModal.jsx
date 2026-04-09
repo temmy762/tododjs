@@ -37,11 +37,11 @@ export default function CheckoutModal({ isOpen, onClose, plan, user }) {
         // Redirect to Stripe Checkout
         window.location.href = data.url;
       } else {
-        setError(data.message || 'Failed to create checkout session');
+        setError(data.message || t('payment.failedCheckout'));
       }
     } catch (err) {
       console.error('Checkout error:', err);
-      setError('An error occurred. Please try again.');
+      setError(t('payment.genericError'));
     } finally {
       setLoading(false);
     }

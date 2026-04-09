@@ -1,7 +1,9 @@
 import { X, Plus, Image as ImageIcon, Lock } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default function PlaylistModal({ isOpen, onClose, onCreate }) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
@@ -33,23 +35,23 @@ export default function PlaylistModal({ isOpen, onClose, onCreate }) {
               <Plus className="w-7 h-7 text-accent" strokeWidth={2} />
             </div>
             <h2 className="text-xl font-bold text-white mb-2">
-              Create Playlist
+              {t('playlist.createPlaylist')}
             </h2>
             <p className="text-sm text-brand-text-tertiary">
-              Organize your favorite tracks
+              {t('playlist.organizeYourTracks')}
             </p>
           </div>
 
           <form onSubmit={handleCreate} className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-brand-text-tertiary mb-2 uppercase tracking-wider">
-                Playlist Name
+                {t('playlist.playlistName')}
               </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="My Awesome Playlist"
+                placeholder={t('playlist.playlistNamePlaceholder')}
                 required
                 className="w-full h-11 px-4 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-brand-text-tertiary outline-none focus:border-accent/50 focus:bg-white/10 transition-all duration-150"
               />
@@ -57,12 +59,12 @@ export default function PlaylistModal({ isOpen, onClose, onCreate }) {
 
             <div>
               <label className="block text-xs font-semibold text-brand-text-tertiary mb-2 uppercase tracking-wider">
-                Description (Optional)
+                {t('playlist.descriptionOptional')}
               </label>
               <textarea
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Add a description..."
+                placeholder={t('playlist.addDescription')}
                 rows={3}
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder-brand-text-tertiary outline-none focus:border-accent/50 focus:bg-white/10 transition-all duration-150 resize-none"
               />
@@ -79,10 +81,10 @@ export default function PlaylistModal({ isOpen, onClose, onCreate }) {
                 <div className="flex-1">
                   <div className="flex items-center gap-2 text-sm font-semibold text-white group-hover:text-accent transition-colors duration-150">
                     <Lock className="w-4 h-4" strokeWidth={2} />
-                    Make Private
+                    {t('playlist.makePrivate')}
                   </div>
                   <p className="text-xs text-brand-text-tertiary mt-0.5">
-                    Only you can see and edit this playlist
+                    {t('playlist.privateDescription')}
                   </p>
                 </div>
               </label>
@@ -94,13 +96,13 @@ export default function PlaylistModal({ isOpen, onClose, onCreate }) {
                 onClick={onClose}
                 className="flex-1 py-2.5 rounded-lg bg-white hover:bg-brand-text-secondary border border-brand-black/10 hover:border-brand-black/20 text-black text-sm font-semibold transition-all duration-150"
               >
-                Cancel
+                {t('actions.cancel')}
               </button>
               <button
                 type="submit"
                 className="flex-1 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-semibold transition-all duration-150 shadow-lg shadow-accent/30 hover:shadow-xl hover:shadow-accent/40"
               >
-                Create Playlist
+                {t('playlist.createPlaylist')}
               </button>
             </div>
           </form>

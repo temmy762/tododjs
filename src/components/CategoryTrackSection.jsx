@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Loader, Music, ChevronLeft, ChevronRight, List, Grid3x3 } from 'lucide-react';
 import TrackListView from './TrackListView';
 import TrackGridView from './TrackGridView';
@@ -25,6 +26,7 @@ export default function CategoryTrackSection({
   onTrackInteraction,
   userFavorites = new Set(),
 }) {
+  const { t } = useTranslation();
   const [tracks, setTracks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -78,7 +80,7 @@ export default function CategoryTrackSection({
           <h2 className="text-xl md:text-2xl font-bold text-white">{categoryName}</h2>
           {!loading && (
             <p className="text-xs text-brand-text-tertiary mt-0.5">
-              {totalTracks.toLocaleString()} track{totalTracks !== 1 ? 's' : ''}
+              {totalTracks.toLocaleString()} {totalTracks !== 1 ? t('common.tracks') : t('common.track')}
             </p>
           )}
         </div>
@@ -106,9 +108,9 @@ export default function CategoryTrackSection({
       ) : tracks.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
           <Music size={48} className="text-white/10 mb-4" />
-          <p className="text-brand-text-tertiary font-medium">No tracks in {categoryName} yet</p>
+          <p className="text-brand-text-tertiary font-medium">{t('category.noTracksIn', { category: categoryName })}</p>
           <p className="text-xs text-brand-text-tertiary/60 mt-1">
-            Tracks tagged with this category will appear here automatically on upload.
+            {t('category.autoDesc')}
           </p>
         </div>
       ) : viewMode === 'list' ? (

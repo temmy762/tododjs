@@ -1,7 +1,9 @@
 import { X, Sliders } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default function FilterPanel({ isOpen, onClose, onApply }) {
+  const { t } = useTranslation();
   const [bpmRange, setBpmRange] = useState([80, 180]);
   const [selectedGenres, setSelectedGenres] = useState([]);
   const [selectedMoods, setSelectedMoods] = useState([]);
@@ -42,7 +44,7 @@ export default function FilterPanel({ isOpen, onClose, onApply }) {
               <div className="w-10 h-10 rounded-lg bg-accent/10 flex items-center justify-center">
                 <Sliders className="w-5 h-5 text-accent" strokeWidth={1.5} />
               </div>
-              <h2 className="text-xl font-bold text-white">Filters</h2>
+              <h2 className="text-xl font-bold text-white">{t('filter.title')}</h2>
             </div>
             <button 
               onClick={onClose}
@@ -51,16 +53,16 @@ export default function FilterPanel({ isOpen, onClose, onApply }) {
               <X className="w-4 h-4" strokeWidth={2} />
             </button>
           </div>
-          <p className="text-sm text-brand-text-tertiary">Refine your search results</p>
+          <p className="text-sm text-brand-text-tertiary">{t('filter.refine')}</p>
         </div>
 
         <div className="p-6 space-y-8">
           <div>
-            <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">BPM Range</h3>
+            <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">{t('filter.bpmRange')}</h3>
             <div className="space-y-4">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-brand-text-tertiary">Min: <span className="text-white font-semibold">{bpmRange[0]}</span></span>
-                <span className="text-brand-text-tertiary">Max: <span className="text-white font-semibold">{bpmRange[1]}</span></span>
+                <span className="text-brand-text-tertiary">{t('filter.min')} <span className="text-white font-semibold">{bpmRange[0]}</span></span>
+                <span className="text-brand-text-tertiary">{t('filter.max')} <span className="text-white font-semibold">{bpmRange[1]}</span></span>
               </div>
               <div className="relative h-2 bg-white/10 rounded-full">
                 <div 
@@ -93,7 +95,7 @@ export default function FilterPanel({ isOpen, onClose, onApply }) {
           </div>
 
           <div>
-            <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">Genres</h3>
+            <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">{t('filter.genres')}</h3>
             <div className="flex flex-wrap gap-2">
               {genres.map((genre) => (
                 <button
@@ -112,7 +114,7 @@ export default function FilterPanel({ isOpen, onClose, onApply }) {
           </div>
 
           <div>
-            <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">Mood</h3>
+            <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">{t('filter.mood')}</h3>
             <div className="flex flex-wrap gap-2">
               {moods.map((mood) => (
                 <button
@@ -131,7 +133,7 @@ export default function FilterPanel({ isOpen, onClose, onApply }) {
           </div>
 
           <div>
-            <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">Musical Key</h3>
+            <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">{t('filter.musicalKey')}</h3>
             <div className="grid grid-cols-6 gap-2">
               {keys.map((key) => (
                 <button
@@ -156,13 +158,13 @@ export default function FilterPanel({ isOpen, onClose, onApply }) {
               onClick={handleReset}
               className="flex-1 py-3 rounded-lg bg-white hover:bg-brand-text-secondary border border-brand-black/10 hover:border-brand-black/20 text-black text-sm font-semibold transition-all duration-150"
             >
-              Reset
+              {t('filter.reset')}
             </button>
             <button
               onClick={handleApply}
               className="flex-1 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white text-sm font-semibold transition-all duration-150 shadow-lg shadow-accent/30"
             >
-              Apply Filters
+              {t('filter.applyFilters')}
             </button>
           </div>
         </div>

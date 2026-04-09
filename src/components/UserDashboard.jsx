@@ -96,9 +96,9 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
   const planColor = isAdmin ? 'text-purple-400' : (isActivePaid ? 'text-yellow-400' : 'text-brand-text-tertiary');
 
   const stats = [
-    { label: 'DOWNLOADS', value: user?.downloads?.total?.toString() || '0', icon: Download },
-    { label: 'PLAYLISTS', value: user?.playlists?.length?.toString() || '0', icon: Music },
-    { label: 'FAVORITES', value: favorites.length > 0 ? favorites.length.toString() : (user?.favorites?.length?.toString() || '0'), icon: Heart },
+    { label: t('userDashboard.statDownloads'), value: user?.downloads?.total?.toString() || '0', icon: Download },
+    { label: t('userDashboard.statPlaylists'), value: user?.playlists?.length?.toString() || '0', icon: Music },
+    { label: t('userDashboard.statFavorites'), value: favorites.length > 0 ? favorites.length.toString() : (user?.favorites?.length?.toString() || '0'), icon: Heart },
   ];
 
   const clearMessage = () => setMessage({ type: '', text: '' });
@@ -113,11 +113,11 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      setMessage({ type: 'error', text: 'Please select an image file' });
+      setMessage({ type: 'error', text: t('userDashboard.invalidPhone').replace('phone number', 'image file') });
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
-      setMessage({ type: 'error', text: 'Image must be under 5MB' });
+      setMessage({ type: 'error', text: 'Image must be under 5MB' }); // technical constraint
       return;
     }
 
@@ -138,7 +138,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Profile photo updated!' });
+        setMessage({ type: 'success', text: t('userDashboard.profilePhotoUpdated') });
         if (onUserUpdate) {
           onUserUpdate({ ...user, avatar: data.data.avatar });
         }
@@ -157,7 +157,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
     if (formData.phoneNumber) {
       const cleaned = formData.phoneNumber.replace(/[\s\-\(\)]/g, '');
       if (!/^\+?[1-9]\d{6,14}$/.test(cleaned)) {
-        setMessage({ type: 'error', text: 'Please enter a valid phone number (e.g. +1234567890)' });
+        setMessage({ type: 'error', text: t('userDashboard.invalidPhone') });
         return;
       }
     }
@@ -183,7 +183,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Profile updated successfully!' });
+        setMessage({ type: 'success', text: t('userDashboard.profileUpdated') });
         if (onUserUpdate) {
           onUserUpdate({ ...user, name: formData.name, email: formData.email, phoneNumber: formData.phoneNumber });
         }
@@ -200,15 +200,15 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
   // ── Change Password ──
   const handleChangePassword = async () => {
     if (!passwordData.currentPassword || !passwordData.newPassword) {
-      setMessage({ type: 'error', text: 'Please fill in all password fields' });
+      setMessage({ type: 'error', text: t('userDashboard.fillAllFields') });
       return;
     }
     if (passwordData.newPassword.length < 6) {
-      setMessage({ type: 'error', text: 'New password must be at least 6 characters' });
+      setMessage({ type: 'error', text: t('userDashboard.passwordTooShort') });
       return;
     }
     if (passwordData.newPassword !== passwordData.confirmPassword) {
-      setMessage({ type: 'error', text: 'New passwords do not match' });
+      setMessage({ type: 'error', text: t('userDashboard.passwordsNoMatch') });
       return;
     }
 
@@ -232,7 +232,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ type: 'success', text: 'Password changed successfully!' });
+        setMessage({ type: 'success', text: t('userDashboard.passwordChanged') });
         setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
         if (data.token) {
           localStorage.setItem('token', data.token);
@@ -363,26 +363,26 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
 
               {/* Account Details */}
               <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
-                <h3 className="text-sm font-semibold text-white mb-3 md:mb-4">Account Details</h3>
+                <h3 className="text-sm font-semibold text-white mb-3 md:mb-4">{t('userDashboard.accountDetails')}</h3>
                 <div className="grid grid-cols-2 gap-3 md:gap-4">
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Name</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">{t('dashboard.name')}</p>
                     <p className="text-sm text-white font-medium">{user?.name}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Email</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">{t('userDashboard.email')}</p>
                     <p className="text-sm text-white font-medium">{user?.email}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Phone Number</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">{t('userDashboard.phoneNumber')}</p>
                     <p className="text-sm text-white font-medium">{user?.phoneNumber || <span className="text-brand-text-tertiary italic">-</span>}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Current Plan</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">{t('userDashboard.currentPlan')}</p>
                     <p className={`text-sm font-medium ${planColor}`}>{planLabel}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Status</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">{t('userDashboard.status')}</p>
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
                       subscriptionStatus === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
                     }`}>
@@ -390,7 +390,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                     </span>
                   </div>
                   <div>
-                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">Role</p>
+                    <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">{t('userDashboard.role')}</p>
                     <p className="text-sm text-white font-medium capitalize">{user?.role || 'user'}</p>
                   </div>
                 </div>
@@ -438,12 +438,12 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
               <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
                 <h3 className="text-sm font-semibold text-white mb-4 md:mb-5 flex items-center gap-2">
                   <Pencil className="w-4 h-4 text-accent" />
-                  Edit Profile
+                  {t('userDashboard.editProfileTitle')}
                 </h3>
 
                 <div className="space-y-3 md:space-y-4">
                   <div>
-                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Full Name</label>
+                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">{t('userDashboard.fullName')}</label>
                     <div className="relative">
                       <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                       <input
@@ -457,7 +457,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Email</label>
+                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">{t('userDashboard.email')}</label>
                     <div className="relative">
                       <Mail size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                       <input
@@ -471,7 +471,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                   </div>
 
                   <div>
-                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Phone Number</label>
+                    <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">{t('userDashboard.phoneNumber')}</label>
                     <div className="relative">
                       <Phone size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                       <input
@@ -482,7 +482,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                         placeholder=""
                       />
                     </div>
-                    <p className="text-[10px] text-brand-text-tertiary mt-1">Optional</p>
+                    <p className="text-[10px] text-brand-text-tertiary mt-1">{t('userDashboard.optional')}</p>
                   </div>
                 </div>
 
@@ -493,7 +493,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                     className="px-6 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
                     <Save size={14} />
-                    {saving ? 'Loading...' : 'Save'}
+                    {saving ? t('common.loading') : t('userDashboard.save')}
                   </button>
                   <button
                     onClick={() => {
@@ -502,7 +502,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                     }}
                     className="px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg font-medium text-brand-text-secondary text-sm transition-colors"
                   >
-                    Reset
+                    {t('userDashboard.reset')}
                   </button>
                 </div>
               </div>
@@ -511,7 +511,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
               <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
                 <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
                   <Camera className="w-4 h-4 text-accent" />
-                  Photo
+                  {t('userDashboard.photo')}
                 </h3>
                 <div className="flex items-center gap-4">
                   <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-accent to-accent-hover overflow-hidden border-2 border-white/10 flex items-center justify-center">
@@ -528,9 +528,9 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                       className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-sm font-medium text-white transition-colors disabled:opacity-50 flex items-center gap-2"
                     >
                       <Camera size={14} />
-                      {uploadingAvatar ? 'Loading...' : 'Edit'}
+                      {uploadingAvatar ? t('common.loading') : t('userDashboard.edit')}
                     </button>
-                    <p className="text-[10px] text-brand-text-tertiary mt-1.5">JPEG, PNG, WebP, or GIF. Max 5MB.</p>
+                    <p className="text-[10px] text-brand-text-tertiary mt-1.5">{t('userDashboard.photoDesc')}</p>
                   </div>
                 </div>
               </div>
@@ -543,7 +543,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-sm font-semibold text-white flex items-center gap-2">
                   <Heart className="w-4 h-4 text-accent" />
-                  Favorites
+                  {t('userDashboard.favorites')}
                   <span className="text-xs text-brand-text-tertiary font-normal">({favorites.length})</span>
                 </h3>
               </div>
@@ -565,8 +565,8 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                   <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
                     <Heart className="w-6 h-6 text-brand-text-tertiary" />
                   </div>
-                  <p className="text-sm text-brand-text-tertiary font-medium">No favorites yet</p>
-                  <p className="text-xs text-brand-text-tertiary/50 mt-1">Start adding tracks to your favorites</p>
+                  <p className="text-sm text-brand-text-tertiary font-medium">{t('userDashboard.noFavoritesYet')}</p>
+                  <p className="text-xs text-brand-text-tertiary/50 mt-1">{t('userDashboard.startAddingFavorites')}</p>
                 </div>
               ) : (
                 <div className="space-y-1.5">
@@ -605,7 +605,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                         <button
                           onClick={() => removeFavorite(track._id)}
                           className="w-8 h-8 rounded-lg flex items-center justify-center text-brand-text-tertiary hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                          title="Delete"
+                          title={t('actions.delete')}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -636,12 +636,12 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
             <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
               <h3 className="text-sm font-semibold text-white mb-4 md:mb-5 flex items-center gap-2">
                 <Lock className="w-4 h-4 text-accent" />
-                Change Password
+                {t('userDashboard.changePasswordTitle')}
               </h3>
 
               <div className="space-y-3 md:space-y-4">
                 <div>
-                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Current Password</label>
+                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">{t('userDashboard.currentPassword')}</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                     <input
@@ -662,7 +662,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">New Password</label>
+                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">{t('userDashboard.newPassword')}</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                     <input
@@ -683,7 +683,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">Confirm Password</label>
+                  <label className="block text-xs font-medium mb-1.5 text-brand-text-secondary">{t('userDashboard.confirmPassword')}</label>
                   <div className="relative">
                     <Lock size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                     <input
@@ -710,7 +710,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                 className="mt-6 px-6 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
               >
                 <Shield size={14} />
-                {saving ? 'Loading...' : 'Change Password'}
+                {saving ? t('common.loading') : t('userDashboard.changePasswordTitle')}
               </button>
             </div>
           )}

@@ -34,7 +34,7 @@ export default function ResetPasswordPage() {
     }
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError(t('auth.passwordMinLength'));
       return;
     }
 
@@ -58,7 +58,7 @@ export default function ResetPasswordPage() {
         setError(data.message || t('auth.invalidToken'));
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError(t('payment.genericError'));
     } finally {
       setLoading(false);
     }

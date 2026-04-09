@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Play, Music2 } from 'lucide-react';
 
 export default function AlbumPage({ albums, onAlbumClick }) {
+  const { t } = useTranslation();
   const [hoveredAlbum, setHoveredAlbum] = useState(null);
 
   return (
@@ -10,9 +12,9 @@ export default function AlbumPage({ albums, onAlbumClick }) {
       <div className="sticky top-14 md:top-16 z-20 bg-dark-bg/95 backdrop-blur-md border-b border-white/5 px-4 md:px-10 py-3 md:py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl md:text-3xl font-bold text-white">Packs</h1>
+            <h1 className="text-xl md:text-3xl font-bold text-white">{t('albumPage.packs')}</h1>
             <p className="text-[10px] md:text-sm text-brand-text-tertiary mt-1">
-              {albums.length} packs in your library
+              {t('albumPage.packsCount', { count: albums.length })}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -59,14 +61,14 @@ export default function AlbumPage({ albums, onAlbumClick }) {
                   {/* New Badge */}
                   {album.isNew && (
                     <div className="absolute top-3 right-3 px-2.5 py-1 rounded-full bg-gradient-to-r from-accent to-purple-500 shadow-lg">
-                      <span className="text-[10px] font-bold text-white uppercase tracking-wider">New</span>
+                      <span className="text-[10px] font-bold text-white uppercase tracking-wider">{t('artist.newBadge')}</span>
                     </div>
                   )}
 
                   {/* Track Count Badge */}
                   <div className="absolute bottom-3 left-3 px-2 py-1 rounded-md bg-black/70 backdrop-blur-sm">
                     <span className="text-[10px] font-medium text-white">
-                      {album.trackCount} tracks
+                      {album.trackCount} {t('common.tracks')}
                     </span>
                   </div>
                 </div>

@@ -20,6 +20,10 @@ const mashupSettingsSchema = new mongoose.Schema({
   pageDescription: {
     type: String,
     default: 'Fresh mashups, remixes & edits'
+  },
+  tags: {
+    type: [String],
+    default: ['Intro', 'Outro', 'Clean', 'Dirty', 'Extended', 'Original', 'Acapella']
   }
 }, {
   timestamps: true

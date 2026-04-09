@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { Disc, Loader, Star } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import API_URL from '../config/api';
 
 const API = API_URL;
 
 export default function PlaylistsSection({ onAlbumClick, activeGenre = 'all' }) {
+  const { t } = useTranslation();
   const [featuredAlbums, setFeaturedAlbums] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -51,9 +53,9 @@ export default function PlaylistsSection({ onAlbumClick, activeGenre = 'all' }) 
       <div className="mb-4 md:mb-6">
         <div className="flex items-center gap-2">
           <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
-          <h2 className="text-lg md:text-2xl font-bold text-white">Latest Uploads</h2>
+          <h2 className="text-lg md:text-2xl font-bold text-white">{t('home.latestUploadsTitle')}</h2>
         </div>
-        <p className="text-xs md:text-sm text-brand-text-tertiary mt-1">The latest from your favorite record pools and Premium packs</p>
+        <p className="text-xs md:text-sm text-brand-text-tertiary mt-1">{t('home.latestUploadsSubtitle')}</p>
       </div>
       
       <div className="relative">
@@ -88,7 +90,7 @@ export default function PlaylistsSection({ onAlbumClick, activeGenre = 'all' }) 
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                     
                     <div className="absolute top-2 right-2 px-2 py-1 rounded-full bg-gradient-to-r from-yellow-500 to-orange-500 text-white text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
-                      <Star size={10} className="fill-white" /> Featured
+                      <Star size={10} className="fill-white" /> {t('home.featured')}
                     </div>
                   </div>
                 </div>
@@ -101,7 +103,7 @@ export default function PlaylistsSection({ onAlbumClick, activeGenre = 'all' }) 
                     {item.source || item.genre}
                   </p>
                   <p className="text-[10px] text-brand-text-tertiary/60 mt-0.5">
-                    {item.trackCount} tracks • {item.year}
+                    {item.trackCount} {t('common.tracks')} • {item.year}
                   </p>
                 </div>
               </div>

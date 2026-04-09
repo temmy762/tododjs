@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Music, Building2 } from 'lucide-react';
 
 export default function StoriesBar({ profiles, onProfileClick }) {
+  const { t } = useTranslation();
   const [imageLoadedStates, setImageLoadedStates] = useState({});
 
   const handleImageLoad = (id) => {
@@ -70,7 +72,7 @@ export default function StoriesBar({ profiles, onProfileClick }) {
                     {profile.name}
                   </p>
                   <p className="text-[10px] text-brand-text-tertiary/60 mt-0.5">
-                    {profile.trackCount} tracks
+                    {profile.trackCount} {t('common.tracks')}
                   </p>
                 </div>
               </div>

@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { Play, Download, Heart, Clock, Music, X, Loader, Archive, Share2, Pause, Check } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import GenericCoverArt from './GenericCoverArt';
 import PremiumPrompt from './PremiumPrompt';
 import API_URL from '../config/api';
@@ -35,6 +36,8 @@ const getTonalityColor = (tonality) => {
 };
 
 export default function AlbumDetailView({ album, tracks = [], isLoading = false, autoPlay = false, onClose, onTrackInteraction, userFavorites = new Set(), user, onAuthRequired, onSubscribe }) {
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language === 'es' ? 'es-ES' : 'en-US';
   const [playingTrackId, setPlayingTrackId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const likedTracks = userFavorites;
@@ -99,7 +102,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       }
     } catch (err) {
       console.error('Download failed:', err);
-      alert(err.message || 'Download failed');
+      alert(err.message || t('album.downloadFailed'));
     } finally {
       setDownloadingTrackId(null);
     }
@@ -126,7 +129,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       }
     } catch (err) {
       console.error('ZIP download failed:', err);
-      alert(err.message || 'Download failed');
+      alert(err.message || t('album.downloadFailed'));
     } finally {
       setDownloadingZip(false);
     }
@@ -226,7 +229,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
                   <div className="mb-3 md:mb-4">
                     {album.isNew && (
                       <span className="inline-block px-3 py-1 rounded-full bg-gradient-to-r from-accent to-purple-500 text-xs font-bold text-white uppercase tracking-wider mb-3">
-                        New Release
+                        {t('album.newRelease')}
                       </span>
                     )}
                     <h1 className="text-lg md:text-2xl font-bold text-white mb-1 md:mb-2 leading-tight">
@@ -241,7 +244,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
                   <div className="flex items-center gap-4 text-sm text-brand-text-tertiary mb-6">
                     <span>{album.year}</span>
                     <span>•</span>
-                    <span>{album.trackCount} tracks</span>
+                    <span>{album.trackCount} {t('album.tracks')}</span>
                   </div>
 
                   {/* Action Buttons */}
@@ -260,7 +263,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
                         <Archive className="w-4 h-4 text-white" />
                       )}
                       <span className="text-sm font-semibold text-white">
-                        {downloadingZip ? 'Downloading...' : 'Download All'}
+                        {downloadingZip ? t('album.downloading') : t('album.downloadAll')}
                       </span>
                     </button>
                     <button
@@ -276,7 +279,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
                       <Share2 className="w-4 h-4 text-white group-hover:text-accent transition-colors" />
                       {shareToast && (
                         <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1 rounded-lg bg-accent text-white text-[10px] font-semibold whitespace-nowrap shadow-lg animate-in fade-in zoom-in-95 duration-200 flex items-center gap-1">
-                          <Check className="w-3 h-3" /> Link copied!
+                          <Check className="w-3 h-3" /> {t('album.linkCopied')}
                         </div>
                       )}
                     </button>
@@ -291,9 +294,9 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
                 {/* Track List Header with Gradient */}
                 <div className="px-4 md:px-6 py-3 md:py-4 border-b border-white/5 bg-gradient-to-r from-dark-elevated/80 to-dark-surface/80 backdrop-blur-md">
                   <div className="flex items-center justify-between">
-                    <h2 className="text-xl font-bold text-white">Tracks</h2>
+                    <h2 className="text-xl font-bold text-white">{t('album.tracks')}</h2>
                     <div className="flex items-center gap-2 text-xs text-brand-text-tertiary">
-                      <span>{tracks.length} tracks</span>
+                      <span>{tracks.length} {t('album.tracks')}</span>
                     </div>
                   </div>
                 </div>
@@ -306,15 +309,15 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                       </svg>
-                      Loading tracks...
+                      {t('album.loadingTracks')}
                     </div>
                   )}
                   
                   {!isLoading && tracks.length === 0 && (
                     <div className="flex flex-col items-center justify-center py-16 text-brand-text-tertiary">
                       <Music className="h-12 w-12 mb-4 opacity-50" />
-                      <p className="text-lg font-medium">No tracks available</p>
-                      <p className="text-sm mt-2 opacity-75">This album is being processed or has no tracks yet.</p>
+                      <p className="text-lg font-medium">{t('album.noTracksAvailable')}</p>
+                      <p className="text-sm mt-2 opacity-75">{t('album.noTracksDesc')}</p>
                     </div>
                   )}
                   
@@ -394,7 +397,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
 
                               {/* Date with Year */}
                               <span className="hidden md:inline text-[10px] text-brand-text-tertiary w-20 text-right">
-                                {new Date(track.dateAdded).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                {new Date(track.dateAdded).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })}
                               </span>
                             </div>
                           </div>
@@ -404,7 +407,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
                             <button
                               onClick={(e) => toggleLike(track, e)}
                               className="hover:scale-110 transition-transform duration-150"
-                              title={isLiked ? 'Unlike' : 'Like'}
+                              title={isLiked ? t('album.unlike') : t('album.like')}
                             >
                               <Heart 
                                 className={`w-4 h-4 ${isLiked ? 'text-accent fill-accent' : 'text-white/70 hover:text-white'}`}
@@ -415,7 +418,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
                               onClick={(e) => handleDownloadTrack(track, e)}
                               disabled={downloadingTrackId === (track.id || track._id)}
                               className="hover:scale-110 transition-transform duration-150 disabled:opacity-50"
-                              title="Download track"
+                              title={t('album.downloadTrack')}
                             >
                               {downloadingTrackId === (track.id || track._id) ? (
                                 <svg className="animate-spin w-4 h-4 text-accent" viewBox="0 0 24 24">

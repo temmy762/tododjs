@@ -251,7 +251,7 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
               onChange={(e) => handleFilterChange(e.target.value)}
               className="bg-dark-elevated text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80"
             >
-              <option value="all">All Genres</option>
+              <option value="all">{t('libraryPage.allGenres')}</option>
               {genres.map(genre => (
                 <option key={genre} value={genre}>{genre}</option>
               ))}
@@ -277,7 +277,7 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
 
       <div className="px-4 md:px-10 pt-4 md:pt-5 pb-2">
         <div className="rounded-2xl bg-white/[0.02] backdrop-blur-sm border border-white/10 shadow-lg shadow-black/10 p-4 sm:p-5">
-          <div className="text-sm font-semibold text-white/80 mb-3">Elige la tonalidad:</div>
+          <div className="text-sm font-semibold text-white/80 mb-3">{t('libraryPage.chooseTonality')}</div>
 
           <div className="overflow-x-auto scrollbar-hidden">
             <div className="flex gap-2 min-w-max">
@@ -310,8 +310,8 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
         </div>
       ) : tracks.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 text-center">
-          <p className="text-lg text-white font-semibold mb-2">No tracks found</p>
-          <p className="text-sm text-brand-text-tertiary">Try adjusting your filters or check back later</p>
+          <p className="text-lg text-white font-semibold mb-2">{t('libraryPage.noTracksFound')}</p>
+          <p className="text-sm text-brand-text-tertiary">{t('libraryPage.adjustFilters')}</p>
         </div>
       ) : viewMode === 'list' ? (
         <TrackListView 
@@ -332,7 +332,7 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6 max-w-6xl mx-auto">
             {/* Songs per page selector */}
             <div className="flex items-center gap-3 bg-white/[0.02] backdrop-blur-sm border border-white/10 rounded-xl px-4 py-2.5 shadow-lg">
-              <span className="text-sm font-medium text-brand-text-secondary whitespace-nowrap">Pistas por página:</span>
+              <span className="text-sm font-medium text-brand-text-secondary whitespace-nowrap">{t('libraryPage.perPage')}</span>
               <select
                 value={tracksPerPage}
                 onChange={(e) => handleTracksPerPageChange(e.target.value)}
@@ -355,7 +355,7 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
                     : 'bg-white/[0.05] text-white hover:bg-white/[0.08] hover:scale-105 border border-white/10 shadow-lg'
                 }`}
               >
-                Previous
+                {t('pagination.previous')}
               </button>
 
               <div className="flex items-center gap-2 bg-white/[0.02] backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2 shadow-lg">
@@ -396,7 +396,7 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
                     : 'bg-white/[0.05] text-white hover:bg-white/[0.08] hover:scale-105 border border-white/10 shadow-lg'
                 }`}
               >
-                Next
+                {t('pagination.next')}
               </button>
             </div>
           </div>

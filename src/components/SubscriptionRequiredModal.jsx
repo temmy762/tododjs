@@ -61,7 +61,7 @@ export default function SubscriptionRequiredModal({ isOpen, onClose, onViewPlans
               {t('subscription.startingFrom')}
             </p>
             <div className="text-3xl font-bold text-white">
-              €19.99<span className="text-lg text-brand-text-tertiary">/month</span>
+              €19.99<span className="text-lg text-brand-text-tertiary">{t('subscription.perMonth')}</span>
             </div>
           </div>
 

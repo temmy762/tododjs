@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, X, CreditCard, Shield, Zap, Download, Music, Crown, Users } from 'lucide-react';
 import API_URL from '../config/api';
 
 export default function CheckoutPage({ onClose, selectedPlan }) {
+  const { t } = useTranslation();
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
   const [fetchingPlan, setFetchingPlan] = useState(true);
@@ -55,23 +57,23 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
   const getPlanFeatures = () => {
     const features = [];
     if (plan.features.unlimitedDownloads) {
-      features.push('Unlimited Downloads');
+      features.push(t('subscription.unlimitedDownloads'));
     }
     if (plan.features.fullWebAccess) {
-      features.push('Full Web Access');
+      features.push(t('subscription.fullWebAccess'));
     }
     if (plan.features.whatsappSupport) {
-      features.push('WhatsApp Support');
+      features.push(t('subscription.whatsappSupport'));
     }
     if (plan.features.noCommitment) {
-      features.push('No Commitment');
+      features.push(t('subscription.noCommitment'));
     }
     if (plan.type === 'shared') {
-      features.push('Access for 2 Users');
-      features.push('2 Devices/IP');
+      features.push(t('subscription.twoUsers'));
+      features.push(t('subscription.twoDevices'));
     }
     if (plan.duration === 'quarterly') {
-      features.push(`${plan.durationDays} days access`);
+      features.push(t('checkout.daysAccessFeature', { count: plan.durationDays }));
     }
     return features;
   };
@@ -98,12 +100,12 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
       if (data.success) {
         window.location.href = data.url;
       } else {
-        alert('Error creating checkout session. Please try again.');
+        alert(t('checkout.errorSession'));
         setLoading(false);
       }
     } catch (error) {
       console.error('Checkout error:', error);
-      alert('Error processing checkout. Please try again.');
+      alert(t('checkout.errorProcessing'));
       setLoading(false);
     }
   };
@@ -114,8 +116,8 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
         {/* Header */}
         <div className="sticky top-0 bg-dark-elevated border-b border-white/10 p-4 md:p-6 flex items-center justify-between z-10">
           <div>
-            <h2 className="text-lg md:text-2xl font-bold text-white">Complete Your Subscription</h2>
-            <p className="text-xs md:text-sm text-brand-text-tertiary mt-1">Secure checkout powered by Stripe</p>
+            <h2 className="text-lg md:text-2xl font-bold text-white">{t('checkout.completeSubscription')}</h2>
+            <p className="text-xs md:text-sm text-brand-text-tertiary mt-1">{t('checkout.secureCheckout')}</p>
           </div>
           <button
             onClick={onClose}
@@ -142,18 +144,18 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
 
               <div className="flex items-baseline gap-2 mb-2">
                 <span className="text-5xl font-bold text-white">€{price}</span>
-                <span className="text-white/80">/ {plan.durationDays} days</span>
+                <span className="text-white/80">/ {t('checkout.daysCount', { count: plan.durationDays })}</span>
               </div>
               {plan.duration === 'quarterly' && (
                 <div className="inline-block px-3 py-1 rounded-full bg-white/20 text-white text-sm font-semibold">
-                  Best value - {plan.durationDays} days access
+                  {t('checkout.bestValue', { count: plan.durationDays })}
                 </div>
               )}
             </div>
 
             {/* Features List */}
             <div className="bg-dark-surface rounded-xl p-6">
-              <h4 className="text-lg font-bold text-white mb-4">What's Included</h4>
+              <h4 className="text-lg font-bold text-white mb-4">{t('checkout.whatsIncluded')}</h4>
               <div className="space-y-3">
                 {getPlanFeatures().map((feature, index) => (
                   <div key={index} className="flex items-center gap-3">
@@ -171,29 +173,29 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
           <div>
             {/* Order Summary */}
             <div className="bg-dark-surface rounded-xl p-6 mb-6">
-              <h4 className="text-lg font-bold text-white mb-4">Order Summary</h4>
+              <h4 className="text-lg font-bold text-white mb-4">{t('checkout.orderSummary')}</h4>
               
               <div className="space-y-3 mb-4 pb-4 border-b border-white/10">
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-brand-text-tertiary">Plan</span>
+                  <span className="text-brand-text-tertiary">{t('payment.plan')}</span>
                   <span className="text-white font-medium">{plan.name}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-brand-text-tertiary">Type</span>
+                  <span className="text-brand-text-tertiary">{t('checkout.type')}</span>
                   <span className="text-white font-medium capitalize">{plan.type}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-brand-text-tertiary">Duration</span>
-                  <span className="text-white font-medium">{plan.durationDays} days</span>
+                  <span className="text-brand-text-tertiary">{t('checkout.duration')}</span>
+                  <span className="text-white font-medium">{t('checkout.daysCount', { count: plan.durationDays })}</span>
                 </div>
               </div>
 
               <div className="flex items-center justify-between mb-6">
-                <span className="text-lg font-bold text-white">Total</span>
+                <span className="text-lg font-bold text-white">{t('checkout.total')}</span>
                 <div className="text-right">
                   <div className="text-2xl font-bold text-white">€{price}</div>
                   <div className="text-xs text-brand-text-tertiary">
-                    one-time payment
+                    {t('checkout.oneTimePayment')}
                   </div>
                 </div>
               </div>
@@ -206,18 +208,18 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
                 {loading ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                    <span>Processing...</span>
+                    <span>{t('checkout.processing')}</span>
                   </>
                 ) : (
                   <>
                     <CreditCard className="w-5 h-5" />
-                    <span>Proceed to Checkout</span>
+                    <span>{t('checkout.proceedToCheckout')}</span>
                   </>
                 )}
               </button>
 
               <p className="text-xs text-center text-brand-text-tertiary mt-4">
-                You'll be redirected to Stripe's secure checkout
+                {t('checkout.stripeRedirect')}
               </p>
             </div>
 
@@ -225,14 +227,14 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
             <div className="bg-dark-surface rounded-xl p-6">
               <div className="flex items-center gap-3 mb-4">
                 <Shield className="w-5 h-5 text-green-400" />
-                <span className="text-sm font-semibold text-white">Secure Payment</span>
+                <span className="text-sm font-semibold text-white">{t('checkout.securePayment')}</span>
               </div>
               <p className="text-xs text-brand-text-tertiary mb-4">
-                Your payment information is encrypted and secure. We use Stripe for payment processing.
+                {t('checkout.paymentEncrypted')}
               </p>
               <div className="flex items-center gap-4">
                 <div className="px-3 py-1 rounded bg-dark-elevated text-xs font-semibold text-white">
-                  🔒 SSL Encrypted
+                  🔒 {t('checkout.sslEncrypted')}
                 </div>
                 <div className="px-3 py-1 rounded bg-dark-elevated text-xs font-semibold text-white">
                   💳 Stripe
@@ -245,9 +247,9 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
               <div className="flex items-start gap-3">
                 <Zap className="w-5 h-5 text-green-400 flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-white mb-1">30-Day Money Back Guarantee</p>
+                  <p className="text-sm font-semibold text-white mb-1">{t('checkout.moneyBackGuarantee')}</p>
                   <p className="text-xs text-brand-text-tertiary">
-                    Not satisfied? Get a full refund within 30 days, no questions asked.
+                    {t('checkout.moneyBackDesc')}
                   </p>
                 </div>
               </div>

@@ -1,7 +1,9 @@
 import { Play, Download, Clock, TrendingUp, Sparkles } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default function FeaturedSpotlight({ track, onInteraction }) {
+  const { t } = useTranslation();
   const [imageLoaded, setImageLoaded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
 
@@ -66,7 +68,7 @@ export default function FeaturedSpotlight({ track, onInteraction }) {
               <div className="inline-flex items-center gap-2 mb-2">
                 <div className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-accent/10 border border-accent/20">
                   <Sparkles className="w-3 h-3 text-accent" strokeWidth={2} />
-                  <span className="text-xs font-semibold text-accent tracking-wider uppercase">Featured</span>
+                  <span className="text-xs font-semibold text-accent tracking-wider uppercase">{t('home.featured')}</span>
                 </div>
               </div>
 
@@ -87,7 +89,7 @@ export default function FeaturedSpotlight({ track, onInteraction }) {
                   <span className="font-medium">{track.collection}</span>
                 </div>
                 <div className="text-brand-text-tertiary/60">
-                  <span>Added {new Date(track.dateAdded).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                  <span>{t('home.added')} {new Date(track.dateAdded).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
                 </div>
               </div>
 
@@ -99,7 +101,7 @@ export default function FeaturedSpotlight({ track, onInteraction }) {
                   <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/10 to-white/0 translate-x-[-100%] group-hover/btn:translate-x-[100%] transition-transform duration-700" />
                   <span className="relative flex items-center gap-2">
                     <Play className="w-3.5 h-3.5" fill="white" strokeWidth={0} />
-                    Play Now
+                    {t('actions.playNow')}
                   </span>
                 </button>
                 <button 
@@ -108,7 +110,7 @@ export default function FeaturedSpotlight({ track, onInteraction }) {
                 >
                   <span className="flex items-center gap-2">
                     <Download className="w-3.5 h-3.5" strokeWidth={2} />
-                    Download
+                    {t('actions.download')}
                   </span>
                 </button>
               </div>

@@ -1,5 +1,6 @@
 import { X, Pause, Play, Info, Volume2, VolumeX, SkipBack, SkipForward, Music, User } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import PremiumPrompt from './PremiumPrompt';
 import API_URL from '../config/api';
 
@@ -74,6 +75,7 @@ export default function MusicControlPanel({
   const lastTrackIdRef = useRef(null);
   const volumeTimeoutRef = useRef(null);
 
+  const { t } = useTranslation();
   const isPremium = !!(user?.subscription?.status === 'active' && user?.subscription?.planId);
 
   const totalSeconds = audioDuration || track?.duration || 0;
@@ -384,7 +386,7 @@ export default function MusicControlPanel({
                     type="button"
                     onClick={skipBack}
                     className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.06] transition-all duration-150"
-                    title="Back 10s"
+                    title={t('player.back10s')}
                   >
                     <SkipBack className="w-3.5 h-3.5" fill="currentColor" />
                   </button>
@@ -403,7 +405,7 @@ export default function MusicControlPanel({
                     type="button"
                     onClick={skipForward}
                     className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.06] transition-all duration-150"
-                    title="Forward 10s"
+                    title={t('player.forward10s')}
                   >
                     <SkipForward className="w-3.5 h-3.5" fill="currentColor" />
                   </button>
@@ -418,7 +420,7 @@ export default function MusicControlPanel({
                   {isInfoOpen && (
                     <div className="absolute bottom-full right-0 mb-2 hidden lg:block" ref={infoPopoverRef}>
                       <div className="px-3 py-1.5 rounded-lg bg-dark-elevated border border-white/10 text-[10px] text-brand-text-secondary whitespace-nowrap shadow-xl shadow-black/40">
-                        Pre-escucha a baja calidad de audio. La descarga se realiza con el 100% de calidad.
+                        {t('player.previewInfo')}
                       </div>
                     </div>
                   )}
@@ -473,7 +475,7 @@ export default function MusicControlPanel({
                   type="button"
                   onClick={onClose}
                   className="w-8 h-8 rounded-full flex items-center justify-center text-white/50 bg-white/[0.04] hover:text-white hover:bg-white/10 transition-all duration-150"
-                  title="Close player"
+                  title={t('player.closePlayer')}
                 >
                   <X className="w-4 h-4" strokeWidth={2.5} />
                 </button>
@@ -481,9 +483,9 @@ export default function MusicControlPanel({
                 <button
                   type="button"
                   onClick={onSubscribe}
-                  className="ml-1 px-4 py-1.5 rounded-full bg-accent hover:bg-accent-hover transition-all duration-200 text-white text-[11px] font-bold shadow-lg shadow-accent/20 hover:shadow-accent/30 hover:scale-105 active:scale-95"
+                  className="ml-1 px-4 py-1.5 rounded-full bg-accent hover:bg-accent-hover transition-all duration-200 text-white text-[11px] font-bold shadow-lg shadow-accent/20 hover:shadow-accent/30 hover:scale-105 active:scale-95 whitespace-nowrap"
                 >
-                  Subscribe
+                  {t('player.subscribe')}
                 </button>
               </div>
             </div>
@@ -542,12 +544,12 @@ export default function MusicControlPanel({
       {/* Preview limit indicator for non-premium */}
       {!isPremium && previewLimitHit && !showPrompt && (
         <div className="fixed bottom-0 left-0 right-0 z-[45] flex items-center justify-center py-1.5 bg-gradient-to-r from-accent/90 to-purple-500/90 backdrop-blur-sm">
-          <span className="text-[11px] font-semibold text-white mr-3">Vista Previa Finalizada.</span>
+          <span className="text-[11px] font-semibold text-white mr-3">{t('player.previewEnded')}</span>
           <button
             onClick={() => setShowPrompt(true)}
             className="px-3 py-1 rounded-full bg-white text-black text-[11px] font-bold hover:bg-white/90 transition-all"
           >
-            Suscribete.
+            {t('player.subscribeNow')}
           </button>
         </div>
       )}

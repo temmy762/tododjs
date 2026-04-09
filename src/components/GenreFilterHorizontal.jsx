@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Music, Layers } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import API_URL from '../config/api';
 
 // activeCategory = category NAME (e.g. "Latin Box"), not slug
 export default function GenreFilterHorizontal({ activeCategory, onCategoryChange }) {
+  const { t } = useTranslation();
   const [categories, setCategories] = useState([]);
 
   useEffect(() => {
@@ -16,8 +18,8 @@ export default function GenreFilterHorizontal({ activeCategory, onCategoryChange
   return (
     <div className="relative px-4 md:px-10 pt-4 md:pt-5 pb-4 md:pb-5 bg-gradient-to-b from-dark-bg via-dark-bg/98 to-dark-bg/95">
       <div className="mb-3 md:mb-4">
-        <h2 className="text-lg md:text-xl font-bold text-white tracking-tight">Browse by Record Pool</h2>
-        <p className="text-[10px] md:text-xs text-brand-text-tertiary/80 mt-1">Access your favorite record pools and Premium packs</p>
+        <h2 className="text-lg md:text-xl font-bold text-white tracking-tight">{t('home.browseByRecordPool')}</h2>
+        <p className="text-[10px] md:text-xs text-brand-text-tertiary/80 mt-1">{t('home.recordPoolSubtitle')}</p>
       </div>
 
       <div className="relative">
@@ -33,7 +35,7 @@ export default function GenreFilterHorizontal({ activeCategory, onCategoryChange
               }`}
             >
               <Music size={16} className="flex-shrink-0" />
-              <span className="whitespace-nowrap">All</span>
+              <span className="whitespace-nowrap">{t('common.all')}</span>
             </button>
 
             {categories.map((cat) => {

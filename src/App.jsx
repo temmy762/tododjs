@@ -40,6 +40,7 @@ const API = API_URL;
 const PATH_TO_PAGE = {
   '/': 'home',
   '/library': 'library',
+  '/biblioteca': 'library',
   '/record-pool': 'album',
   '/mashup': 'mashup',
   '/profile': 'profile',

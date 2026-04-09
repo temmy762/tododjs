@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Play, Pause, Heart, Download, Clock } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import GenericCoverArt from './GenericCoverArt';
 
 const getGenreColor = (genre) => {
@@ -52,6 +53,8 @@ const getTonalityColor = (tonality) => {
 };
 
 export default function TrackListView({ tracks, onTrackInteraction, userFavorites = new Set() }) {
+  const { t, i18n } = useTranslation();
+  const dateLocale = i18n.language === 'es' ? 'es-ES' : 'en-US';
   const [playingTrackId, setPlayingTrackId] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
 
@@ -161,7 +164,7 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
                     </span>
                   )}
                   <span className="text-[9px] text-brand-text-tertiary/60">
-                    {new Date(track.dateAdded).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                    {new Date(track.dateAdded).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' })}
                   </span>
                   {track.pool && (
                     <>
@@ -196,12 +199,12 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
       <div className="hidden md:block overflow-x-auto scrollbar-hidden">
         <div className="min-w-[900px] grid grid-cols-[auto_1fr_auto_auto_auto_auto_auto_auto] gap-2 px-3 py-1.5 border-b border-white/5 text-[9px] font-semibold text-brand-text-tertiary uppercase tracking-wider sticky top-0 bg-dark-bg/95 backdrop-blur-md z-10">
           <div className="w-6 text-center">#</div>
-          <div>Title</div>
-          <div className="w-16 text-center">Genre</div>
-          <div className="w-16 text-center">Tonality</div>
+          <div>{t('tracks.title')}</div>
+          <div className="w-16 text-center">{t('common.genre')}</div>
+          <div className="w-16 text-center">{t('tracks.tonality')}</div>
           <div className="w-12 text-center">BPM</div>
-          <div className="w-24 text-center">Date Added</div>
-          <div className="w-20">Pool</div>
+          <div className="w-24 text-center">{t('sort.dateAdded')}</div>
+          <div className="w-20">{t('tracks.pool')}</div>
           <div className="w-24"></div>
         </div>
 
@@ -286,7 +289,7 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
               </div>
 
               <div className="w-24 flex items-center justify-center text-[10px] text-brand-text-tertiary">
-                {new Date(track.dateAdded).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                {new Date(track.dateAdded).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })}
               </div>
 
               <div className="w-20 flex items-center text-[9px] text-brand-text-tertiary/80 truncate">

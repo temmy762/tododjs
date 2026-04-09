@@ -1,4 +1,7 @@
+import { useTranslation } from 'react-i18next';
+
 export default function TonalityFilter({ activeTonality, onTonalityChange }) {
+  const { t } = useTranslation();
   const tonalitiesA = ['1A', '2A', '3A', '4A', '5A', '6A', '7A', '8A', '9A', '10A', '11A', '12A'];
   const tonalitiesB = ['1B', '2B', '3B', '4B', '5B', '6B', '7B', '8B', '9B', '10B', '11B', '12B'];
 
@@ -36,7 +39,7 @@ export default function TonalityFilter({ activeTonality, onTonalityChange }) {
   return (
     <div className="px-4 md:px-10 pt-2 pb-2 animate-in fade-in slide-in-from-top duration-500" style={{ animationDelay: '200ms' }}>
       <div className="rounded-2xl bg-white/[0.02] backdrop-blur-sm border border-white/10 shadow-lg shadow-black/10 p-4 sm:p-5">
-        <div className="text-sm font-semibold text-white/80 mb-3">Elige la tonalidad:</div>
+        <div className="text-sm font-semibold text-white/80 mb-3">{t('filter.chooseKey')}</div>
 
         <div className="overflow-x-auto scrollbar-hidden">
           <div className="flex gap-2 min-w-max">

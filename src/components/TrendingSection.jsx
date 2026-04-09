@@ -1,15 +1,18 @@
 import { useState, useEffect } from 'react';
 import { TrendingUp, Clock, Download, Play, Flame, Sparkles } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import GenericCoverArt from './GenericCoverArt';
 import API_URL from '../config/api';
 
-const PERIOD_OPTIONS = [
-  { value: '24h', label: '24h', labelFull: 'Last 24h' },
-  { value: '7d',  label: '7d',  labelFull: 'Last 7 Days' },
-  { value: '30d', label: '30d', labelFull: 'Last 30 Days' },
-];
+const PERIOD_VALUES = ['24h', '7d', '30d'];
 
 export default function TrendingSection({ onTrackInteraction, activeGenre = 'all' }) {
+  const { t } = useTranslation();
+  const PERIOD_OPTIONS = [
+    { value: '24h', label: t('home.period24h'), labelFull: t('home.last24h') },
+    { value: '7d',  label: t('home.period7d'),  labelFull: t('home.last7Days') },
+    { value: '30d', label: t('home.period30d'), labelFull: t('home.last30Days') },
+  ];
   const [trendingTracks, setTrendingTracks] = useState([]);
   const [recentTracks, setRecentTracks] = useState([]);
   const [activeTab, setActiveTab] = useState('trending');
@@ -90,7 +93,7 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
             }`}
           >
             <Flame size={15} className={activeTab === 'trending' ? 'text-white' : 'text-brand-text-tertiary'} />
-            <span>Most Downloaded</span>
+            <span>{t('home.mostDownloaded')}</span>
           </button>
           <button
             onClick={() => setActiveTab('recent')}
@@ -101,14 +104,14 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
             }`}
           >
             <Sparkles size={15} className={activeTab === 'recent' ? 'text-white' : 'text-brand-text-tertiary'} />
-            <span>Latest Uploads</span>
+            <span>{t('home.latestUploads')}</span>
           </button>
         </div>
 
         {/* Fallback notice */}
         {activeTab === 'trending' && isFallback && (
           <span className="text-[10px] text-brand-text-tertiary/60 bg-white/[0.04] border border-white/[0.06] px-2.5 py-1 rounded-full">
-            Based on all-time downloads
+            {t('home.basedOnAllTime')}
           </span>
         )}
 
@@ -167,9 +170,9 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
             )}
           </div>
           <p className="text-sm text-brand-text-tertiary font-medium">
-            {activeTab === 'trending' ? 'No trending tracks yet' : 'No recent uploads yet'}
+            {activeTab === 'trending' ? t('home.noTrendingYet') : t('home.noRecentUploads')}
           </p>
-          <p className="text-xs text-brand-text-tertiary/50 mt-1">Check back soon for updates</p>
+          <p className="text-xs text-brand-text-tertiary/50 mt-1">{t('home.checkBackSoon')}</p>
         </div>
       )}
     </div>

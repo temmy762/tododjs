@@ -19,7 +19,7 @@ export default function PaymentSuccessPage() {
     if (sessionId) {
       verifyPayment();
     } else {
-      setError('No session ID provided');
+      setError(t('payment.noSessionId'));
       setLoading(false);
     }
   }, [sessionId]);
@@ -75,8 +75,8 @@ export default function PaymentSuccessPage() {
       <div className="min-h-screen flex items-center justify-center bg-dark-bg">
         <div className="text-center">
           <Loader className="w-16 h-16 text-accent animate-spin mx-auto mb-4" />
-          <p className="text-white text-lg">Verifying your payment...</p>
-          <p className="text-brand-text-tertiary text-sm mt-2">Please wait</p>
+          <p className="text-white text-lg">{t('payment.verifying')}</p>
+          <p className="text-brand-text-tertiary text-sm mt-2">{t('payment.pleaseWait')}</p>
         </div>
       </div>
     );
@@ -89,13 +89,13 @@ export default function PaymentSuccessPage() {
           <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-red-500/10 border border-red-500/20 mb-6">
             <AlertCircle className="w-10 h-10 text-red-400" />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-3">Payment Verification Failed</h1>
+          <h1 className="text-2xl font-bold text-white mb-3">{t('payment.verificationFailed')}</h1>
           <p className="text-brand-text-tertiary mb-6">{error}</p>
           <button
             onClick={() => navigate('/')}
             className="w-full py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-all duration-150"
           >
-            Return to Home
+            {t('payment.returnToHome')}
           </button>
         </div>
       </div>
@@ -127,7 +127,7 @@ export default function PaymentSuccessPage() {
               </h3>
               <div className="space-y-3">
                 <div className="flex justify-between">
-                  <span className="text-brand-text-secondary">Plan:</span>
+                  <span className="text-brand-text-secondary">{t('payment.plan')}:</span>
                   <span className="text-white font-semibold">{subscriptionData.plan?.name}</span>
                 </div>
                 <div className="flex justify-between">
@@ -148,7 +148,7 @@ export default function PaymentSuccessPage() {
 
           {/* Thank You Message */}
           <p className="text-brand-text-tertiary mb-6">
-            {t('subscription.thankYou')}! You now have unlimited access to all tracks.
+            {t('subscription.thankYou')}! {t('payment.unlimitedAccess')}
           </p>
 
           {/* CTA Button */}
@@ -156,13 +156,13 @@ export default function PaymentSuccessPage() {
             onClick={() => navigate('/')}
             className="w-full py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-all duration-150 shadow-lg shadow-accent/30 hover:shadow-xl hover:shadow-accent/40 flex items-center justify-center gap-2"
           >
-            Start Downloading
+            {t('payment.startDownloading')}
             <ArrowRight className="w-5 h-5" />
           </button>
 
           {/* Auto Redirect Notice */}
           <p className="text-xs text-brand-text-tertiary mt-4">
-            Redirecting to home in 5 seconds...
+            {t('payment.redirecting')}
           </p>
         </div>
       </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Music, Upload, Trash2, Edit3, Save, X, Eye, EyeOff,
   Loader, CheckCircle, AlertCircle, FileAudio,
-  Image, Sparkles, FileUp, RotateCcw, Check, AlertTriangle
+  Image, Sparkles, FileUp, RotateCcw, Check, AlertTriangle, Tag, Plus, Pencil
 } from 'lucide-react';
 import GenericCoverArt from '../GenericCoverArt';
 import API_URL from '../../config/api';
@@ -11,7 +11,11 @@ const API = API_URL;
 
 export default function AdminMashups() {
   const [mashups, setMashups] = useState([]);
-  const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Mash Ups', pageDescription: '' });
+  const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Mash Ups', pageDescription: '', tags: ['Intro', 'Outro', 'Clean', 'Dirty', 'Extended', 'Original', 'Acapella'] });
+  const [newTag, setNewTag] = useState('');
+  const [editingTagIdx, setEditingTagIdx] = useState(null);
+  const [editingTagValue, setEditingTagValue] = useState('');
+  const [savingTags, setSavingTags] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploadState, setUploadState] = useState({
     status: 'idle', // idle, uploading, processing, success, error
@@ -73,10 +77,56 @@ export default function AdminMashups() {
     try {
       const res = await fetch(`${API}/mashups/settings`);
       const data = await res.json();
-      if (data.success) setSettings(data.data);
+      if (data.success) setSettings({ ...data.data, tags: data.data.tags || ['Intro', 'Outro', 'Clean', 'Dirty', 'Extended', 'Original', 'Acapella'] });
     } catch (err) {
       console.error('Error fetching mashup settings:', err);
     }
+  };
+
+  const handleSaveTags = async (updatedTags) => {
+    try {
+      setSavingTags(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API}/mashups/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ tags: updatedTags })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSettings(prev => ({ ...prev, tags: updatedTags }));
+        setMessage({ type: 'success', text: 'Tags saved!' });
+      } else {
+        setMessage({ type: 'error', text: data.message });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Failed to save tags' });
+    } finally {
+      setSavingTags(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+    }
+  };
+
+  const handleAddTag = () => {
+    const trimmed = newTag.trim();
+    if (!trimmed || (settings.tags || []).includes(trimmed)) return;
+    const updated = [...(settings.tags || []), trimmed];
+    setNewTag('');
+    handleSaveTags(updated);
+  };
+
+  const handleDeleteTag = (idx) => {
+    const updated = (settings.tags || []).filter((_, i) => i !== idx);
+    handleSaveTags(updated);
+  };
+
+  const handleRenameTag = (idx) => {
+    const trimmed = editingTagValue.trim();
+    if (!trimmed) return;
+    const updated = (settings.tags || []).map((t, i) => i === idx ? trimmed : t);
+    setEditingTagIdx(null);
+    setEditingTagValue('');
+    handleSaveTags(updated);
   };
 
   const handleSaveSettings = async () => {
@@ -380,6 +430,74 @@ export default function AdminMashups() {
           >
             <Save size={14} />
             {savingSettings ? 'Saving...' : 'Save Settings'}
+          </button>
+        </div>
+      </div>
+
+      {/* ── Tag Management ── */}
+      <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
+        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
+          <Tag className="w-4 h-4 text-accent" />
+          Version Tags
+          <span className="text-xs font-normal text-brand-text-tertiary ml-1">— filter chips shown in Live Mashup page</span>
+        </h3>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {(settings.tags || []).map((tag, idx) => (
+            <div key={idx} className="flex items-center gap-1 group">
+              {editingTagIdx === idx ? (
+                <div className="flex items-center gap-1">
+                  <input
+                    autoFocus
+                    value={editingTagValue}
+                    onChange={e => setEditingTagValue(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleRenameTag(idx); if (e.key === 'Escape') { setEditingTagIdx(null); setEditingTagValue(''); } }}
+                    className="px-2 py-1 bg-white/10 border border-accent rounded text-xs text-white focus:outline-none w-24"
+                  />
+                  <button onClick={() => handleRenameTag(idx)} className="p-1 text-accent hover:text-white transition-colors">
+                    <Check size={12} />
+                  </button>
+                  <button onClick={() => { setEditingTagIdx(null); setEditingTagValue(''); }} className="p-1 text-brand-text-tertiary hover:text-white transition-colors">
+                    <X size={12} />
+                  </button>
+                </div>
+              ) : (
+                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 text-xs font-medium text-white border border-white/10">
+                  {tag}
+                  <button
+                    onClick={() => { setEditingTagIdx(idx); setEditingTagValue(tag); }}
+                    className="ml-1 text-brand-text-tertiary hover:text-accent transition-colors"
+                    title="Rename"
+                  >
+                    <Pencil size={10} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteTag(idx)}
+                    className="ml-0.5 text-brand-text-tertiary hover:text-red-400 transition-colors"
+                    title="Delete"
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={newTag}
+            onChange={e => setNewTag(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAddTag(); }}
+            placeholder="New tag name..."
+            className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm w-48"
+          />
+          <button
+            onClick={handleAddTag}
+            disabled={!newTag.trim() || savingTags}
+            className="px-4 py-2 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white text-sm transition-colors disabled:opacity-50 flex items-center gap-2"
+          >
+            <Plus size={14} />
+            {savingTags ? 'Saving...' : 'Add Tag'}
           </button>
         </div>
       </div>

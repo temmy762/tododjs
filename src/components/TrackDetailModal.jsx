@@ -1,7 +1,9 @@
 import { X, Play, Download, Heart, Share2, Clock, Music2, Disc3, Calendar, TrendingUp } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 export default function TrackDetailModal({ isOpen, onClose, track, onAction }) {
+  const { t } = useTranslation();
   const [isLiked, setIsLiked] = useState(false);
 
   if (!isOpen || !track) return null;
@@ -49,7 +51,7 @@ export default function TrackDetailModal({ isOpen, onClose, track, onAction }) {
                 <div className="flex-1 pb-2">
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-accent/20 border border-accent/30 mb-3">
                     <TrendingUp className="w-3 h-3 text-accent" strokeWidth={2} />
-                    <span className="text-xs font-bold text-accent uppercase tracking-wider">Premium Track</span>
+                    <span className="text-xs font-bold text-accent uppercase tracking-wider">{t('trackDetail.premiumTrack')}</span>
                   </div>
                   
                   <h1 className="text-4xl font-bold text-white mb-2 leading-tight">
@@ -65,14 +67,14 @@ export default function TrackDetailModal({ isOpen, onClose, track, onAction }) {
                       className="flex items-center gap-2 px-6 py-2.5 bg-accent hover:bg-accent-hover rounded-lg text-white text-sm font-semibold transition-all duration-150 shadow-lg shadow-accent/30 hover:shadow-xl hover:shadow-accent/40"
                     >
                       <Play className="w-4 h-4" fill="white" strokeWidth={0} />
-                      Play
+                      {t('actions.play')}
                     </button>
                     <button 
                       onClick={() => handleAction('download')}
                       className="flex items-center gap-2 px-6 py-2.5 bg-white hover:bg-brand-text-secondary border border-brand-black/10 hover:border-brand-black/20 rounded-lg text-black text-sm font-semibold transition-all duration-150"
                     >
                       <Download className="w-4 h-4" strokeWidth={2} />
-                      Download
+                      {t('actions.download')}
                     </button>
                     <button 
                       onClick={() => setIsLiked(!isLiked)}
@@ -96,7 +98,7 @@ export default function TrackDetailModal({ isOpen, onClose, track, onAction }) {
           <div className="p-10">
             <div className="grid md:grid-cols-2 gap-8 mb-10">
               <div>
-                <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">Track Information</h3>
+                <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">{t('trackDetail.trackInfo')}</h3>
                 <div className="space-y-3">
                   <div className="flex items-center justify-between py-2 border-b border-white/5">
                     <div className="flex items-center gap-2 text-brand-text-tertiary">
@@ -108,21 +110,21 @@ export default function TrackDetailModal({ isOpen, onClose, track, onAction }) {
                   <div className="flex items-center justify-between py-2 border-b border-white/5">
                     <div className="flex items-center gap-2 text-brand-text-tertiary">
                       <Music2 className="w-4 h-4" strokeWidth={1.5} />
-                      <span className="text-sm">Key</span>
+                      <span className="text-sm">{t('tracks.tonality')}</span>
                     </div>
                     <span className="text-sm font-semibold text-white">A Minor</span>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-white/5">
                     <div className="flex items-center gap-2 text-brand-text-tertiary">
                       <Disc3 className="w-4 h-4" strokeWidth={1.5} />
-                      <span className="text-sm">Genre</span>
+                      <span className="text-sm">{t('common.genre')}</span>
                     </div>
                     <span className="text-sm font-semibold text-white">House</span>
                   </div>
                   <div className="flex items-center justify-between py-2 border-b border-white/5">
                     <div className="flex items-center gap-2 text-brand-text-tertiary">
                       <Calendar className="w-4 h-4" strokeWidth={1.5} />
-                      <span className="text-sm">Released</span>
+                      <span className="text-sm">{t('trackDetail.released')}</span>
                     </div>
                     <span className="text-sm font-semibold text-white">
                       {new Date(track.dateAdded).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
@@ -132,7 +134,7 @@ export default function TrackDetailModal({ isOpen, onClose, track, onAction }) {
               </div>
 
               <div>
-                <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">Tags & Mood</h3>
+                <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">{t('trackDetail.tagsAndMood')}</h3>
                 <div className="flex flex-wrap gap-2">
                   {['Energetic', 'Uplifting', 'Dance', 'Night', 'Club', 'Peak Time'].map((tag) => (
                     <span 
@@ -147,7 +149,7 @@ export default function TrackDetailModal({ isOpen, onClose, track, onAction }) {
             </div>
 
             <div className="mb-10">
-              <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">Waveform Preview</h3>
+              <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">{t('trackDetail.waveformPreview')}</h3>
               <div className="h-24 bg-white/5 rounded-lg border border-white/10 flex items-end justify-center gap-0.5 p-4 overflow-hidden">
                 {Array.from({ length: 100 }).map((_, i) => (
                   <div 
@@ -163,7 +165,7 @@ export default function TrackDetailModal({ isOpen, onClose, track, onAction }) {
             </div>
 
             <div>
-              <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">Similar Tracks</h3>
+              <h3 className="text-sm font-bold text-brand-text-tertiary uppercase tracking-wider mb-4">{t('trackDetail.similarTracks')}</h3>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {relatedTracks.map((relTrack) => (
                   <div 

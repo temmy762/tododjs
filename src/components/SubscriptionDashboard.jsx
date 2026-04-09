@@ -29,7 +29,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
       }
     } catch (error) {
       console.error('Error fetching subscription:', error);
-      setError('Failed to load subscription data');
+      setError(t('subscriptionMgmt.failedToLoad'));
     } finally {
       setLoading(false);
     }
@@ -51,7 +51,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
   };
 
   const handleCancelSubscription = async () => {
-    if (!confirm('Are you sure you want to cancel your subscription? You will retain access until the end of your billing period.')) {
+    if (!confirm(t('subscriptionMgmt.cancelConfirm'))) {
       return;
     }
 
@@ -70,12 +70,12 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
       }
     } catch (error) {
       console.error('Error cancelling subscription:', error);
-      alert('Failed to cancel subscription');
+      alert(t('subscriptionMgmt.failedToCancel'));
     }
   };
 
   const handleRemoveDevice = async (deviceId) => {
-    if (!confirm('Remove this device from your subscription?')) {
+    if (!confirm(t('subscriptionMgmt.removeDeviceConfirm'))) {
       return;
     }
 
@@ -93,7 +93,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
       }
     } catch (error) {
       console.error('Error removing device:', error);
-      alert('Failed to remove device');
+      alert(t('subscriptionMgmt.failedToCancel'));
     }
   };
 
@@ -113,7 +113,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
       });
       const data = await res.json();
       if (data.success) {
-        alert('Subscription shared successfully!');
+        alert(t('subscriptionMgmt.sharedSuccess'));
         setShareEmail('');
         fetchSubscriptionData();
       } else {
@@ -121,7 +121,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
       }
     } catch (error) {
       console.error('Error sharing subscription:', error);
-      alert('Failed to share subscription');
+      alert(t('subscriptionMgmt.failedToShare'));
     } finally {
       setShareLoading(false);
     }
@@ -150,8 +150,8 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
     return (
       <div className="text-center py-12">
         <Crown className="w-16 h-16 text-brand-text-tertiary mx-auto mb-4" />
-        <h3 className="text-xl font-bold text-white mb-2">No Active Subscription</h3>
-        <p className="text-brand-text-tertiary mb-6">Subscribe to unlock unlimited downloads</p>
+        <h3 className="text-xl font-bold text-white mb-2">{t('subscriptionMgmt.noActiveSubscription')}</h3>
+        <p className="text-brand-text-tertiary mb-6">{t('subscriptionMgmt.subscribeToUnlock')}</p>
         <button
           onClick={() => window.location.href = '/pricing'}
           className="px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-all duration-150"
@@ -207,7 +207,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
               <CreditCard className="w-5 h-5 text-accent" />
               <div>
                 <p className="text-sm text-brand-text-tertiary">{t('subscription.daysRemaining')}</p>
-                <p className="text-lg font-semibold text-white">{daysRemaining} days</p>
+                <p className="text-lg font-semibold text-white">{daysRemaining} {t('admin.days')}</p>
               </div>
             </div>
           </div>
@@ -234,7 +234,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
             {t('subscription.devices')}
           </h3>
           <p className="text-sm text-brand-text-tertiary mb-4">
-            {devices.length} / {plan.features.maxDevices} devices registered
+            {t('subscriptionMgmt.devicesRegistered', { current: devices.length, max: plan.features.maxDevices })}
           </p>
 
           {devices.length > 0 ? (
@@ -249,7 +249,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
                     <div>
                       <p className="text-sm font-semibold text-white">{device.deviceInfo}</p>
                       <p className="text-xs text-brand-text-tertiary">
-                        Last active: {new Date(device.lastActive).toLocaleDateString()}
+                        {t('subscriptionMgmt.lastActive')} {new Date(device.lastActive).toLocaleDateString()}
                       </p>
                     </div>
                   </div>
@@ -263,7 +263,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-brand-text-tertiary">No devices registered yet</p>
+            <p className="text-sm text-brand-text-tertiary">{t('subscriptionMgmt.noDevicesYet')}</p>
           )}
         </div>
       )}

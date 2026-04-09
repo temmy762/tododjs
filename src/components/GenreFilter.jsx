@@ -1,5 +1,7 @@
-const genres = [
-  { id: 'all', name: 'All Genres', icon: '🎵' },
+import { useTranslation } from 'react-i18next';
+
+const genreList = [
+  { id: 'all', icon: '🎵' },
   { id: 'house', name: 'House', icon: '🏠' },
   { id: 'techno', name: 'Techno', icon: '⚡' },
   { id: 'hip-hop', name: 'Hip-Hop', icon: '🎤' },
@@ -10,6 +12,11 @@ const genres = [
 ];
 
 export default function GenreFilter({ activeGenre, onGenreChange }) {
+  const { t } = useTranslation();
+  const genres = genreList.map(g => ({
+    ...g,
+    name: g.id === 'all' ? t('genreFilter.allGenres') : g.name,
+  }));
   return (
     <div className="mb-10 px-10 animate-in fade-in slide-in-from-top duration-500" style={{ animationDelay: '200ms' }}>
       <div className="flex items-center justify-center gap-2.5 overflow-x-auto scrollbar-hidden pb-2">

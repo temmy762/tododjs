@@ -19,16 +19,6 @@ const CAMELOT_KEYS = [
   '1B','2B','3B','4B','5B','6B','7B','8B','9B','10B','11B','12B',
 ];
 
-// Common DJ version-type tags and the title keywords that match them
-const VERSION_TAGS = [
-  { label: 'Intro',    regex: /\bintro\b/i },
-  { label: 'Outro',    regex: /\boutro\b/i },
-  { label: 'Clean',    regex: /\bclean\b/i },
-  { label: 'Dirty',    regex: /\bdirty\b/i },
-  { label: 'Extended', regex: /\bextended\b/i },
-  { label: 'Original', regex: /\boriginal\b/i },
-  { label: 'Acapella', regex: /\bacapella\b/i },
-];
 
 const SORT_MAP = {
   dateAdded: '-createdAt',
@@ -62,7 +52,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
   // ── data state ──────────────────────────────────────────────
   const [tracks, setTracks] = useState([]);
   const [genres, setGenres] = useState([]);
-  const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Live Mashups', pageDescription: '' });
+  const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Live Mashups', pageDescription: '', tags: ['Intro', 'Outro', 'Clean', 'Dirty', 'Extended', 'Original', 'Acapella'] });
   const [loading, setLoading] = useState(true);
   const [totalTracks, setTotalTracks] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -155,13 +145,11 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
     return nums;
   };
 
-  // Client-side tag filter
+  // Client-side tag filter (dynamic tags from settings)
+  const activeTags = settings.tags || [];
   const displayedTracks = filterTag === 'all'
     ? tracks
-    : tracks.filter(t => {
-        const tagDef = VERSION_TAGS.find(v => v.label === filterTag);
-        return tagDef ? tagDef.regex.test(t.title) : true;
-      });
+    : tracks.filter(t => new RegExp(`\\b${filterTag}\\b`, 'i').test(t.title));
 
   const hasActiveFilters = filterGenre !== 'all' || filterTonality !== 'all' || filterTag !== 'all';
 
@@ -190,7 +178,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
           <div>
             <h1 className="text-xl md:text-3xl font-bold text-white">{settings.pageTitle || t('admin.mashups')}</h1>
             <p className="text-[10px] md:text-sm text-brand-text-tertiary mt-1">
-              {totalTracks.toLocaleString()} {t('admin.mashups').toLowerCase()} &bull; Page {currentPage} of {totalPages}
+              {totalTracks.toLocaleString()} {t('admin.mashups').toLowerCase()} &bull; {t('common.page')} {currentPage} {t('common.of')} {totalPages}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -199,7 +187,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
                 onClick={() => { setFilterGenre('all'); setFilterTonality('all'); setFilterTag('all'); setCurrentPage(1); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30 text-xs font-semibold transition-all"
               >
-                <X className="w-3 h-3" /> Clear filters
+                <X className="w-3 h-3" /> {t('mashupPage.clearFilters')}
               </button>
             )}
             <button
@@ -226,7 +214,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
               onChange={e => handleGenreChange(e.target.value)}
               className="bg-dark-elevated text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80"
             >
-              <option value="all">All Genres</option>
+              <option value="all">{t('mashupPage.allGenres')}</option>
               {genres.map(g => <option key={g} value={g}>{g}</option>)}
             </select>
           </div>
@@ -237,10 +225,10 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
               onChange={e => handleSortChange(e.target.value)}
               className="bg-dark-elevated text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80"
             >
-              <option value="dateAdded">Date Added (Newest)</option>
-              <option value="title">Title (A-Z)</option>
-              <option value="artist">Artist (A-Z)</option>
-              <option value="bpm">BPM (High to Low)</option>
+              <option value="dateAdded">{t('sort.dateAddedNewest')}</option>
+              <option value="title">{t('sort.titleAZ')}</option>
+              <option value="artist">{t('sort.artistAZ')}</option>
+              <option value="bpm">{t('sort.bpmHighLow')}</option>
             </select>
           </div>
         </div>
@@ -249,16 +237,16 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
       {/* Version Tag Chips */}
       <div className="px-4 md:px-10 pt-3 pb-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-brand-text-tertiary font-medium flex-shrink-0">Tags:</span>
+          <span className="text-xs text-brand-text-tertiary font-medium flex-shrink-0">{t('mashupPage.tags')}</span>
           <button
             onClick={() => setFilterTag('all')}
             className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
               filterTag === 'all' ? 'bg-accent text-white' : 'bg-white/10 text-brand-text-tertiary hover:text-white'
             }`}
           >
-            All
+            {t('mashupPage.allTags')}
           </button>
-          {VERSION_TAGS.map(({ label }) => (
+          {activeTags.map((label) => (
             <button
               key={label}
               onClick={() => setFilterTag(prev => prev === label ? 'all' : label)}
@@ -276,13 +264,13 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
       <div className="px-4 md:px-10 pt-4 pb-2">
         <div className="rounded-2xl bg-white/[0.02] backdrop-blur-sm border border-white/10 shadow-lg shadow-black/10 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-semibold text-white/80">Filter by key:</span>
+            <span className="text-sm font-semibold text-white/80">{t('mashupPage.filterByKey')}</span>
             {filterTonality !== 'all' && (
               <button
                 onClick={() => { setFilterTonality('all'); setCurrentPage(1); }}
                 className="flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 transition-all"
               >
-                <X className="w-3 h-3" /> Clear key
+                <X className="w-3 h-3" /> {t('mashupPage.clearKey')}
               </button>
             )}
           </div>
@@ -319,9 +307,9 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
       ) : tracks.length === 0 ? (
         <div className="text-center py-20">
           <Music className="w-12 h-12 text-brand-text-tertiary mx-auto mb-4" />
-          <p className="text-lg text-brand-text-tertiary font-medium">No mashups found</p>
+          <p className="text-lg text-brand-text-tertiary font-medium">{t('mashupPage.notFound')}</p>
           <p className="text-sm text-brand-text-tertiary/50 mt-1">
-            {hasActiveFilters ? 'Try adjusting your filters' : 'Check back soon for fresh drops'}
+            {hasActiveFilters ? t('mashupPage.tryFilters') : t('mashupPage.checkBack')}
           </p>
         </div>
       ) : viewMode === 'list' ? (
@@ -342,7 +330,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
         <div className="px-4 md:px-10 py-6 md:py-8">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-6 max-w-6xl mx-auto">
             <div className="flex items-center gap-3 bg-white/[0.02] backdrop-blur-sm border border-white/10 rounded-xl px-4 py-2.5 shadow-lg">
-              <span className="text-sm font-medium text-brand-text-secondary whitespace-nowrap">Per page:</span>
+              <span className="text-sm font-medium text-brand-text-secondary whitespace-nowrap">{t('mashupPage.perPage')}</span>
               <select
                 value={tracksPerPage}
                 onChange={e => handleTracksPerPageChange(e.target.value)}
@@ -359,7 +347,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
                 disabled={currentPage === 1}
                 className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 ${currentPage === 1 ? 'bg-dark-elevated/20 text-brand-text-tertiary/40 cursor-not-allowed' : 'bg-white/[0.05] text-white hover:bg-white/[0.08] hover:scale-105 border border-white/10 shadow-lg'}`}
               >
-                Previous
+                {t('pagination.previous')}
               </button>
               <div className="flex items-center gap-2 bg-white/[0.02] backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2 shadow-lg">
                 {renderPageNumbers().map((num, i) =>
@@ -381,7 +369,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
                 disabled={currentPage === totalPages}
                 className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 ${currentPage === totalPages ? 'bg-dark-elevated/20 text-brand-text-tertiary/40 cursor-not-allowed' : 'bg-white/[0.05] text-white hover:bg-white/[0.08] hover:scale-105 border border-white/10 shadow-lg'}`}
               >
-                Next
+                {t('pagination.next')}
               </button>
             </div>
           </div>

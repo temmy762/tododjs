@@ -32,10 +32,10 @@ export default function ForgotPasswordModal({ isOpen, onClose }) {
           onClose();
         }, 3000);
       } else {
-        setError(data.message || 'Failed to send reset email');
+        setError(data.message || t('auth.failedResetEmail'));
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError(t('payment.genericError'));
     } finally {
       setLoading(false);
     }

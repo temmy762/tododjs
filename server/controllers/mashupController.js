@@ -118,7 +118,7 @@ export const uploadMashupBanner = async (req, res) => {
 // @access  Private/Admin
 export const updateMashupSettings = async (req, res) => {
   try {
-    const { videoUrl, pageTitle, pageDescription, bannerImageUrl } = req.body;
+    const { videoUrl, pageTitle, pageDescription, bannerImageUrl, tags } = req.body;
     let settings = await MashupSettings.findOne();
     if (!settings) {
       settings = await MashupSettings.create({});
@@ -128,6 +128,7 @@ export const updateMashupSettings = async (req, res) => {
     if (bannerImageUrl !== undefined) settings.bannerImageUrl = bannerImageUrl;
     if (pageTitle !== undefined) settings.pageTitle = pageTitle;
     if (pageDescription !== undefined) settings.pageDescription = pageDescription;
+    if (tags !== undefined && Array.isArray(tags)) settings.tags = tags;
 
     await settings.save();
     res.status(200).json({ success: true, data: settings });

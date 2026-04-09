@@ -4,15 +4,16 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 
 export default function Sidebar({ onAdminClick, user, onLoginClick, onLogout, onProfileClick }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
   
   const isAdmin = user?.role === 'admin';
+  const libraryPath = i18n.language === 'es' ? '/biblioteca' : '/library';
 
   const navItems = [
     { path: '/', label: t('nav.home'), icon: Home },
-    { path: '/library', label: t('nav.library'), icon: Library },
+    { path: libraryPath, label: t('nav.library'), icon: Library },
     { path: '/record-pool', label: t('nav.recordPool'), icon: Disc },
     { path: '/mashup', label: t('nav.liveMashup'), icon: Layers },
     ...(!isAdmin ? [{ path: '/pricing', label: t('subscription.pricing'), icon: CreditCard }] : [])
@@ -71,7 +72,7 @@ export default function Sidebar({ onAdminClick, user, onLoginClick, onLogout, on
             <button
               onClick={() => onAdminClick?.()}
               className="group relative flex flex-col items-center gap-1.5 transition-all duration-300 hover:scale-105"
-              title="Admin Dashboard"
+              title={t('nav.admin')}
             >
               <div className="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 bg-gradient-to-br from-red-500 to-pink-500 hover:shadow-lg hover:shadow-red-500/30">
                 <Shield className="w-5 h-5 text-white" strokeWidth={2} />
@@ -107,7 +108,7 @@ export default function Sidebar({ onAdminClick, user, onLoginClick, onLogout, on
             <button
               onClick={onLoginClick}
               className="group relative flex flex-col items-center gap-1.5 transition-all duration-300 hover:scale-105"
-              title="Login"
+              title={t('auth.login')}
             >
               <div className="w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 bg-dark-elevated/50 hover:bg-accent hover:shadow-lg hover:shadow-accent/30">
                 <LogIn className="w-5 h-5 text-brand-text-tertiary group-hover:text-white transition-colors" strokeWidth={2} />

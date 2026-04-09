@@ -16,16 +16,16 @@ export default function PaymentCancelPage() {
 
         {/* Cancel Message */}
         <h1 className="text-3xl font-bold text-white mb-3">
-          Payment Cancelled
+          {t('payment.cancelled')}
         </h1>
         <p className="text-lg text-brand-text-tertiary mb-6">
-          Your payment was cancelled. No charges were made to your account.
+          {t('payment.cancelledDesc')}
         </p>
 
         {/* Info */}
         <div className="bg-dark-elevated rounded-lg p-6 mb-6 text-left border border-white/5">
           <p className="text-sm text-brand-text-secondary">
-            If you encountered any issues during checkout or have questions about our plans, please don't hesitate to contact our support team via WhatsApp.
+            {t('payment.cancelledInfo')}
           </p>
         </div>
 
@@ -36,7 +36,7 @@ export default function PaymentCancelPage() {
             className="w-full py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-all duration-150 shadow-lg shadow-accent/30 hover:shadow-xl hover:shadow-accent/40 flex items-center justify-center gap-2"
           >
             <CreditCard className="w-5 h-5" />
-            Try Again
+            {t('payment.tryAgain')}
           </button>
           <button
             onClick={() => navigate('/')}
