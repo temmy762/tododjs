@@ -271,7 +271,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
               {filteredAllItems.length === 0 ? (
                 <EmptyState icon={Layers2} text={t('recordPool.noCollectionsSearch')} />
               ) : viewMode === 'grid' ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
                   {filteredAllItems.map((item, i) => (
                     <CollectionCard key={item._id} item={item} index={i} onClick={() => openPool(item)} />
                   ))}
@@ -390,17 +390,17 @@ function CollectionCard({ item, index, onClick }) {
             <span className="bg-black/50 backdrop-blur-sm text-white text-[10px] font-bold px-2 py-1 rounded-full">{subtitle}</span>
           </div>
         )}
-        <div className="absolute bottom-0 left-0 right-0 p-4">
-          <h3 className="text-lg font-bold text-white mb-0.5 drop-shadow-lg line-clamp-2">{item.name}</h3>
-          {packCount && <p className="text-white/60 text-xs">{packCount}</p>}
+        <div className="absolute bottom-0 left-0 right-0 p-2.5 sm:p-4">
+          <h3 className="text-sm sm:text-lg font-bold text-white mb-0.5 drop-shadow-lg line-clamp-2">{item.name}</h3>
+          {packCount && <p className="text-white/60 text-[10px] sm:text-xs">{packCount}</p>}
         </div>
       </div>
-      <div className="px-4 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-4 text-sm">
-          <span className="text-brand-text-tertiary flex items-center gap-1">
+      <div className="px-2.5 sm:px-4 py-2 sm:py-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 sm:gap-4 text-[10px] sm:text-sm min-w-0">
+          <span className="text-brand-text-tertiary flex items-center gap-1 whitespace-nowrap">
             <Disc size={12} className="text-accent" />{item.totalAlbums || 0} {t('recordPool.albums')}
           </span>
-          <span className="text-brand-text-tertiary flex items-center gap-1">
+          <span className="text-brand-text-tertiary flex items-center gap-1 whitespace-nowrap">
             <Music size={12} className="text-accent" />{item.totalTracks || 0} {t('recordPool.tracks')}
           </span>
         </div>

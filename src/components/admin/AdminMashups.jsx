@@ -8,14 +8,15 @@ import GenericCoverArt from '../GenericCoverArt';
 import API_URL from '../../config/api';
 
 const API = API_URL;
+const DEFAULT_MASHUP_CATEGORIES = ['Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap', 'House', 'EDM', 'Afro House', 'Remember', 'International'];
 
 export default function AdminMashups() {
   const [mashups, setMashups] = useState([]);
-  const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Mash Ups', pageDescription: '', tags: ['Intro', 'Outro', 'Clean', 'Dirty', 'Extended', 'Original', 'Acapella'] });
-  const [newTag, setNewTag] = useState('');
-  const [editingTagIdx, setEditingTagIdx] = useState(null);
-  const [editingTagValue, setEditingTagValue] = useState('');
-  const [savingTags, setSavingTags] = useState(false);
+  const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Mash Ups', pageDescription: '', categories: DEFAULT_MASHUP_CATEGORIES });
+  const [newCategory, setNewCategory] = useState('');
+  const [editingCategoryIdx, setEditingCategoryIdx] = useState(null);
+  const [editingCategoryValue, setEditingCategoryValue] = useState('');
+  const [savingCategories, setSavingCategories] = useState(false);
   const [loading, setLoading] = useState(true);
   const [uploadState, setUploadState] = useState({
     status: 'idle', // idle, uploading, processing, success, error
@@ -39,6 +40,7 @@ export default function AdminMashups() {
   const [uploadForm, setUploadForm] = useState({
     title: '',
     artist: '',
+    category: 'Reggaeton',
     genre: 'Mashup',
     bpm: '',
     tonality: '',
@@ -77,56 +79,56 @@ export default function AdminMashups() {
     try {
       const res = await fetch(`${API}/mashups/settings`);
       const data = await res.json();
-      if (data.success) setSettings({ ...data.data, tags: data.data.tags || ['Intro', 'Outro', 'Clean', 'Dirty', 'Extended', 'Original', 'Acapella'] });
+      if (data.success) setSettings({ ...data.data, categories: data.data.categories || DEFAULT_MASHUP_CATEGORIES });
     } catch (err) {
       console.error('Error fetching mashup settings:', err);
     }
   };
 
-  const handleSaveTags = async (updatedTags) => {
+  const handleSaveCategories = async (updatedCategories) => {
     try {
-      setSavingTags(true);
+      setSavingCategories(true);
       const token = localStorage.getItem('token');
       const res = await fetch(`${API}/mashups/settings`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ tags: updatedTags })
+        body: JSON.stringify({ categories: updatedCategories })
       });
       const data = await res.json();
       if (data.success) {
-        setSettings(prev => ({ ...prev, tags: updatedTags }));
-        setMessage({ type: 'success', text: 'Tags saved!' });
+        setSettings(prev => ({ ...prev, categories: updatedCategories }));
+        setMessage({ type: 'success', text: 'Categories saved!' });
       } else {
         setMessage({ type: 'error', text: data.message });
       }
     } catch {
-      setMessage({ type: 'error', text: 'Failed to save tags' });
+      setMessage({ type: 'error', text: 'Failed to save categories' });
     } finally {
-      setSavingTags(false);
+      setSavingCategories(false);
       setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     }
   };
 
-  const handleAddTag = () => {
-    const trimmed = newTag.trim();
-    if (!trimmed || (settings.tags || []).includes(trimmed)) return;
-    const updated = [...(settings.tags || []), trimmed];
-    setNewTag('');
-    handleSaveTags(updated);
+  const handleAddCategory = () => {
+    const trimmed = newCategory.trim();
+    if (!trimmed || (settings.categories || []).includes(trimmed)) return;
+    const updated = [...(settings.categories || []), trimmed];
+    setNewCategory('');
+    handleSaveCategories(updated);
   };
 
-  const handleDeleteTag = (idx) => {
-    const updated = (settings.tags || []).filter((_, i) => i !== idx);
-    handleSaveTags(updated);
+  const handleDeleteCategory = (idx) => {
+    const updated = (settings.categories || []).filter((_, i) => i !== idx);
+    handleSaveCategories(updated);
   };
 
-  const handleRenameTag = (idx) => {
-    const trimmed = editingTagValue.trim();
+  const handleRenameCategory = (idx) => {
+    const trimmed = editingCategoryValue.trim();
     if (!trimmed) return;
-    const updated = (settings.tags || []).map((t, i) => i === idx ? trimmed : t);
-    setEditingTagIdx(null);
-    setEditingTagValue('');
-    handleSaveTags(updated);
+    const updated = (settings.categories || []).map((category, i) => i === idx ? trimmed : category);
+    setEditingCategoryIdx(null);
+    setEditingCategoryValue('');
+    handleSaveCategories(updated);
   };
 
   const handleSaveSettings = async () => {
@@ -154,7 +156,7 @@ export default function AdminMashups() {
 
   const resetUpload = () => {
     setUploadState({ status: 'idle', progress: 0, step: '', extractedData: null, error: null });
-    setUploadForm({ title: '', artist: '', genre: 'Mashup', bpm: '', tonality: '' });
+    setUploadForm({ title: '', artist: '', category: 'Reggaeton', genre: 'Mashup', bpm: '', tonality: '' });
     setAudioFiles([]);
     setCoverFile(null);
     setBatchProgress({ current: 0, total: 0, completed: [], failed: [] });
@@ -193,6 +195,7 @@ export default function AdminMashups() {
         if (coverFile) formData.append('coverArt', coverFile);
         formData.append('title', uploadForm.title || file.name.replace(/\.[^/.]+$/, ''));
         formData.append('artist', uploadForm.artist || 'Unknown Artist');
+        formData.append('category', uploadForm.category || 'Reggaeton');
         formData.append('genre', uploadForm.genre);
         if (uploadForm.bpm) formData.append('bpm', uploadForm.bpm);
         if (uploadForm.tonality) formData.append('tonality', uploadForm.tonality);
@@ -293,6 +296,7 @@ export default function AdminMashups() {
     setEditForm({
       title: mashup.title,
       artist: mashup.artist,
+      category: mashup.category || 'Reggaeton',
       genre: mashup.genre,
       bpm: mashup.bpm || '',
       tonality: mashup.tonality || ''
@@ -438,40 +442,40 @@ export default function AdminMashups() {
       <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
         <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
           <Tag className="w-4 h-4 text-accent" />
-          Version Tags
-          <span className="text-xs font-normal text-brand-text-tertiary ml-1">— filter chips shown in Live Mashup page</span>
+          Mashup Categories
+          <span className="text-xs font-normal text-brand-text-tertiary ml-1">— category chips shown in Live Mashup page</span>
         </h3>
         <div className="flex flex-wrap gap-2 mb-4">
-          {(settings.tags || []).map((tag, idx) => (
+          {(settings.categories || []).map((category, idx) => (
             <div key={idx} className="flex items-center gap-1 group">
-              {editingTagIdx === idx ? (
+              {editingCategoryIdx === idx ? (
                 <div className="flex items-center gap-1">
                   <input
                     autoFocus
-                    value={editingTagValue}
-                    onChange={e => setEditingTagValue(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleRenameTag(idx); if (e.key === 'Escape') { setEditingTagIdx(null); setEditingTagValue(''); } }}
+                    value={editingCategoryValue}
+                    onChange={e => setEditingCategoryValue(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') handleRenameCategory(idx); if (e.key === 'Escape') { setEditingCategoryIdx(null); setEditingCategoryValue(''); } }}
                     className="px-2 py-1 bg-white/10 border border-accent rounded text-xs text-white focus:outline-none w-24"
                   />
-                  <button onClick={() => handleRenameTag(idx)} className="p-1 text-accent hover:text-white transition-colors">
+                  <button onClick={() => handleRenameCategory(idx)} className="p-1 text-accent hover:text-white transition-colors">
                     <Check size={12} />
                   </button>
-                  <button onClick={() => { setEditingTagIdx(null); setEditingTagValue(''); }} className="p-1 text-brand-text-tertiary hover:text-white transition-colors">
+                  <button onClick={() => { setEditingCategoryIdx(null); setEditingCategoryValue(''); }} className="p-1 text-brand-text-tertiary hover:text-white transition-colors">
                     <X size={12} />
                   </button>
                 </div>
               ) : (
                 <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 text-xs font-medium text-white border border-white/10">
-                  {tag}
+                  {category}
                   <button
-                    onClick={() => { setEditingTagIdx(idx); setEditingTagValue(tag); }}
+                    onClick={() => { setEditingCategoryIdx(idx); setEditingCategoryValue(category); }}
                     className="ml-1 text-brand-text-tertiary hover:text-accent transition-colors"
                     title="Rename"
                   >
                     <Pencil size={10} />
                   </button>
                   <button
-                    onClick={() => handleDeleteTag(idx)}
+                    onClick={() => handleDeleteCategory(idx)}
                     className="ml-0.5 text-brand-text-tertiary hover:text-red-400 transition-colors"
                     title="Delete"
                   >
@@ -485,19 +489,19 @@ export default function AdminMashups() {
         <div className="flex items-center gap-2">
           <input
             type="text"
-            value={newTag}
-            onChange={e => setNewTag(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleAddTag(); }}
-            placeholder="New tag name..."
+            value={newCategory}
+            onChange={e => setNewCategory(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') handleAddCategory(); }}
+            placeholder="New category name..."
             className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm w-48"
           />
           <button
-            onClick={handleAddTag}
-            disabled={!newTag.trim() || savingTags}
+            onClick={handleAddCategory}
+            disabled={!newCategory.trim() || savingCategories}
             className="px-4 py-2 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white text-sm transition-colors disabled:opacity-50 flex items-center gap-2"
           >
             <Plus size={14} />
-            {savingTags ? 'Saving...' : 'Add Tag'}
+            {savingCategories ? 'Saving...' : 'Add Category'}
           </button>
         </div>
       </div>
@@ -780,7 +784,19 @@ export default function AdminMashups() {
                   <span>Advanced Options</span>
                   <span className="group-open:rotate-180 transition-transform">▼</span>
                 </summary>
-                <div className="mt-3 grid grid-cols-3 gap-3">
+                <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <label className="block text-[10px] text-brand-text-tertiary mb-1">Category</label>
+                    <select
+                      value={uploadForm.category}
+                      onChange={(e) => setUploadForm({ ...uploadForm, category: e.target.value })}
+                      className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs"
+                    >
+                      {(settings.categories || DEFAULT_MASHUP_CATEGORIES).map((category) => (
+                        <option key={category} value={category} className="bg-dark-bg text-white">{category}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
                     <label className="block text-[10px] text-brand-text-tertiary mb-1">Genre</label>
                     <input
@@ -926,7 +942,7 @@ export default function AdminMashups() {
                 </div>
 
                 {editingId === mashup._id ? (
-                  <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-2">
+                  <div className="flex-1 grid grid-cols-2 md:grid-cols-5 gap-2">
                     <input
                       value={editForm.title}
                       onChange={(e) => setEditForm({ ...editForm, title: e.target.value })}
@@ -939,6 +955,15 @@ export default function AdminMashups() {
                       className="px-2 py-1.5 bg-white/5 border border-white/10 rounded text-xs text-white"
                       placeholder="Artist"
                     />
+                    <select
+                      value={editForm.category}
+                      onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                      className="px-2 py-1.5 bg-white/5 border border-white/10 rounded text-xs text-white"
+                    >
+                      {(settings.categories || DEFAULT_MASHUP_CATEGORIES).map((category) => (
+                        <option key={category} value={category} className="bg-dark-bg text-white">{category}</option>
+                      ))}
+                    </select>
                     <input
                       value={editForm.bpm}
                       onChange={(e) => setEditForm({ ...editForm, bpm: e.target.value })}
@@ -957,6 +982,9 @@ export default function AdminMashups() {
                     <p className="text-sm font-semibold text-white truncate">{mashup.title}</p>
                     <p className="text-xs text-brand-text-tertiary truncate">{mashup.artist}</p>
                     <div className="flex items-center gap-2 mt-1">
+                      {mashup.category && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold text-white bg-white/10">{mashup.category}</span>
+                      )}
                       {mashup.genre && (
                         <span className="px-1.5 py-0.5 rounded text-[9px] font-bold text-accent bg-accent/10">{mashup.genre}</span>
                       )}

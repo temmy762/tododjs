@@ -16,11 +16,19 @@ export const getMashups = async (req, res) => {
       limit = 30,
       page = 1,
       genre,
+      category,
       tonality,
     } = req.query;
 
     const query = { isPublished: true };
     if (genre && genre !== 'all') query.genre = genre;
+    if (category && category !== 'all') {
+      query.$or = [
+        { category },
+        { category: { $exists: false }, genre: category },
+        { category: null, genre: category }
+      ];
+    }
     if (tonality && tonality !== 'all') query.tonality = tonality;
 
     const total = await Mashup.countDocuments(query);
@@ -77,6 +85,9 @@ export const getMashupSettings = async (req, res) => {
         // ignore
       }
     }
+    if (!Array.isArray(data.categories) || data.categories.length === 0) {
+      data.categories = ['Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap', 'House', 'EDM', 'Afro House', 'Remember', 'International'];
+    }
     res.status(200).json({ success: true, data });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -118,7 +129,7 @@ export const uploadMashupBanner = async (req, res) => {
 // @access  Private/Admin
 export const updateMashupSettings = async (req, res) => {
   try {
-    const { videoUrl, pageTitle, pageDescription, bannerImageUrl, tags } = req.body;
+    const { videoUrl, pageTitle, pageDescription, bannerImageUrl, categories } = req.body;
     let settings = await MashupSettings.findOne();
     if (!settings) {
       settings = await MashupSettings.create({});
@@ -128,7 +139,7 @@ export const updateMashupSettings = async (req, res) => {
     if (bannerImageUrl !== undefined) settings.bannerImageUrl = bannerImageUrl;
     if (pageTitle !== undefined) settings.pageTitle = pageTitle;
     if (pageDescription !== undefined) settings.pageDescription = pageDescription;
-    if (tags !== undefined && Array.isArray(tags)) settings.tags = tags;
+    if (categories !== undefined && Array.isArray(categories)) settings.categories = categories;
 
     await settings.save();
     res.status(200).json({ success: true, data: settings });
@@ -159,7 +170,7 @@ export const getAdminMashups = async (req, res) => {
 // @access  Private/Admin
 export const createMashup = async (req, res) => {
   try {
-    const { title, artist, genre, bpm, tonality } = req.body;
+    const { title, artist, category, genre, bpm, tonality } = req.body;
 
     if (!req.files || !req.files.audio) {
       return res.status(400).json({ success: false, message: 'Please upload an audio file' });
@@ -216,6 +227,7 @@ export const createMashup = async (req, res) => {
     const mashupData = {
       title: title || audioFile.originalname.replace(/\.[^/.]+$/, ''),
       artist: artist || 'Unknown Artist',
+      category: category || detectedGenre || 'Reggaeton',
       genre: detectedGenre,
       bpm: detectedBpm,
       tonality: detectedTonality,
@@ -269,7 +281,7 @@ export const createMashup = async (req, res) => {
 // @access  Private/Admin
 export const updateMashup = async (req, res) => {
   try {
-    const { title, artist, genre, bpm, tonality, isPublished, tonalityNeedsReview } = req.body;
+    const { title, artist, category, genre, bpm, tonality, isPublished, tonalityNeedsReview } = req.body;
     const mashup = await Mashup.findById(req.params.id);
 
     if (!mashup) {
@@ -278,6 +290,7 @@ export const updateMashup = async (req, res) => {
 
     if (title !== undefined) mashup.title = title;
     if (artist !== undefined) mashup.artist = artist;
+    if (category !== undefined) mashup.category = category;
     if (genre !== undefined) mashup.genre = genre;
     if (bpm !== undefined) mashup.bpm = parseInt(bpm);
     if (tonality !== undefined) {

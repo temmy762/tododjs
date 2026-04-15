@@ -11,7 +11,22 @@ export default function GenreFilterHorizontal({ activeCategory, onCategoryChange
   useEffect(() => {
     fetch(`${API_URL}/categories`)
       .then(r => r.json())
-      .then(d => { if (d.success) setCategories(d.data || []); })
+      .then(d => {
+        if (d.success) {
+          const data = d.data || [];
+          const hasReggaeton = data.some(cat => cat.name === 'Reggaeton');
+          setCategories(hasReggaeton ? data : [
+            ...data,
+            {
+              _id: 'default-reggaeton',
+              name: 'Reggaeton',
+              color: '#06B6D4',
+              thumbnail: '',
+              trackCount: 0
+            }
+          ]);
+        }
+      })
       .catch(() => {});
   }, []);
 

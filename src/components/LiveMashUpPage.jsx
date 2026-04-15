@@ -51,27 +51,21 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
 
   // ── data state ──────────────────────────────────────────────
   const [tracks, setTracks] = useState([]);
-  const [genres, setGenres] = useState([]);
-  const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Live Mashups', pageDescription: '', tags: ['Intro', 'Outro', 'Clean', 'Dirty', 'Extended', 'Original', 'Acapella'] });
+  const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Live Mashups', pageDescription: '', categories: ['Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap', 'House', 'EDM', 'Afro House', 'Remember', 'International'] });
   const [loading, setLoading] = useState(true);
   const [totalTracks, setTotalTracks] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
   // ── standalone filter state (completely independent) ─────────
-  const [filterGenre, setFilterGenre] = useState('all');
+  const [filterCategory, setFilterCategory] = useState('all');
   const [filterTonality, setFilterTonality] = useState('all');
-  const [filterTag, setFilterTag] = useState('all');
   const [sortBy, setSortBy] = useState('dateAdded');
   const [currentPage, setCurrentPage] = useState(1);
   const [tracksPerPage, setTracksPerPage] = useState(30);
   const [viewMode, setViewMode] = useState('list');
 
-  // ── fetch genres once ────────────────────────────────────────
+  // ── fetch settings once ────────────────────────────────────────
   useEffect(() => {
-    fetch(`${API_URL}/mashups/genres`)
-      .then(r => r.json())
-      .then(d => { if (d.success) setGenres(d.data); })
-      .catch(() => {});
     fetch(`${API_URL}/mashups/settings`)
       .then(r => r.json())
       .then(d => { if (d.success) setSettings(d.data); })
@@ -87,7 +81,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
         limit: tracksPerPage,
         sort: SORT_MAP[sortBy] || '-createdAt',
       });
-      if (filterGenre !== 'all') params.set('genre', filterGenre);
+      if (filterCategory !== 'all') params.set('category', filterCategory);
       if (filterTonality !== 'all') params.set('tonality', filterTonality);
 
       const res = await fetch(`${API_URL}/mashups?${params}`);
@@ -102,12 +96,12 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, tracksPerPage, sortBy, filterGenre, filterTonality]);
+  }, [currentPage, tracksPerPage, sortBy, filterCategory, filterTonality]);
 
   useEffect(() => { fetchMashups(); }, [fetchMashups]);
 
   // ── handlers ────────────────────────────────────────────────
-  const handleGenreChange = (g) => { setFilterGenre(g); setCurrentPage(1); };
+  const handleCategoryChange = (category) => { setFilterCategory(category); setCurrentPage(1); };
   const handleTonalityChange = (key) => {
     setFilterTonality(prev => prev === key ? 'all' : key);
     setCurrentPage(1);
@@ -145,13 +139,9 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
     return nums;
   };
 
-  // Client-side tag filter (dynamic tags from settings)
-  const activeTags = settings.tags || [];
-  const displayedTracks = filterTag === 'all'
-    ? tracks
-    : tracks.filter(t => new RegExp(`\\b${filterTag}\\b`, 'i').test(t.title));
-
-  const hasActiveFilters = filterGenre !== 'all' || filterTonality !== 'all' || filterTag !== 'all';
+  const displayedTracks = tracks;
+  const mashupCategories = settings.categories || [];
+  const hasActiveFilters = filterCategory !== 'all' || filterTonality !== 'all';
 
   return (
     <div className="min-h-screen">
@@ -184,7 +174,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
           <div className="flex items-center gap-2">
             {hasActiveFilters && (
               <button
-                onClick={() => { setFilterGenre('all'); setFilterTonality('all'); setFilterTag('all'); setCurrentPage(1); }}
+                onClick={() => { setFilterCategory('all'); setFilterTonality('all'); setCurrentPage(1); }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30 text-xs font-semibold transition-all"
               >
                 <X className="w-3 h-3" /> {t('mashupPage.clearFilters')}
@@ -205,18 +195,29 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
           </div>
         </div>
 
-        {/* Genre + Sort row */}
+        {/* Category + Sort row */}
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-brand-text-tertiary" />
-            <select
-              value={filterGenre}
-              onChange={e => handleGenreChange(e.target.value)}
-              className="bg-dark-elevated text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80"
+          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hidden pb-1 max-w-full">
+            <SlidersHorizontal className="w-3.5 h-3.5 text-brand-text-tertiary flex-shrink-0" />
+            <button
+              onClick={() => handleCategoryChange('all')}
+              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+                filterCategory === 'all' ? 'bg-accent text-white' : 'bg-white/10 text-brand-text-tertiary hover:text-white'
+              }`}
             >
-              <option value="all">{t('mashupPage.allGenres')}</option>
-              {genres.map(g => <option key={g} value={g}>{g}</option>)}
-            </select>
+              {t('common.all')}
+            </button>
+            {mashupCategories.map((category) => (
+              <button
+                key={category}
+                onClick={() => handleCategoryChange(filterCategory === category ? 'all' : category)}
+                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+                  filterCategory === category ? 'bg-accent text-white' : 'bg-white/10 text-brand-text-tertiary hover:text-white'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
           </div>
           <div className="flex items-center gap-2">
             <ArrowUpDown className="w-3.5 h-3.5 text-brand-text-tertiary" />
@@ -231,32 +232,6 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
               <option value="bpm">{t('sort.bpmHighLow')}</option>
             </select>
           </div>
-        </div>
-      </div>
-
-      {/* Version Tag Chips */}
-      <div className="px-4 md:px-10 pt-3 pb-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-brand-text-tertiary font-medium flex-shrink-0">{t('mashupPage.tags')}</span>
-          <button
-            onClick={() => setFilterTag('all')}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-              filterTag === 'all' ? 'bg-accent text-white' : 'bg-white/10 text-brand-text-tertiary hover:text-white'
-            }`}
-          >
-            {t('mashupPage.allTags')}
-          </button>
-          {activeTags.map((label) => (
-            <button
-              key={label}
-              onClick={() => setFilterTag(prev => prev === label ? 'all' : label)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all ${
-                filterTag === label ? 'bg-accent text-white' : 'bg-white/10 text-brand-text-tertiary hover:text-white'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
         </div>
       </div>
 

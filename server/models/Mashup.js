@@ -11,6 +11,10 @@ const mashupSchema = new mongoose.Schema({
     required: [true, 'Please provide an artist name'],
     trim: true
   },
+  category: {
+    type: String,
+    default: 'Reggaeton'
+  },
   genre: {
     type: String,
     default: 'Others'

@@ -282,6 +282,7 @@ export const seedCategories = async (req, res) => {
     { name: 'Heavy Hits',    color: '#8B5CF6', sortOrder: 5 },
     { name: 'Club Killers',  color: '#EC4899', sortOrder: 6 },
     { name: 'Franchise',     color: '#F97316', sortOrder: 7 },
+    { name: 'Reggaeton',     color: '#06B6D4', sortOrder: 8 },
   ];
 
   try {

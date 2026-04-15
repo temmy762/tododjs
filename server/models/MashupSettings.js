@@ -21,9 +21,9 @@ const mashupSettingsSchema = new mongoose.Schema({
     type: String,
     default: 'Fresh mashups, remixes & edits'
   },
-  tags: {
+  categories: {
     type: [String],
-    default: ['Intro', 'Outro', 'Clean', 'Dirty', 'Extended', 'Original', 'Acapella']
+    default: ['Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap', 'House', 'EDM', 'Afro House', 'Remember', 'International']
   }
 }, {
   timestamps: true
