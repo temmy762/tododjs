@@ -55,6 +55,114 @@ export const getMashups = async (req, res) => {
   }
 };
 
+// ─── Mashup category keyword rules (same list as categorizeMashups.js) ────────
+const MASHUP_CATEGORIES = [
+  'Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap',
+  'House', 'EDM', 'Afro House', 'Remember', 'International',
+];
+
+const MASHUP_CATEGORY_RULES = [
+  { category: 'Old School Reggaeton', keywords: ['old school reggaeton','old-school reggaeton','reggaeton clasico','reggaeton clásico','reggaeton viejo','old school perreo'] },
+  { category: 'Dembow',               keywords: ['dembow','dem bow'] },
+  { category: 'Reggaeton',            keywords: ['reggaeton','reggaetón','regueton','reguetón','perreo','urbano latino'] },
+  { category: 'Trap',                 keywords: ['trap','latin trap','trap latino','drill'] },
+  { category: 'Afro House',           keywords: ['afro house','afrohouse','afro-house','afrobeat','amapiano','tribal house'] },
+  { category: 'House',                keywords: ['tech house','deep house','progressive house','funky house','vocal house'] },
+  { category: 'EDM',                  keywords: ['edm','electro house','big room','dubstep','trance','techno','drum and bass'] },
+  { category: 'Remember',             keywords: ['remember','throwback','retro','oldies','80s','90s','clasicos','clásicos'] },
+  { category: 'International',        keywords: ['hip hop','hip-hop','r&b','soul','funk','rock','indie','bachata','salsa','merengue','cumbia','reggae','dancehall'] },
+];
+
+function detectMashupCategoryByKeyword(text) {
+  const lower = (text || '').toLowerCase();
+  for (const rule of MASHUP_CATEGORY_RULES) {
+    for (const kw of rule.keywords) {
+      if (lower.includes(kw)) return rule.category;
+    }
+  }
+  return null;
+}
+
+function cleanMashupTitle(raw) {
+  const FORCE_UPPER = new Set(['DJ', 'BPM', 'EDM', 'EP', 'LP']);
+  const LOWER_WORDS = new Set(['a','an','the','of','in','on','at','to','by','de','del','la','el','y','e']);
+  let t = (raw || '')
+    .replace(/_/g, ' ')
+    .replace(/\.(mp3|wav|flac|m4a)$/i, '')
+    .replace(/\s*\(\s*\d+\s*\)\s*$/g, '')
+    .replace(/\s*-?\s*copy$/i, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  const words = t.split(/\s+/);
+  return words.map((word, idx) => {
+    const core = word.replace(/[^a-zA-Z]/g, '');
+    if (!core) return word;
+    if (FORCE_UPPER.has(core.toUpperCase())) return word.toUpperCase();
+    if (/^(ft\.?|feat\.?)$/i.test(word)) return idx === 0 ? word[0].toUpperCase() + word.slice(1).toLowerCase() : word.toLowerCase();
+    if (idx !== 0 && idx !== words.length - 1 && LOWER_WORDS.has(core.toLowerCase())) return word.toLowerCase();
+    return word[0].toUpperCase() + word.slice(1).toLowerCase();
+  }).join(' ');
+}
+
+// @desc    Auto-categorize and clean titles for all mashups
+// @route   POST /api/mashups/auto-categorize
+// @access  Admin
+export const autoCategorizeMashups = async (req, res) => {
+  try {
+    const { force = false, dryRun = false } = req.body;
+
+    const filter = force
+      ? {}
+      : { $or: [{ category: { $exists: false } }, { category: null }, { category: '' }] };
+
+    const mashups = await Mashup.find(filter).lean();
+
+    const results = [];
+    let updated = 0;
+
+    for (const m of mashups) {
+      const combined        = `${m.title || ''} ${m.artist || ''}`;
+      const detectedCategory = detectMashupCategoryByKeyword(combined)
+        || (MASHUP_CATEGORIES.includes(m.genre) ? m.genre : null)
+        || 'Reggaeton';
+
+      const cleanedTitle    = cleanMashupTitle(m.title);
+      const categoryChanged = detectedCategory !== m.category;
+      const titleChanged    = cleanedTitle !== m.title;
+
+      if (!categoryChanged && !titleChanged) continue;
+
+      const entry = {
+        id:       m._id,
+        title:    m.title,
+        newTitle: titleChanged    ? cleanedTitle     : m.title,
+        category: m.category,
+        newCategory: categoryChanged ? detectedCategory : m.category,
+      };
+      results.push(entry);
+
+      if (!dryRun) {
+        const update = {};
+        if (categoryChanged) update.category = detectedCategory;
+        if (titleChanged)    update.title    = cleanedTitle;
+        await Mashup.updateOne({ _id: m._id }, { $set: update });
+        updated++;
+      }
+    }
+
+    res.json({
+      success: true,
+      dryRun,
+      processed: mashups.length,
+      changed: results.length,
+      updated: dryRun ? 0 : updated,
+      results,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get distinct genres from published mashups
 // @route   GET /api/mashups/genres
 // @access  Public

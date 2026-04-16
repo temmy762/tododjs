@@ -10,7 +10,8 @@ import {
   updateMashup,
   deleteMashup,
   getMashupPlayback,
-  getMashupGenres
+  getMashupGenres,
+  autoCategorizeMashups
 } from '../controllers/mashupController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -62,5 +63,6 @@ router.put('/:id', protect, authorize('admin'), mashupUpload.fields([
   { name: 'coverArt', maxCount: 1 }
 ]), updateMashup);
 router.delete('/:id', protect, authorize('admin'), deleteMashup);
+router.post('/auto-categorize', protect, authorize('admin'), autoCategorizeMashups);
 
 export default router;

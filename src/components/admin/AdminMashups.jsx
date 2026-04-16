@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Music, Upload, Trash2, Edit3, Save, X, Eye, EyeOff,
   Loader, CheckCircle, AlertCircle, FileAudio,
-  Image, Sparkles, FileUp, RotateCcw, Check, AlertTriangle, Tag, Plus, Pencil
+  Image, Sparkles, FileUp, RotateCcw, Check, AlertTriangle, Tag, Plus, Pencil, Wand2
 } from 'lucide-react';
 import GenericCoverArt from '../GenericCoverArt';
 import API_URL from '../../config/api';
@@ -17,6 +17,8 @@ export default function AdminMashups() {
   const [editingCategoryIdx, setEditingCategoryIdx] = useState(null);
   const [editingCategoryValue, setEditingCategoryValue] = useState('');
   const [savingCategories, setSavingCategories] = useState(false);
+  const [autoRunning, setAutoRunning] = useState(false);
+  const [autoPreview, setAutoPreview] = useState(null);
   const [loading, setLoading] = useState(true);
   const [uploadState, setUploadState] = useState({
     status: 'idle', // idle, uploading, processing, success, error
@@ -129,6 +131,51 @@ export default function AdminMashups() {
     setEditingCategoryIdx(null);
     setEditingCategoryValue('');
     handleSaveCategories(updated);
+  };
+
+  const handleAutoCategorizeDryRun = async () => {
+    try {
+      setAutoRunning(true);
+      setAutoPreview(null);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API}/mashups/auto-categorize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ dryRun: true, force: true })
+      });
+      const data = await res.json();
+      if (data.success) setAutoPreview(data);
+      else setMessage({ type: 'error', text: data.message });
+    } catch {
+      setMessage({ type: 'error', text: 'Auto-categorize preview failed' });
+    } finally {
+      setAutoRunning(false);
+    }
+  };
+
+  const handleAutoCategorizeApply = async () => {
+    try {
+      setAutoRunning(true);
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API}/mashups/auto-categorize`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ dryRun: false, force: true })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setAutoPreview(null);
+        setMessage({ type: 'success', text: `Done — ${data.updated} mashup(s) updated.` });
+        fetchMashups();
+      } else {
+        setMessage({ type: 'error', text: data.message });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Auto-categorize failed' });
+    } finally {
+      setAutoRunning(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 4000);
+    }
   };
 
   const handleSaveSettings = async () => {
@@ -436,6 +483,82 @@ export default function AdminMashups() {
             {savingSettings ? 'Saving...' : 'Save Settings'}
           </button>
         </div>
+      </div>
+
+      {/* ── Auto-Categorize Panel ── */}
+      <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Wand2 className="w-4 h-4 text-accent" />
+              Auto-Categorize Mashups
+            </h3>
+            <p className="text-xs text-brand-text-tertiary mt-1">
+              Scans title + artist of every mashup, detects the correct category and cleans up the title professionally.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={handleAutoCategorizeDryRun}
+              disabled={autoRunning}
+              className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium text-white transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {autoRunning ? <Loader size={12} className="animate-spin" /> : <Wand2 size={12} />}
+              Preview
+            </button>
+            {autoPreview && (
+              <button
+                onClick={handleAutoCategorizeApply}
+                disabled={autoRunning}
+                className="px-4 py-2 bg-accent hover:bg-accent-hover rounded-lg text-xs font-medium text-white transition-colors disabled:opacity-50 flex items-center gap-2"
+              >
+                {autoRunning ? <Loader size={12} className="animate-spin" /> : <Check size={12} />}
+                Apply {autoPreview.changed} Changes
+              </button>
+            )}
+          </div>
+        </div>
+
+        {autoPreview && (
+          <div className="mt-4">
+            <p className="text-xs text-brand-text-tertiary mb-2">
+              Scanned <span className="text-white font-medium">{autoPreview.processed}</span> mashups —
+              <span className="text-accent font-medium"> {autoPreview.changed}</span> will change.
+              Review below, then click <strong>Apply</strong>.
+            </p>
+            {autoPreview.results.length === 0 ? (
+              <p className="text-xs text-green-400 flex items-center gap-1.5">
+                <CheckCircle size={12} /> All mashups already look great!
+              </p>
+            ) : (
+              <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+                {autoPreview.results.map((r) => (
+                  <div key={r.id} className="px-3 py-2 rounded-lg bg-white/[0.02] border border-white/[0.06] text-xs">
+                    <div className="flex items-center gap-2">
+                      {r.title !== r.newTitle && (
+                        <span className="text-brand-text-tertiary">
+                          <span className="line-through opacity-50">{r.title}</span>
+                          {' → '}
+                          <span className="text-white">{r.newTitle}</span>
+                        </span>
+                      )}
+                      {r.category !== r.newCategory && (
+                        <span className="ml-auto flex items-center gap-1 flex-shrink-0">
+                          <span className="px-1.5 py-0.5 rounded bg-white/10 text-white/50">{r.category || 'none'}</span>
+                          <span className="text-accent">→</span>
+                          <span className="px-1.5 py-0.5 rounded bg-accent/20 text-accent font-medium">{r.newCategory}</span>
+                        </span>
+                      )}
+                    </div>
+                    {r.title === r.newTitle && r.category !== r.newCategory && (
+                      <p className="text-white/60 mt-0.5">{r.title}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── Tag Management ── */}
