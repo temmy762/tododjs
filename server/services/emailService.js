@@ -31,14 +31,17 @@ export async function sendEmail({ to, subject, html, text }) {
     });
 
     if (error) {
-      console.error('Resend email error:', error);
+      console.error('Resend API error:', JSON.stringify(error, null, 2));
+      console.error('  → name:', error.name, '| statusCode:', error.statusCode);
+      console.error('  → message:', error.message);
       return { success: false, error };
     }
 
-    console.log(`Email sent to ${to}: ${data.id}`);
-    return { success: true, id: data.id };
+    console.log(`✓ Email sent to ${to}: ${data?.id}`);
+    return { success: true, id: data?.id };
   } catch (err) {
-    console.error('Email send failed:', err.message);
+    console.error('Email send exception:', err.message);
+    console.error(err);
     return { success: false, error: err.message };
   }
 }

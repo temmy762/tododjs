@@ -440,7 +440,7 @@ export const forgotPassword = async (req, res) => {
       const emailResult = await sendPasswordResetEmail(user, resetToken);
 
       if (!emailResult?.success) {
-        console.error('Password reset email provider failed:', emailResult?.error);
+        console.error('Password reset email provider failed:', JSON.stringify(emailResult?.error, null, 2));
         user.resetPasswordToken = undefined;
         user.resetPasswordExpire = undefined;
         await user.save({ validateBeforeSave: false });
