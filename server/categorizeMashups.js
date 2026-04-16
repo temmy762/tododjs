@@ -13,9 +13,11 @@
 
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import { detectGenreWithAI } from './services/openai.js';
+import { fileURLToPath } from 'url';
+import { dirname, resolve } from 'path';
 
-dotenv.config();
+const __dirname = dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: resolve(__dirname, '.env') });
 
 // ─── Flags ────────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
@@ -264,9 +266,10 @@ async function main() {
       }
     }
 
-    // Tier 2: OpenAI (opt-in)
+    // Tier 2: OpenAI (opt-in — loaded dynamically to avoid crash when no API key)
     if (!detectedCategory && USE_AI) {
       try {
+        const { detectGenreWithAI } = await import('./services/openai.js');
         const aiGenre = await detectGenreWithAI(m.title, m.artist);
         if (aiGenre) {
           const mapped = MASHUP_CATEGORIES.includes(aiGenre) ? aiGenre : null;
