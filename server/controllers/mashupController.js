@@ -297,14 +297,25 @@ export const createMashup = async (req, res) => {
 
     const formatMap = { mp3: 'MP3', wav: 'WAV', flac: 'FLAC' };
 
-    // Detect genre using AI if not provided
+    // Clean title professionally (strip underscores, filename artifacts, apply Title Case)
+    const rawTitle   = title || audioFile.originalname.replace(/\.[^/.]+$/, '');
+    const cleanTitle = cleanMashupTitle(rawTitle);
+
+    // Detect category: keyword scan (free) → AI fallback → 'Reggaeton'
+    const trackArtist = artist || 'Unknown Artist';
+    let detectedCategory = category || null;
+
+    if (!detectedCategory) {
+      detectedCategory = detectMashupCategoryByKeyword(`${cleanTitle} ${trackArtist}`);
+    }
+
+    // Detect genre using AI if keyword scan didn't resolve a category
     let detectedGenre = genre || 'Mashup';
-    if (!genre) {
-      const trackTitle = title || audioFile.originalname.replace(/\.[^/.]+$/, '');
-      const trackArtist = artist || 'Unknown Artist';
-      const aiGenre = await detectGenreWithAI(trackTitle, trackArtist);
+    if (!detectedCategory) {
+      const aiGenre = await detectGenreWithAI(cleanTitle, trackArtist);
       if (aiGenre) {
         detectedGenre = aiGenre;
+        if (MASHUP_CATEGORIES.includes(aiGenre)) detectedCategory = aiGenre;
       }
     }
 
@@ -314,10 +325,8 @@ export const createMashup = async (req, res) => {
     
     if (!tonality || !bpm) {
       try {
-        const trackTitle = title || audioFile.originalname.replace(/\.[^/.]+$/, '');
-        const trackArtist = artist || 'Unknown Artist';
         const { tonality: tonalityResult, detectedBpm: bpmResult } = await detectTonality(audioFile.buffer, {
-          title: trackTitle,
+          title: cleanTitle,
           artist: trackArtist
         });
         
@@ -333,9 +342,9 @@ export const createMashup = async (req, res) => {
     }
 
     const mashupData = {
-      title: title || audioFile.originalname.replace(/\.[^/.]+$/, ''),
-      artist: artist || 'Unknown Artist',
-      category: category || detectedGenre || 'Reggaeton',
+      title: cleanTitle,
+      artist: trackArtist,
+      category: detectedCategory || 'Reggaeton',
       genre: detectedGenre,
       bpm: detectedBpm,
       tonality: detectedTonality,
