@@ -44,14 +44,22 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
     setFilterCategoryName(initialCategoryName);
     setCurrentPage(1);
   }, [initialCategory, initialCategoryName]);
-  const [genres, setGenres] = useState([]);
 
-  useEffect(() => {
-    fetch(`${API_URL}/categories`)
-      .then(r => r.json())
-      .then(d => { if (d.success) setGenres((d.data || []).map(c => c.name)); })
-      .catch(() => setGenres(['Reggaeton', 'Dembow', 'Trap', 'House', 'EDM', 'Afro House', 'Others']));
-  }, []);
+  // The 10 fixed music genres every track is auto-classified into.
+  // `value` MUST match the genre string stored on each Track in the DB.
+  // `label` is what the user sees in the dropdown.
+  const GENRE_OPTIONS = [
+    { value: 'Reggaeton',            label: 'Reggaeton' },
+    { value: 'Old School Reggaeton', label: 'Reggaeton Old School' },
+    { value: 'Dembow',               label: 'Dembow' },
+    { value: 'Trap',                 label: 'Trap' },
+    { value: 'House',                label: 'House' },
+    { value: 'EDM',                  label: 'EDM' },
+    { value: 'Afro House',           label: 'Afro House' },
+    { value: 'Remember',             label: 'Remember' },
+    { value: 'International',        label: 'Internacional' },
+    { value: 'Others',               label: 'Otros' },
+  ];
 
   const tonalitiesA = ['1A', '2A', '3A', '4A', '5A', '6A', '7A', '8A', '9A', '10A', '11A', '12A'];
   const tonalitiesB = ['1B', '2B', '3B', '4B', '5B', '6B', '7B', '8B', '9B', '10B', '11B', '12B'];
@@ -252,8 +260,8 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
               className="bg-dark-elevated text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80"
             >
               <option value="all">{t('libraryPage.allGenres')}</option>
-              {genres.map(genre => (
-                <option key={genre} value={genre}>{genre}</option>
+              {GENRE_OPTIONS.map(({ value, label }) => (
+                <option key={value} value={value}>{label}</option>
               ))}
             </select>
           </div>
