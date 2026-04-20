@@ -38,7 +38,8 @@ const API = API_URL;
 
 // Map URL paths to internal page IDs
 const PATH_TO_PAGE = {
-  '/': 'home',
+  '/': 'library',
+  '/home': 'home',
   '/library': 'library',
   '/biblioteca': 'library',
   '/record-pool': 'album',
@@ -48,7 +49,11 @@ const PATH_TO_PAGE = {
   '/subscription': 'subscription',
   '/settings': 'settings',
 };
-const PAGE_TO_PATH = Object.fromEntries(Object.entries(PATH_TO_PAGE).map(([k, v]) => [v, k]));
+// Prefer the first path registered for each page (so "library" → "/library", not "/biblioteca")
+const PAGE_TO_PATH = Object.entries(PATH_TO_PAGE).reduce((acc, [path, page]) => {
+  if (!acc[page]) acc[page] = path;
+  return acc;
+}, {});
 
 function App() {
   const { i18n } = useTranslation();
