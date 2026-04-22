@@ -12,7 +12,7 @@ export default function Sidebar({ onAdminClick, user, onLoginClick, onLogout, on
   const libraryPath = i18n.language === 'es' ? '/biblioteca' : '/library';
 
   const navItems = [
-    { path: '/', label: t('nav.home'), icon: Home },
+    { path: '/home', label: t('nav.home'), icon: Home },
     { path: libraryPath, label: t('nav.library'), icon: Library },
     { path: '/record-pool', label: t('nav.recordPool'), icon: Disc },
     { path: '/mashup', label: t('nav.liveMashup'), icon: Layers },
