@@ -128,29 +128,11 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       const token = localStorage.getItem('token');
       const albumId = album.id || album._id;
       if (!albumId) throw new Error('Album id is missing');
-      const res = await fetch(`${API_URL}/downloads/album/${albumId}/file`, {
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      const contentType = res.headers.get('content-type') || '';
-      if (!res.ok) {
-        const err = contentType.includes('json') ? await res.json().catch(() => null) : null;
-        throw new Error(err?.message || `HTTP ${res.status}`);
-      }
-      if (contentType.includes('application/json')) {
-        const data = await res.json();
-        if (!data?.downloadUrl) throw new Error('No download URL returned');
-        triggerDownload(data.downloadUrl);
-      } else {
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${album?.name || album?.title || 'album'}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
-      }
+      const iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = `${API_URL}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`;
+      document.body.appendChild(iframe);
+      setTimeout(() => iframe.remove(), 120000);
     } catch (err) {
       console.error('ZIP download failed:', err);
       alert(err.message || t('album.downloadFailed'));
