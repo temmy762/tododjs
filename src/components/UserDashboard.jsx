@@ -384,9 +384,12 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                   <div>
                     <p className="text-[10px] text-brand-text-tertiary uppercase tracking-wider mb-0.5">{t('userDashboard.status')}</p>
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
-                      subscriptionStatus === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
+                      isAdmin ? 'bg-purple-500/20 text-purple-400' :
+                      subscriptionStatus === 'active' ? 'bg-green-500/20 text-green-400' :
+                      !subscriptionPlanId ? 'bg-blue-500/20 text-blue-400' :
+                      'bg-red-500/20 text-red-400'
                     }`}>
-                      {subscriptionStatus || 'Inactive'}
+                      {isAdmin ? 'Admin' : subscriptionStatus === 'active' ? t('userDashboard.active', 'Active') : !subscriptionPlanId ? t('userDashboard.free', 'Free') : t('userDashboard.inactive', 'Inactive')}
                     </span>
                   </div>
                   <div>

@@ -331,8 +331,7 @@ function App() {
         const notExpired = !sub?.currentPeriodEnd || new Date(sub.currentPeriodEnd) > new Date();
 
         if (!isPaid || !isActive || !notExpired) {
-          setSelectedPlan('premium');
-          setShowCheckout(true);
+          navigate('/pricing');
           return;
         }
       }
@@ -495,8 +494,7 @@ function App() {
       const notExpired = !sub?.currentPeriodEnd || new Date(sub.currentPeriodEnd) > new Date();
 
       if (!isPaid || !isActive || !notExpired) {
-        setSelectedPlan('premium');
-        setShowCheckout(true);
+        navigate('/pricing');
         return;
       }
     }
