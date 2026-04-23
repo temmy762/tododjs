@@ -506,9 +506,41 @@ function App() {
       return;
     }
 
-    // Open the download URL directly in a new tab — browser handles the ZIP stream natively
     const token = localStorage.getItem('token');
-    window.open(`${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`, '_blank');
+    fetch(`${API}/downloads/album/${albumId}/file`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (res) => {
+        const contentType = res.headers.get('content-type') || '';
+        if (!res.ok) {
+          const err = contentType.includes('json') ? await res.json().catch(() => null) : null;
+          throw new Error(err?.message || `HTTP ${res.status}`);
+        }
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          if (!data?.downloadUrl) throw new Error('No download URL returned');
+          const a = document.createElement('a');
+          a.href = data.downloadUrl;
+          a.download = '';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } else {
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `${album?.name || 'album'}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
+        }
+      })
+      .catch(err => {
+        console.error('Album download failed:', err);
+        alert(err.message || 'Download failed. Please try again.');
+      });
   };
 
   const allTracks = useMemo(() => {
