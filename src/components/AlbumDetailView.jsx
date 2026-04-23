@@ -128,31 +128,8 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       const token = localStorage.getItem('token');
       const albumId = album.id || album._id;
       if (!albumId) throw new Error('Album id is missing');
-      const res = await fetch(`${API_URL}/downloads/album/${albumId}/file`, {
-        method: 'GET',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null);
-        throw new Error(errData?.message || `HTTP ${res.status}`);
-      }
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/json')) {
-        const data = await res.json();
-        if (!data?.downloadUrl) throw new Error('No download URL returned');
-        triggerDownload(data.downloadUrl);
-      } else {
-        // Backend streaming ZIP directly — read as blob
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${album?.name || album?.title || 'album'}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 10000);
-      }
+      // Open directly in new tab — browser handles the ZIP stream natively
+      window.open(`${API_URL}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`, '_blank');
     } catch (err) {
       console.error('ZIP download failed:', err);
       alert(err.message || t('album.downloadFailed'));

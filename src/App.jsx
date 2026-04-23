@@ -506,39 +506,9 @@ function App() {
       return;
     }
 
+    // Open the download URL directly in a new tab — browser handles the ZIP stream natively
     const token = localStorage.getItem('token');
-    fetch(`${API}/downloads/album/${albumId}/file`, {
-      method: 'GET',
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const err = await res.json().catch(() => null);
-          throw new Error(err?.message || `HTTP ${res.status}`);
-        }
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/json')) {
-          // Backend returned a pre-signed URL (album had a zipKey)
-          const data = await res.json();
-          if (!data?.downloadUrl) throw new Error('No download URL returned');
-          window.open(data.downloadUrl, '_blank', 'noopener,noreferrer');
-        } else {
-          // Backend is streaming the ZIP directly — read as blob and download
-          const blob = await res.blob();
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `${album?.name || 'album'}.zip`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          setTimeout(() => URL.revokeObjectURL(url), 10000);
-        }
-      })
-      .catch(err => {
-        console.error('[AlbumDownload] failed:', err);
-        alert(err.message || 'Download failed. Please try again.');
-      });
+    window.open(`${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`, '_blank');
   };
 
   const allTracks = useMemo(() => {
