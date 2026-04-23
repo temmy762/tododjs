@@ -200,6 +200,11 @@ export const downloadTrackFile = async (req, res) => {
     });
     const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
 
+    // If opened directly in browser (token via query param), redirect for native download
+    if (req.query.token) {
+      return res.redirect(signedUrl);
+    }
+
     return res.status(200).json({
       success: true,
       downloadUrl: signedUrl,
@@ -337,6 +342,10 @@ export const downloadAlbumFile = async (req, res) => {
         ResponseContentDisposition: `attachment; filename="${zipFilename}"`
       });
       const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
+      // If opened directly in browser (token via query param), redirect so the browser downloads natively
+      if (req.query.token) {
+        return res.redirect(signedUrl);
+      }
       return res.status(200).json({
         success: true,
         downloadUrl: signedUrl,
