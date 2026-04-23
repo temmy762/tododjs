@@ -132,15 +132,26 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
         method: 'GET',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
-      const data = await res.json().catch(() => null);
       if (!res.ok) {
-        throw new Error(data?.message || 'ZIP download failed');
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.message || `HTTP ${res.status}`);
       }
-      // If backend returns a signed URL, trigger download without leaving the page
-      if (data?.downloadUrl) {
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        const data = await res.json();
+        if (!data?.downloadUrl) throw new Error('No download URL returned');
         triggerDownload(data.downloadUrl);
       } else {
-        throw new Error('No download URL returned');
+        // Backend streaming ZIP directly — read as blob
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${album?.name || album?.title || 'album'}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
       }
     } catch (err) {
       console.error('ZIP download failed:', err);

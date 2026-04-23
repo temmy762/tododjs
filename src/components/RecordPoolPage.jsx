@@ -478,7 +478,7 @@ function AlbumCard({ album, index, onClick, onPlay, onDownload }) {
             className="w-11 h-11 rounded-full bg-accent shadow-lg shadow-accent/40 flex items-center justify-center scale-75 group-hover:scale-100 transition-transform duration-300">
             <Play size={18} className="text-white ml-0.5" fill="white" />
           </button>
-          <button type="button" onClick={e => { e.stopPropagation(); onDownload?.(); }}
+          <button type="button" onClick={e => { e.stopPropagation(); e.preventDefault(); onDownload?.(); }}
             className="w-11 h-11 rounded-full bg-white/90 shadow-lg flex items-center justify-center scale-75 group-hover:scale-100 transition-transform duration-300">
             <Download size={16} className="text-black" />
           </button>

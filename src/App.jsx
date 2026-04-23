@@ -512,25 +512,31 @@ function App() {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(async (res) => {
-        const data = await res.json().catch(() => null);
         if (!res.ok) {
-          throw new Error(data?.message || 'Download failed. Please try again.');
+          const err = await res.json().catch(() => null);
+          throw new Error(err?.message || `HTTP ${res.status}`);
         }
-        if (data?.downloadUrl) {
-          // Trigger download without navigating away from the page
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          // Backend returned a pre-signed URL (album had a zipKey)
+          const data = await res.json();
+          if (!data?.downloadUrl) throw new Error('No download URL returned');
+          window.open(data.downloadUrl, '_blank', 'noopener,noreferrer');
+        } else {
+          // Backend is streaming the ZIP directly — read as blob and download
+          const blob = await res.blob();
+          const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
-          a.href = data.downloadUrl;
-          a.rel = 'noopener';
-          a.download = '';
+          a.href = url;
+          a.download = `${album?.name || 'album'}.zip`;
           document.body.appendChild(a);
           a.click();
           a.remove();
-        } else {
-          throw new Error('No download URL returned');
+          setTimeout(() => URL.revokeObjectURL(url), 10000);
         }
       })
       .catch(err => {
-        console.error('Album download failed:', err);
+        console.error('[AlbumDownload] failed:', err);
         alert(err.message || 'Download failed. Please try again.');
       });
   };
