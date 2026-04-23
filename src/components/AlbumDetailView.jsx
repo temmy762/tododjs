@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { Play, Download, Heart, Clock, Music, X, Loader, Archive, Share2, Pause, Check } from 'lucide-react';
+import { Play, Download, Heart, Clock, Music, X, Loader, Archive, Share2, Pause, Check, ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import GenericCoverArt from './GenericCoverArt';
 import PremiumPrompt from './PremiumPrompt';
@@ -194,17 +194,17 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-dark-bg animate-in fade-in duration-300">
-      {/* Close Button */}
-      <button
-        onClick={onClose}
-        className="fixed top-3 right-3 md:top-6 md:right-6 z-50 w-9 h-9 md:w-10 md:h-10 rounded-full bg-dark-elevated/80 backdrop-blur-md hover:bg-dark-elevated hover:scale-110 flex items-center justify-center transition-all duration-200 text-white shadow-lg"
-      >
-        <X className="w-5 h-5" strokeWidth={2} />
-      </button>
-
-      <div className="h-full overflow-y-auto">
+    <div className="animate-in fade-in duration-300">
+      <div>
         <div className="max-w-[1400px] mx-auto px-4 py-4 md:px-8 md:py-6 lg:py-8">
+          {/* Back Button */}
+          <button
+            onClick={onClose}
+            className="mb-4 md:mb-6 inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-elevated/60 hover:bg-dark-elevated text-white/90 hover:text-white transition-all duration-200 hover:scale-105 backdrop-blur-md"
+          >
+            <ArrowLeft className="w-4 h-4" strokeWidth={2} />
+            <span className="text-sm font-medium">{t('album.back', 'Back')}</span>
+          </button>
           {/* Split Layout Container */}
           <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[380px_1fr] gap-6 lg:gap-8 animate-in slide-in-from-bottom duration-500">
             

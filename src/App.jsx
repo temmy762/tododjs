@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import SearchOverlay from './components/SearchOverlay';
 import AuthModal from './components/auth/AuthModal';
 import { authService } from './services/authService';
+import ErrorBoundary from './components/ErrorBoundary';
 import { startTokenRefreshScheduler, stopTokenRefreshScheduler } from './services/apiFetch';
 import ArtistAlbumView from './components/ArtistAlbumView';
 import TonalityFilter from './components/TonalityFilter';
@@ -583,8 +584,24 @@ function App() {
 
       <div className="md:ml-20">
         <main className={`pt-16 md:pt-20 ${panelOpen ? 'pb-36 md:pb-24' : 'pb-20 md:pb-10'} relative`}>
+        <ErrorBoundary>
         <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
-        {activePage === 'library' ? (
+        {selectedAlbumDetail ? (
+          <AlbumDetailView
+            album={selectedAlbumDetail}
+            tracks={albumDetailLoading ? [] : albumDetailTracks}
+            isLoading={albumDetailLoading}
+            autoPlay={albumAutoPlay}
+            onClose={() => { setSelectedAlbumDetail(null); setAlbumDetailTracks([]); setAlbumAutoPlay(false); }}
+            onTrackInteraction={handleTrackInteraction}
+            userFavorites={userFavorites}
+            user={user}
+            onAuthRequired={handleOpenAuth}
+            onSubscribe={() => {
+              navigate('/pricing');
+            }}
+          />
+        ) : activePage === 'library' ? (
           <LibraryPage
             onTrackInteraction={handleTrackInteraction}
             userFavorites={userFavorites}
@@ -673,6 +690,7 @@ function App() {
           </>
         ) : null}
         </Suspense>
+        </ErrorBoundary>
         </main>
       </div>
 
@@ -733,23 +751,6 @@ function App() {
         />
       )}
 
-      {selectedAlbumDetail && (
-        <AlbumDetailView 
-          album={selectedAlbumDetail}
-          tracks={albumDetailLoading ? [] : albumDetailTracks}
-          isLoading={albumDetailLoading}
-          autoPlay={albumAutoPlay}
-          onClose={() => { setSelectedAlbumDetail(null); setAlbumDetailTracks([]); setAlbumAutoPlay(false); }}
-          onTrackInteraction={handleTrackInteraction}
-          userFavorites={userFavorites}
-          user={user}
-          onAuthRequired={handleOpenAuth}
-          onSubscribe={() => {
-            navigate('/pricing');
-          }}
-        />
-      )}
-
       {showAdminDashboard && (
         <Suspense fallback={null}>
           <AdminDashboard 
@@ -785,10 +786,12 @@ function App() {
       )}
 
       {showCheckout && (
-        <CheckoutPage 
-          selectedPlan={selectedPlan}
-          onClose={() => setShowCheckout(false)}
-        />
+        <Suspense fallback={null}>
+          <CheckoutPage 
+            selectedPlan={selectedPlan}
+            onClose={() => setShowCheckout(false)}
+          />
+        </Suspense>
       )}
 
       {authModalOpen && (

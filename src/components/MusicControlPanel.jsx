@@ -273,7 +273,11 @@ export default function MusicControlPanel({
   );
 
   const renderWaveform = (waveData, barCount, progressPct) => {
-    const active = Math.round((progressPct / 100) * barCount);
+    const activeFloat = (progressPct / 100) * barCount;
+    const activeIndex = Math.floor(activeFloat);
+    const activeFrac = activeFloat - activeIndex;
+    const INACTIVE_OPACITY = 0.15;
+    const ACTIVE_OPACITY = 0.9;
     return (
       <div
         className="relative h-10 rounded-xl bg-white/[0.03] border border-white/[0.06] overflow-hidden cursor-pointer select-none group/wave"
@@ -293,17 +297,23 @@ export default function MusicControlPanel({
       >
         <div className="absolute inset-0 flex items-end gap-[1px] px-2 py-1.5">
           {waveData.slice(0, barCount).map((h, i) => {
-            const isActive = i < active;
+            let opacity;
+            if (i < activeIndex) {
+              opacity = ACTIVE_OPACITY;
+            } else if (i === activeIndex) {
+              // Smooth interpolation for the currently-playing bar
+              opacity = INACTIVE_OPACITY + (ACTIVE_OPACITY - INACTIVE_OPACITY) * activeFrac;
+            } else {
+              opacity = INACTIVE_OPACITY;
+            }
             return (
               <div
                 key={i}
-                className="rounded-full transition-colors duration-100"
+                className="rounded-full"
                 style={{
                   width: '2px',
                   height: `${h}px`,
-                  backgroundColor: isActive
-                    ? 'rgba(255,255,255,0.9)'
-                    : 'rgba(255,255,255,0.15)',
+                  backgroundColor: `rgba(255,255,255,${opacity})`,
                 }}
               />
             );
