@@ -517,10 +517,22 @@ function App() {
           throw new Error(data?.message || 'Download failed. Please try again.');
         }
         if (data?.downloadUrl) {
-          window.location.href = data.downloadUrl;
+          // Trigger download without navigating away from the page
+          const a = document.createElement('a');
+          a.href = data.downloadUrl;
+          a.rel = 'noopener';
+          a.download = '';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        } else {
+          throw new Error('No download URL returned');
         }
       })
-      .catch(err => alert(err.message || 'Download failed. Please try again.'));
+      .catch(err => {
+        console.error('Album download failed:', err);
+        alert(err.message || 'Download failed. Please try again.');
+      });
   };
 
   const allTracks = useMemo(() => {

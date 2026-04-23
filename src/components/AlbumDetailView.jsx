@@ -5,6 +5,17 @@ import GenericCoverArt from './GenericCoverArt';
 import PremiumPrompt from './PremiumPrompt';
 import API_URL from '../config/api';
 
+// Trigger a file download from a URL without navigating away from the current page
+const triggerDownload = (url) => {
+  const a = document.createElement('a');
+  a.href = url;
+  a.rel = 'noopener';
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+};
+
 const getTonalityColor = (tonality) => {
   const colors = {
     '1A': '#63E6E2',
@@ -98,7 +109,9 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
         throw new Error(data?.message || 'Download failed');
       }
       if (data?.downloadUrl) {
-        window.location.href = data.downloadUrl;
+        triggerDownload(data.downloadUrl);
+      } else {
+        throw new Error('No download URL returned');
       }
     } catch (err) {
       console.error('Download failed:', err);
@@ -123,9 +136,11 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       if (!res.ok) {
         throw new Error(data?.message || 'ZIP download failed');
       }
-      // If backend returns a signed URL, open it directly for fast download
+      // If backend returns a signed URL, trigger download without leaving the page
       if (data?.downloadUrl) {
-        window.location.href = data.downloadUrl;
+        triggerDownload(data.downloadUrl);
+      } else {
+        throw new Error('No download URL returned');
       }
     } catch (err) {
       console.error('ZIP download failed:', err);
@@ -198,15 +213,15 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       </button>
 
       <div className="h-full overflow-y-auto">
-        <div className="max-w-[1600px] mx-auto px-4 py-4 md:px-10 md:py-8">
+        <div className="max-w-[1400px] mx-auto px-4 py-4 md:px-8 md:py-6 lg:py-8">
           {/* Split Layout Container */}
-          <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-8 animate-in slide-in-from-bottom duration-500">
+          <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[380px_1fr] gap-6 lg:gap-8 animate-in slide-in-from-bottom duration-500">
             
             {/* LEFT: Album Card */}
-            <div className="lg:sticky lg:top-8 h-fit">
+            <div className="lg:sticky lg:top-6 h-fit">
               <div className="bg-gradient-to-br from-dark-elevated to-dark-surface rounded-2xl overflow-hidden shadow-2xl border border-white/5 animate-in slide-in-from-left duration-500">
                 {/* Album Cover - Reduced Height */}
-                <div className="relative group h-[200px] md:h-[320px]">
+                <div className="relative group aspect-square lg:aspect-auto lg:h-[260px] xl:h-[300px]">
                   {album.coverArt ? (
                     <img
                       src={album.coverArt}
