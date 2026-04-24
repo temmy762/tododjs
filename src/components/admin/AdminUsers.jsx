@@ -87,15 +87,23 @@ export default function AdminUsers() {
     }
   };
 
+  // Normalize Stripe planIds to human-readable plan names
+  const normalizePlan = (raw) => {
+    if (!raw || raw === 'free') return 'free';
+    if (['premium', 'individual-monthly', 'individual-quarterly'].includes(raw)) return 'premium';
+    if (['pro', 'shared-monthly', 'shared-quarterly'].includes(raw)) return 'pro';
+    return raw;
+  };
+
   const getPlanLabel = (u) => {
     if (u.role === 'admin') return t('admin.adminRole');
-    const plan = u.subscription?.plan || 'free';
+    const plan = normalizePlan(u.subscription?.plan || u.subscription?.planId || 'free');
     return t(`subscription.${plan}`, plan.charAt(0).toUpperCase() + plan.slice(1));
   };
 
   const getRoleColor = (u) => {
     if (u.role === 'admin') return 'from-red-500 to-pink-500';
-    const plan = u.subscription?.plan || 'free';
+    const plan = normalizePlan(u.subscription?.plan || u.subscription?.planId || 'free');
     if (plan === 'pro') return 'from-orange-500 to-red-500';
     if (plan === 'premium') return 'from-purple-500 to-pink-500';
     return 'from-gray-500 to-gray-600';
@@ -302,7 +310,15 @@ export default function AdminUsers() {
 function EditUserModal({ user, onClose, onSave }) {
   const { t } = useTranslation();
   const [role, setRole] = useState(user.role || 'user');
-  const [plan, setPlan] = useState(user.subscription?.plan || 'free');
+
+  // Normalize Stripe planIds to human-readable plan names for the dropdown
+  const normalizePlan = (raw) => {
+    if (!raw || raw === 'free') return 'free';
+    if (['premium', 'individual-monthly', 'individual-quarterly'].includes(raw)) return 'premium';
+    if (['pro', 'shared-monthly', 'shared-quarterly'].includes(raw)) return 'pro';
+    return raw;
+  };
+  const [plan, setPlan] = useState(normalizePlan(user.subscription?.plan || user.subscription?.planId || 'free'));
   const [isActive, setIsActive] = useState(user.isActive !== false);
 
   return (
