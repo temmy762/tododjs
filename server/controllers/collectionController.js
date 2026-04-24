@@ -1467,13 +1467,31 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
 
     const finalDatePacks = await ensureCardsExist();
 
-    // Build a map of date pack name to ID
+    // Build a multi-key map: cleaned name, raw name, sourceFolderName, lowercase variants
     const datePackMap = new Map();
     for (const dp of finalDatePacks) {
-      datePackMap.set(dp.name, dp._id.toString());
-      const cleaned = cleanDatePackName(dp.name);
-      if (cleaned && cleaned !== dp.name) datePackMap.set(cleaned, dp._id.toString());
+      const id = dp._id.toString();
+      const names = new Set();
+      names.add(dp.name);
+      names.add(cleanDatePackName(dp.name));
+      if (dp.sourceFolderName) {
+        names.add(dp.sourceFolderName);
+        names.add(cleanDatePackName(dp.sourceFolderName));
+      }
+      for (const n of names) {
+        if (n) {
+          datePackMap.set(n, id);
+          datePackMap.set(n.toLowerCase().trim(), id);
+        }
+      }
     }
+    const resolveDatePackId = (rawName) => {
+      if (!rawName) return undefined;
+      return datePackMap.get(rawName)
+        || datePackMap.get(cleanDatePackName(rawName))
+        || datePackMap.get(rawName.toLowerCase().trim())
+        || datePackMap.get(cleanDatePackName(rawName)?.toLowerCase().trim());
+    };
 
     console.log(` Found MP3s in ${mp3FilesByDatePack.size} date packs`);
 
@@ -1493,9 +1511,9 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
 
     // Process each date pack
     for (const [datePackName, mp3Files] of mp3FilesByDatePack) {
-      const datePackId = datePackMap.get(datePackName);
+      const datePackId = resolveDatePackId(datePackName);
       if (!datePackId) {
-        console.log(`   Date pack "${datePackName}" not found in existing cards, skipping`);
+        console.log(`   Date pack "${datePackName}" not found in existing cards (map keys: ${[...datePackMap.keys()].join(', ')}), skipping`);
         continue;
       }
 
