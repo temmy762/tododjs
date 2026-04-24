@@ -1425,7 +1425,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
         }
 
         const datePack = await DatePack.create({
-          name: datePackName,
+          name: cleanDatePackName(datePackName),
           collectionId: collection._id,
           date: packDate,
           status: 'pending',
@@ -1558,10 +1558,15 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
     if (totalTracks === 0) {
       collection.status = 'failed';
       collection.processingProgress = 0;
-      collection.errorMessage = 'No MP3 tracks were extracted from the ZIP. The file may contain no MP3 files, use an unsupported folder structure, or have a date-pack name mismatch.';
+      const mapKeyCount = datePackMap.size;
+      const zipPackNames = [...mp3FilesByDatePack.keys()];
+      const dbPackNames = finalDatePacks.map(dp => dp.name);
+      collection.errorMessage = `No MP3 tracks were extracted. ZIP contained ${zipPackNames.length} date-pack folder(s) [${zipPackNames.slice(0, 5).join(', ')}] but ${processedCount} matched the ${dbPackNames.length} stored date-pack(s) [${dbPackNames.slice(0, 5).join(', ')}]. Check server logs for details.`;
       await collection.save();
       try { zipfile.close(); } catch { /* ignore */ }
-      console.log(' Processing complete but 0 tracks extracted — marking collection as failed.');
+      console.log(` Processing complete but 0 tracks extracted — marking collection as failed.`);
+      console.log(`   ZIP date-pack keys: ${zipPackNames.join(', ')}`);
+      console.log(`   DB date-pack names: ${dbPackNames.join(', ')}`);
       if (fs.existsSync(zipFilePath)) fs.unlinkSync(zipFilePath);
       return;
     }
@@ -2331,7 +2336,8 @@ export const getCollectionStatus = async (req, res) => {
         updatedAt: collection.updatedAt,
         processingDetail: collection.processingDetail || '',
         tracksProcessed: collection.tracksProcessed || 0,
-        totalTracksEstimate: collection.totalTracksEstimate || 0
+        totalTracksEstimate: collection.totalTracksEstimate || 0,
+        errorMessage: collection.errorMessage || ''
       }
     });
   } catch (error) {

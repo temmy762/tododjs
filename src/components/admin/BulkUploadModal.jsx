@@ -216,7 +216,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
 
             const statusJson = await statusResp.json();
             if (statusJson?.success) {
-              const { status, processingProgress, processingDetail, tracksProcessed, totalTracksEstimate } = statusJson.data;
+              const { status, processingProgress, processingDetail, tracksProcessed, totalTracksEstimate, errorMessage } = statusJson.data;
               updateItem(idx, {
                 processingProgress: processingProgress ?? 0,
                 processingDetail: processingDetail ?? '',
@@ -226,7 +226,8 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                   ? 'completed'
                   : status === 'failed'
                     ? 'failed'
-                    : 'processing'
+                    : 'processing',
+                uploadError: status === 'failed' ? (errorMessage || 'Processing failed. Check server logs.') : ''
               });
               if (status === 'completed' || status === 'failed') {
                 clearInterval(interval);
@@ -632,14 +633,15 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
               }
               const statusJson = await statusResp.json();
               if (statusJson?.success) {
-                const { status, processingProgress, uploadStats, processingDetail, tracksProcessed, totalTracksEstimate } = statusJson.data;
+                const { status, processingProgress, uploadStats, processingDetail, tracksProcessed, totalTracksEstimate, errorMessage } = statusJson.data;
                 updateItem(idx, {
                   uploadStats,
                   processingProgress: processingProgress ?? 0,
                   processingDetail: processingDetail ?? '',
                   tracksProcessed: tracksProcessed ?? 0,
                   totalTracksEstimate: totalTracksEstimate ?? 0,
-                  uploadStatus: status === 'completed' ? 'completed' : status === 'failed' ? 'failed' : 'processing'
+                  uploadStatus: status === 'completed' ? 'completed' : status === 'failed' ? 'failed' : 'processing',
+                  uploadError: status === 'failed' ? (errorMessage || 'Processing failed. Check server logs.') : ''
                 });
                 if (status === 'completed' || status === 'failed') {
                   clearInterval(interval);
@@ -662,7 +664,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     // Process uploads SEQUENTIALLY to avoid server overload / concurrent failures
     const itemsToProcess = uploadItems
       .map((item, idx) => ({ item, idx }))
-      .filter(({ item }) => item.scanStatus === 'scanned');
+      .filter(({ item }) => item.scanStatus === 'scanned' && item.uploadStatus === 'idle');
 
     for (const { item, idx } of itemsToProcess) {
       await processItem(item, idx);
