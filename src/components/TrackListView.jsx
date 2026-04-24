@@ -166,12 +166,6 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
                   <span className="text-[9px] text-brand-text-tertiary/60">
                     {new Date(track.dateAdded).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric' })}
                   </span>
-                  {track.pool && (
-                    <>
-                      <span className="text-[9px] text-brand-text-tertiary/40">•</span>
-                      <span className="text-[9px] text-brand-text-tertiary/60 truncate max-w-[80px]">{track.pool}</span>
-                    </>
-                  )}
                 </div>
 
                 <div className="flex items-center gap-3 flex-shrink-0">
@@ -204,7 +198,6 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
           <div className="w-16 text-center">{t('tracks.tonality')}</div>
           <div className="w-12 text-center">BPM</div>
           <div className="w-24 text-center">{t('sort.dateAdded')}</div>
-          <div className="w-20">{t('tracks.pool')}</div>
           <div className="w-24"></div>
         </div>
 
@@ -284,16 +277,12 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
 
               <div className="w-12 flex items-center justify-center">
                 <span className="px-1 py-0.5 rounded text-[9px] font-medium text-brand-text-secondary bg-dark-elevated/50">
-                  {track.bpm}
+                  {track.bpm > 0 ? track.bpm : '—'}
                 </span>
               </div>
 
               <div className="w-24 flex items-center justify-center text-[10px] text-brand-text-tertiary">
                 {new Date(track.dateAdded).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })}
-              </div>
-
-              <div className="w-20 flex items-center text-[9px] text-brand-text-tertiary/80 truncate">
-                {track.pool}
               </div>
 
               <div className="w-24 flex items-center justify-end gap-1">

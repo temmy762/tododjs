@@ -163,6 +163,20 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
   }
 
   const { subscription, plan, daysRemaining } = subscriptionData;
+
+  if (!subscription) {
+    return (
+      <div className="text-center py-12">
+        <Crown className="w-16 h-16 text-brand-text-tertiary mx-auto mb-4" />
+        <h3 className="text-xl font-bold text-white mb-2">{t('subscriptionMgmt.noActiveSubscription')}</h3>
+        <p className="text-brand-text-tertiary mb-6">{t('subscriptionMgmt.subscribeToUnlock')}</p>
+        <button onClick={() => window.location.href = '/pricing'} className="px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-all duration-150">
+          {t('subscription.viewPlans')}
+        </button>
+      </div>
+    );
+  }
+
   const isSpanish = i18n.language === 'es';
   const planName = isSpanish ? plan?.nameEs : plan?.name;
 
@@ -175,8 +189,16 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
             <h2 className="text-2xl font-bold text-white mb-2">{t('subscription.currentPlan')}</h2>
             <p className="text-brand-text-tertiary">{t('subscription.subscriptionDetails')}</p>
           </div>
-          <div className="px-4 py-2 rounded-full bg-green-500/10 border border-green-500/20">
-            <span className="text-sm font-semibold text-green-400 capitalize">
+          <div className={`px-4 py-2 rounded-full border ${
+            subscription.status === 'active' ? 'bg-green-500/10 border-green-500/20' :
+            subscription.status === 'cancelled' ? 'bg-yellow-500/10 border-yellow-500/20' :
+            'bg-red-500/10 border-red-500/20'
+          }`}>
+            <span className={`text-sm font-semibold capitalize ${
+              subscription.status === 'active' ? 'text-green-400' :
+              subscription.status === 'cancelled' ? 'text-yellow-400' :
+              'text-red-400'
+            }`}>
               {t(`subscription.${subscription.status}`)}
             </span>
           </div>
@@ -198,7 +220,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
               <div>
                 <p className="text-sm text-brand-text-tertiary">{t('subscription.expiresOn')}</p>
                 <p className="text-lg font-semibold text-white">
-                  {new Date(subscription.endDate).toLocaleDateString()}
+                  {subscription.endDate ? new Date(subscription.endDate).toLocaleDateString() : '—'}
                 </p>
               </div>
             </div>
@@ -234,7 +256,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
             {t('subscription.devices')}
           </h3>
           <p className="text-sm text-brand-text-tertiary mb-4">
-            {t('subscriptionMgmt.devicesRegistered', { current: devices.length, max: plan.features.maxDevices })}
+            {t('subscriptionMgmt.devicesRegistered', { current: devices.length, max: plan?.features?.maxDevices ?? '—' })}
           </p>
 
           {devices.length > 0 ? (
@@ -247,7 +269,11 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
                   <div className="flex items-center gap-3">
                     <Smartphone className="w-5 h-5 text-brand-text-tertiary" />
                     <div>
-                      <p className="text-sm font-semibold text-white">{device.deviceInfo}</p>
+                      <p className="text-sm font-semibold text-white">
+                        {typeof device.deviceInfo === 'object'
+                          ? (device.deviceInfo?.deviceName || device.deviceInfo?.browser || 'Unknown Device')
+                          : (device.deviceInfo || 'Unknown Device')}
+                      </p>
                       <p className="text-xs text-brand-text-tertiary">
                         {t('subscriptionMgmt.lastActive')} {new Date(device.lastActive).toLocaleDateString()}
                       </p>

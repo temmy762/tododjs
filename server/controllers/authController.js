@@ -96,6 +96,17 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
           console.error('Failed to send device block email:', emailError);
         }
 
+        // Record blocked attempt for admin panel visibility
+        user.blockedLoginAttempts.push({
+          deviceName: deviceInfo.deviceName,
+          browser: deviceInfo.browser,
+          os: deviceInfo.os,
+          ipAddress,
+          userAgent,
+          attemptedAt: new Date()
+        });
+        await user.save();
+
         return res.status(403).json({
           success: false,
           deviceLimitReached: true,

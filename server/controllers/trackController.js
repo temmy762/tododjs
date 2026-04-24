@@ -460,7 +460,7 @@ export const reanalyzeAlbumTracks = async (req, res) => {
           const { tonality, detectedBpm } = await detectTonality(audioBuffer, metadata);
 
           track.tonality = tonality;
-          if (detectedBpm) track.bpm = detectedBpm;
+          track.bpm = detectedBpm || track.bpm || 128;
           await track.save();
           updated++;
           console.log(`   ✅ Updated: ${track.title} → ${tonality.camelot || 'unknown'} | ${detectedBpm || track.bpm} BPM`);
@@ -470,6 +470,52 @@ export const reanalyzeAlbumTracks = async (req, res) => {
       }
       console.log(`\n✅ Re-analysis complete: ${updated}/${tracks.length} tracks updated`);
     })();
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Bulk-fix tracks with missing/zero BPM using filename extraction + default fallback
+// @route   PATCH /api/tracks/fix-bpm
+// @access  Private/Admin
+export const fixMissingBpm = async (req, res) => {
+  try {
+    const defaultBpm = parseInt(req.body.defaultBpm) || 128;
+
+    const tracks = await Track.find({ $or: [{ bpm: { $lte: 0 } }, { bpm: null }, { bpm: { $exists: false } }] })
+      .select('_id title bpm');
+
+    if (!tracks.length) {
+      return res.status(200).json({ success: true, message: 'No tracks with missing BPM found', updated: 0 });
+    }
+
+    let updated = 0;
+    const results = [];
+
+    for (const track of tracks) {
+      let newBpm = null;
+
+      // Try to extract BPM from title (e.g. "Song Title 128 BPM" or "Song [128]")
+      const bpmMatch = track.title?.match(/(\d{2,3})\s*BPM/i) || track.title?.match(/\[(\d{2,3})\]/);
+      if (bpmMatch) {
+        const parsed = parseInt(bpmMatch[1]);
+        if (parsed >= 60 && parsed <= 220) newBpm = parsed;
+      }
+
+      // Fall back to default
+      if (!newBpm) newBpm = defaultBpm;
+
+      await Track.updateOne({ _id: track._id }, { $set: { bpm: newBpm } });
+      updated++;
+      results.push({ title: track.title, bpm: newBpm, fromFilename: !!bpmMatch });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Fixed BPM for ${updated} track(s)`,
+      updated,
+      results
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

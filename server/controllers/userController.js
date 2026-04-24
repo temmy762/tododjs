@@ -160,7 +160,7 @@ export const getDeviceOverview = async (req, res) => {
     const total = await User.countDocuments(query);
 
     const users = await User.find(query)
-      .select('name email role subscription.status subscription.plan subscription.devices subscription.sharedWith subscription.sharedBy subscription.stripeCustomerId subscription.stripeSubscriptionId lastLogin isActive createdAt')
+      .select('name email role subscription.status subscription.plan subscription.planId subscription.devices subscription.sharedWith subscription.sharedBy subscription.stripeCustomerId subscription.stripeSubscriptionId blockedLoginAttempts lastLogin isActive createdAt')
       .sort('-lastLogin')
       .skip(skip)
       .limit(parseInt(limit))
@@ -176,9 +176,11 @@ export const getDeviceOverview = async (req, res) => {
       const activeSessions = devices.filter(d => d.lastActive && new Date(d.lastActive) > activeThreshold).length;
       const uniqueIPs = [...new Set(devices.map(d => d.ipAddress).filter(Boolean))];
       const uniqueCountries = [...new Set(devices.map(d => d.location).filter(Boolean))];
+      const blockedAttempts = u.blockedLoginAttempts || [];
       const suspiciousSharing = (
         uniqueIPs.length > 2 ||
-        (u.subscription?.sharedWith?.length > 0)
+        (u.subscription?.sharedWith?.length > 0) ||
+        blockedAttempts.length > 0
       );
       return {
         _id: u._id,
@@ -191,12 +193,14 @@ export const getDeviceOverview = async (req, res) => {
         subscription: {
           status: u.subscription?.status,
           plan: u.subscription?.plan,
+          planId: u.subscription?.planId,
           sharedWith: u.subscription?.sharedWith || [],
           sharedBy: u.subscription?.sharedBy || null,
           stripeCustomerId: u.subscription?.stripeCustomerId || null,
           stripeSubscriptionId: u.subscription?.stripeSubscriptionId || null
         },
         devices,
+        blockedLoginAttempts: blockedAttempts,
         activeSessions,
         uniqueIPs,
         uniqueCountries,

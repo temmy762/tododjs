@@ -111,14 +111,28 @@ export async function analyzeAudio(mp3Buffer) {
     console.error('Key detection error:', err.message);
   }
 
-  // BPM detection
+  // BPM detection — try RhythmExtractor2013 first (more reliable), fall back to PercivalBpmEstimator
   try {
-    const bpmData = essentia.PercivalBpmEstimator(signal, 1024, 2048, 128, 128, 210, 50, audioBuffer.sampleRate);
-    if (bpmData && bpmData.bpm > 0) {
-      bpmResult = Math.round(bpmData.bpm);
+    if (typeof essentia.RhythmExtractor2013 === 'function') {
+      const rhythmData = essentia.RhythmExtractor2013(signal, 208, 'multifeature', 40);
+      if (rhythmData && rhythmData.bpm > 0) {
+        bpmResult = Math.round(rhythmData.bpm);
+      }
     }
   } catch (err) {
-    console.error('BPM detection error:', err.message);
+    console.error('RhythmExtractor2013 error:', err.message);
+  }
+
+  if (!bpmResult) {
+    try {
+      // Correct param order: frameSize=1024, hopSize=128, maxBPM=210, minBPM=50, sampleRate
+      const bpmData = essentia.PercivalBpmEstimator(signal, 1024, 128, 210, 50, audioBuffer.sampleRate);
+      if (bpmData && bpmData.bpm > 0) {
+        bpmResult = Math.round(bpmData.bpm);
+      }
+    } catch (err) {
+      console.error('PercivalBpmEstimator error:', err.message);
+    }
   }
 
   // Clean up

@@ -90,6 +90,14 @@ const userSchema = new mongoose.Schema({
       isCurrentDevice: { type: Boolean, default: false }
     }]
   },
+  blockedLoginAttempts: [{
+    deviceName: { type: String, default: 'Unknown Device' },
+    browser:    { type: String, default: 'Unknown' },
+    os:         { type: String, default: 'Unknown' },
+    ipAddress:  { type: String, default: null },
+    userAgent:  { type: String, default: null },
+    attemptedAt:{ type: Date,   default: Date.now }
+  }],
   subscriptionHistory: [{
     planId: String,
     startDate: Date,

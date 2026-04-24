@@ -1,6 +1,8 @@
 import { parseBuffer } from 'music-metadata';
 import { analyzeAudio } from './audioAnalysis.js';
 import { detectTonalityWithAI } from './openai.js';
+import { lookupSpotifyFeatures } from './spotifyBpm.js';
+import { lookupAuddFeatures } from './auddBpm.js';
 
 const CAMELOT_MAP = {
   'C major': '8B', 'A minor': '8A',
@@ -69,7 +71,36 @@ export function parseKeyFromID3(initialKey) {
 export async function detectTonality(audioBuffer, metadata) {
   let tonality = null;
   let detectedBpm = null;
-  
+
+  // Step 0: External metadata lookup (Spotify or AudD) — same data source as Tunebat
+  if (metadata.title) {
+    try {
+      // Try Spotify first (if configured), fall back to AudD
+      const ext = process.env.SPOTIFY_CLIENT_ID
+        ? await lookupSpotifyFeatures(metadata.title, metadata.artist)
+        : await lookupAuddFeatures(metadata.title, metadata.artist);
+
+      if (ext?.bpm) {
+        detectedBpm = ext.bpm;
+        const src = ext.spotifyTrack ? 'Spotify' : 'AudD';
+        console.log(`   ✓ BPM from ${src}: ${detectedBpm} (${ext.spotifyTrack || ext.matchedTrack || 'matched'})`);
+      }
+      if (ext?.camelot) {
+        tonality = {
+          key: ext.key,
+          scale: ext.scale,
+          camelot: ext.camelot,
+          source: ext.spotifyTrack ? 'spotify' : 'audd',
+          confidence: 0.95,
+          needsManualReview: false
+        };
+        console.log(`   ✓ Key from external lookup: ${tonality.camelot}`);
+      }
+    } catch (err) {
+      console.log('   ⚠ External BPM lookup skipped:', err.message);
+    }
+  }
+
   // Step 1: Try ID3 tags (fastest, most reliable if present)
   try {
     const musicMetadata = await parseBuffer(audioBuffer, { mimeType: 'audio/mpeg' });
@@ -103,8 +134,8 @@ export async function detectTonality(audioBuffer, metadata) {
       }
     }
 
-    // Also grab BPM from ID3 if available
-    if (musicMetadata.common.bpm) {
+    // Also grab BPM from ID3 if not already found via Spotify
+    if (!detectedBpm && musicMetadata.common.bpm) {
       detectedBpm = Math.round(musicMetadata.common.bpm);
       console.log(`   ✓ BPM from ID3 tag: ${detectedBpm}`);
     }
@@ -113,7 +144,7 @@ export async function detectTonality(audioBuffer, metadata) {
   }
 
   // Step 2: Essentia.js real audio analysis (accurate, analyzes waveform)
-  if (!tonality || !detectedBpm) {
+  if ((!tonality || !detectedBpm) && !(tonality?.source === 'spotify' && detectedBpm)) {
     try {
       console.log(`   🎵 Running Essentia.js audio analysis...`);
       const analysis = await analyzeAudio(audioBuffer);

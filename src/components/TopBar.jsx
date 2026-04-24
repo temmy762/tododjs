@@ -111,7 +111,7 @@ export default function TopBar({ onSearchFocus, onSearchChange, searchQuery, onS
               <User className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2} />
               <span className="hidden sm:inline">{t('auth.login')}</span>
             </button>
-          ) : user.role !== 'admin' && subscriptionStatus?.hasSubscription ? (
+          ) : user.role !== 'admin' && subscriptionStatus?.isActive ? (
             <button
               onClick={() => navigate('/subscription')}
               className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-full bg-gradient-to-r from-accent to-accent-hover border border-accent/20 transition-all duration-200 hover:scale-105 text-xs md:text-sm font-semibold text-white shadow-lg shadow-accent/30"
@@ -120,6 +120,15 @@ export default function TopBar({ onSearchFocus, onSearchChange, searchQuery, onS
               <Crown className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2} />
               <span className="hidden sm:inline">{subscriptionStatus.plan?.type === 'shared' ? '👥' : '👤'}</span>
               <span className="hidden md:inline text-xs">{subscriptionStatus.daysRemaining}d</span>
+            </button>
+          ) : user.role !== 'admin' && subscriptionStatus?.hasSubscription && subscriptionStatus.subscription?.status === 'cancelled' ? (
+            <button
+              onClick={() => navigate('/subscription')}
+              className="flex items-center gap-1.5 md:gap-2 px-3 md:px-4 py-2 md:py-2.5 rounded-full bg-yellow-500/20 border border-yellow-500/30 transition-all duration-200 hover:scale-105 text-xs md:text-sm font-semibold text-yellow-400"
+              title={t('subscription.manageSubscription')}
+            >
+              <Crown className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2} />
+              <span className="hidden sm:inline">{t('subscription.cancelled', 'Cancelled')}</span>
             </button>
           ) : user.role !== 'admin' && (
             <button

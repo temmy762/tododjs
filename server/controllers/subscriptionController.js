@@ -68,21 +68,28 @@ export const getSubscriptionStatus = async (req, res) => {
     
     const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
     
-    // Check if subscription expired
+    // Check if subscription expired (past endDate)
     if (user.subscription.endDate && new Date() > user.subscription.endDate) {
-      user.subscription.status = 'expired';
-      await user.save();
+      if (user.subscription.status !== 'expired') {
+        user.subscription.status = 'expired';
+        await user.save();
+      }
     }
+
+    const status = user.subscription.status;
+    const daysRemaining = user.subscription.endDate 
+      ? Math.max(0, Math.ceil((user.subscription.endDate - new Date()) / (1000 * 60 * 60 * 24)))
+      : 0;
+    const isActive = status === 'active';
     
     res.status(200).json({
       success: true,
       data: {
         hasSubscription: true,
+        isActive,
         subscription: user.subscription,
         plan: plan,
-        daysRemaining: user.subscription.endDate 
-          ? Math.ceil((user.subscription.endDate - new Date()) / (1000 * 60 * 60 * 24))
-          : 0
+        daysRemaining
       }
     });
   } catch (error) {

@@ -198,6 +198,22 @@ function UserDeviceRow({ user, onRevoke, onRevokeAll }) {
           )}
 
           {/* Device list */}
+          {/* Blocked login attempts */}
+          {user.blockedLoginAttempts?.length > 0 && (
+            <div className="mb-3 p-3 rounded-lg border border-red-500/20 bg-red-500/5">
+              <p className="text-xs font-bold text-red-400 flex items-center gap-1 mb-2">
+                <AlertTriangle className="w-3 h-3" />
+                {user.blockedLoginAttempts.length} BLOCKED LOGIN ATTEMPT{user.blockedLoginAttempts.length > 1 ? 'S' : ''} (device limit reached)
+              </p>
+              {user.blockedLoginAttempts.slice(-5).reverse().map((attempt, i) => (
+                <div key={i} className="flex items-center justify-between text-xs py-1 border-t border-red-500/10 first:border-0">
+                  <span className="text-red-300">{attempt.deviceName} · {attempt.browser} / {attempt.os}</span>
+                  <span className="text-red-400/60 font-mono">{attempt.ipAddress || '?'} · {timeAgo(attempt.attemptedAt)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
           {user.devices?.length === 0 && (
             <p className="text-sm text-brand-text-tertiary text-center py-4">No registered devices</p>
           )}
@@ -291,7 +307,8 @@ export default function AdminUserDevices() {
         const totalDevices = data.data.reduce((s, u) => s + (u.devices?.length || 0), 0);
         const activeSessions = data.data.reduce((s, u) => s + (u.activeSessions || 0), 0);
         const suspiciousUsers = data.data.filter(u => u.suspiciousSharing).length;
-        setStats({ totalDevices, activeSessions, suspiciousUsers, totalUsers: data.pagination.total });
+        const blockedAttempts = data.data.reduce((s, u) => s + (u.blockedLoginAttempts?.length || 0), 0);
+        setStats({ totalDevices, activeSessions, suspiciousUsers, blockedAttempts, totalUsers: data.pagination.total });
       }
     } catch (err) {
       console.error('Failed to fetch devices:', err);
@@ -382,7 +399,7 @@ export default function AdminUserDevices() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="bg-dark-elevated rounded-xl p-4 border border-white/10">
           <div className="flex items-center gap-2 mb-2">
             <Users className="w-4 h-4 text-accent" />
@@ -410,6 +427,13 @@ export default function AdminUserDevices() {
             <span className="text-xs text-brand-text-tertiary font-medium uppercase tracking-wide">Suspicious</span>
           </div>
           <p className={`text-2xl font-bold ${stats.suspiciousUsers > 0 ? 'text-yellow-400' : 'text-white'}`}>{stats.suspiciousUsers}</p>
+        </div>
+        <div className={`bg-dark-elevated rounded-xl p-4 border ${stats.blockedAttempts > 0 ? 'border-red-500/30 bg-red-500/5' : 'border-white/10'}`}>
+          <div className="flex items-center gap-2 mb-2">
+            <XCircle className={`w-4 h-4 ${stats.blockedAttempts > 0 ? 'text-red-400' : 'text-brand-text-tertiary'}`} />
+            <span className="text-xs text-brand-text-tertiary font-medium uppercase tracking-wide">Blocked Logins</span>
+          </div>
+          <p className={`text-2xl font-bold ${stats.blockedAttempts > 0 ? 'text-red-400' : 'text-white'}`}>{stats.blockedAttempts || 0}</p>
         </div>
       </div>
 

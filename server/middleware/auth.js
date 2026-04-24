@@ -35,16 +35,33 @@ export const protect = async (req, res, next) => {
       });
     }
 
-    // Validate device token is still active (token matches an activeToken on a registered device)
-    const hasActiveSubscription = req.user.subscription?.status === 'active' && req.user.subscription?.plan !== 'free';
-    if (hasActiveSubscription && req.user.registeredDevices?.length > 0) {
-      const deviceWithToken = req.user.registeredDevices.some(d => d.activeToken === token);
-      if (!deviceWithToken) {
-        return res.status(401).json({
-          success: false,
-          message: 'Session expired or device no longer authorized. Please log in again from a registered device.',
-          code: 'SESSION_INVALIDATED'
-        });
+    // Per-request device enforcement for active subscribers
+    const hasActiveSubscription =
+      req.user.subscription?.status === 'active' &&
+      req.user.subscription?.planId;
+
+    if (hasActiveSubscription) {
+      const deviceId = req.headers['x-device-id'];
+      const registeredDevices = req.user.subscription?.devices || [];
+
+      // Only enforce if the client sends a device ID AND the user already has registered devices
+      // (avoids locking out legacy sessions that predate device tracking)
+      if (deviceId && registeredDevices.length > 0) {
+        const isRegistered = registeredDevices.some(d => d.deviceId === deviceId);
+        if (!isRegistered) {
+          return res.status(401).json({
+            success: false,
+            message: 'This device is not authorized on your account. Please log in again.',
+            code: 'DEVICE_NOT_REGISTERED'
+          });
+        }
+
+        // Update lastActive for this device (fire-and-forget, don't block the request)
+        const device = registeredDevices.find(d => d.deviceId === deviceId);
+        if (device) {
+          device.lastActive = new Date();
+          req.user.save().catch(() => {});
+        }
       }
     }
 
