@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, Fragment } from 'react';
-import { X, Upload, Archive, AlertCircle, CheckCircle, Loader, FolderTree, Music, ChevronDown, ChevronUp, ChevronRight, RotateCcw, Ban, FolderOpen, Check } from 'lucide-react';
+import { X, Upload, Archive, AlertCircle, CheckCircle, Loader, FolderTree, Music, ChevronDown, ChevronUp, ChevronRight, RotateCcw, Ban, FolderOpen, Check, Minimize2, Maximize2 } from 'lucide-react';
 import { API_URL } from '../../config/api';
 
 export default function BulkUploadModal({ onClose, onSuccess }) {
@@ -12,6 +12,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   const [success, setSuccess] = useState('');
   const [dragActive, setDragActive] = useState(false);
   const [sources, setSources] = useState([]);
+  const [minimized, setMinimized] = useState(false);
 
   const [expandedDatePacks, setExpandedDatePacks] = useState(new Set());
   const [failedTracks, setFailedTracks] = useState([]);
@@ -658,13 +659,14 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
       }
     };
 
-    // Launch all uploads concurrently
-    const tasks = uploadItems
+    // Process uploads SEQUENTIALLY to avoid server overload / concurrent failures
+    const itemsToProcess = uploadItems
       .map((item, idx) => ({ item, idx }))
-      .filter(({ item }) => item.scanStatus === 'scanned')
-      .map(({ item, idx }) => processItem(item, idx));
+      .filter(({ item }) => item.scanStatus === 'scanned');
 
-    await Promise.all(tasks);
+    for (const { item, idx } of itemsToProcess) {
+      await processItem(item, idx);
+    }
 
     setUploading(false);
     setSuccess('All uploads complete.');
@@ -698,6 +700,83 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
   };
 
+  const completedCount = uploadItems.filter(i => i.uploadStatus === 'completed').length;
+  const failedItemCount = uploadItems.filter(i => i.uploadStatus === 'failed').length;
+  const activeCount = uploadItems.filter(i => i.uploadStatus === 'uploading' || i.uploadStatus === 'processing').length;
+  const allDone = uploadItems.length > 0 && uploadItems.every(i => i.uploadStatus === 'completed' || i.uploadStatus === 'failed');
+  const activeItem = uploadItems.find(i => i.uploadStatus === 'uploading' || i.uploadStatus === 'processing');
+
+  if (minimized) {
+    return (
+      <div className="fixed bottom-4 right-4 z-50 w-80 bg-dark-elevated border border-white/10 rounded-xl shadow-2xl shadow-black/50 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-3 bg-dark-surface border-b border-white/10">
+          <div className="flex items-center gap-2 min-w-0">
+            {activeCount > 0 ? (
+              <Loader size={16} className="text-accent animate-spin flex-shrink-0" />
+            ) : allDone ? (
+              <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
+            ) : (
+              <Archive size={16} className="text-accent flex-shrink-0" />
+            )}
+            <span className="text-sm font-semibold text-white truncate">
+              {activeCount > 0 ? `Uploading ${completedCount + 1}/${uploadItems.length}` : allDone ? 'Uploads complete' : 'Bulk Upload'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            <button onClick={() => setMinimized(false)} className="p-1.5 rounded-lg hover:bg-white/10 text-brand-text-tertiary hover:text-white transition-colors" title="Expand">
+              <Maximize2 size={14} />
+            </button>
+            {!uploading && (
+              <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-white/10 text-brand-text-tertiary hover:text-white transition-colors" title="Close">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+        {uploadItems.length > 0 && (
+          <div className="px-4 pt-3">
+            <div className="flex justify-between text-[10px] text-brand-text-tertiary mb-1">
+              <span>{completedCount} of {uploadItems.length} done</span>
+              {failedItemCount > 0 && <span className="text-red-400">{failedItemCount} failed</span>}
+            </div>
+            <div className="w-full bg-white/10 rounded-full h-1.5">
+              <div
+                className={`h-1.5 rounded-full transition-all duration-500 ${allDone && failedItemCount === 0 ? 'bg-green-500' : 'bg-accent'}`}
+                style={{ width: `${uploadItems.length > 0 ? Math.round(((completedCount + failedItemCount) / uploadItems.length) * 100) : 0}%` }}
+              />
+            </div>
+          </div>
+        )}
+        {activeItem && (
+          <div className="px-4 py-2">
+            <p className="text-xs text-white font-medium truncate">{activeItem.overrides?.collectionName || activeItem.file?.name}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex-1 bg-white/10 rounded-full h-1">
+                <div
+                  className={`h-1 rounded-full transition-all duration-300 ${activeItem.uploadStatus === 'uploading' ? 'bg-accent' : 'bg-yellow-400'}`}
+                  style={{ width: `${activeItem.uploadStatus === 'uploading' ? (activeItem.uploadProgress ?? 0) : (activeItem.processingProgress ?? 0)}%` }}
+                />
+              </div>
+              <span className="text-[10px] text-accent font-medium">
+                {activeItem.uploadStatus === 'uploading' ? `${activeItem.uploadProgress ?? 0}%` : `${activeItem.processingProgress ?? 0}%`}
+              </span>
+            </div>
+          </div>
+        )}
+        {allDone && (
+          <div className="px-4 py-2">
+            <p className="text-xs text-green-400">{completedCount} uploaded{failedItemCount > 0 ? `, ${failedItemCount} failed` : ''}</p>
+          </div>
+        )}
+        <div className="px-4 pb-3 pt-1">
+          <button onClick={() => setMinimized(false)} className="w-full text-center text-xs text-accent hover:text-accent-hover font-medium py-1 transition-colors">
+            {allDone ? 'View details' : 'Show full view'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
       <div className="bg-dark-elevated rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden border border-white/10">
@@ -707,12 +786,21 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
             <Archive className="w-5 h-5 text-accent" />
             Bulk Collection Upload
           </h2>
-          <button
-            onClick={onClose}
-            className="text-brand-text-tertiary hover:text-white transition-colors"
-          >
-            <X className="w-6 h-6" />
-          </button>
+          <div className="flex items-center gap-1">
+            {uploading && (
+              <button onClick={() => setMinimized(true)} className="p-1.5 rounded-lg hover:bg-white/10 text-brand-text-tertiary hover:text-white transition-colors" title="Minimize — upload continues in background">
+                <Minimize2 size={18} />
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              disabled={uploading}
+              className="text-brand-text-tertiary hover:text-white transition-colors disabled:opacity-30"
+              title={uploading ? 'Minimize to continue upload in background' : 'Close'}
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
         </div>
 
         {/* Content */}

@@ -78,6 +78,14 @@ export default function AdminRecordPool() {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
+  // Auto-poll every 5s when any collection is still processing/queued
+  useEffect(() => {
+    const hasActive = collections.some(c => c.status === 'processing' || c.status === 'queued');
+    if (!hasActive) return;
+    const interval = setInterval(fetchAll, 5000);
+    return () => clearInterval(interval);
+  }, [collections, fetchAll]);
+
   useEffect(() => {
     if (!collections || collections.length === 0) return;
     let toOpen = null;
@@ -210,28 +218,8 @@ export default function AdminRecordPool() {
 
         {/* Unified List View */}
         {view === 'list' && (() => {
-          const hiddenFromPublic = collections.filter(i => i.missingThumbnail);
-          const missingThumb    = [...collections, ...sources].filter(i => !i.thumbnail && !i.missingThumbnail);
           return (
             <div>
-              {hiddenFromPublic.length > 0 && (
-                <div className="mb-3 flex items-start gap-3 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl">
-                  <AlertCircle size={18} className="text-red-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-red-300 text-sm">
-                    <span className="font-semibold">{hiddenFromPublic.length} collection{hiddenFromPublic.length > 1 ? 's are' : ' is'} hidden from public</span>{' '}— no cover art was found in the ZIP.
-                    Use the edit (pencil) button on each red-outlined card to upload a thumbnail.
-                  </p>
-                </div>
-              )}
-              {missingThumb.length > 0 && (
-                <div className="mb-5 flex items-start gap-3 px-4 py-3 bg-yellow-500/10 border border-yellow-500/30 rounded-xl">
-                  <AlertCircle size={18} className="text-yellow-400 flex-shrink-0 mt-0.5" />
-                  <p className="text-yellow-300 text-sm">
-                    <span className="font-semibold">{missingThumb.length} card{missingThumb.length > 1 ? 's are' : ' is'} missing a thumbnail.</span>{' '}
-                    Use the edit button on each card to upload one.
-                  </p>
-                </div>
-              )}
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold">Record Pool</h2>
                 <button onClick={() => setModal('bulkUpload')} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors">

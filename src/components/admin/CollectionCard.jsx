@@ -40,30 +40,21 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete, o
     }
   };
 
-  const isMissingCover = collection.missingThumbnail;
+  const FALLBACK_IMG = '/images/ToDoDjs_Logo.png';
   const isFailed = collection.status === 'failed' ||
     (collection.status === 'completed' && (collection.totalTracks ?? 0) === 0);
   return (
-    <div className={`bg-white/5 rounded-lg overflow-hidden transition-all group ${
-      isMissingCover
-        ? 'border-2 border-red-500/60 hover:border-red-400'
-        : 'border border-white/10 hover:border-accent/50'
-    }`}>
+    <div className="bg-white/5 rounded-lg overflow-hidden transition-all group border border-white/10 hover:border-accent/50">
       <div 
         onClick={() => collection.status === 'completed' && onView(collection)}
         className={`relative aspect-video bg-gradient-to-br from-accent/20 to-purple-500/20 ${collection.status === 'completed' ? 'cursor-pointer' : ''}`}
       >
-        {collection.thumbnail ? (
-          <img
-            src={collection.thumbnail}
-            alt={collection.name}
-            className="w-full h-full object-cover"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <FolderOpen size={64} className="text-white/20" />
-          </div>
-        )}
+        <img
+          src={collection.thumbnail || FALLBACK_IMG}
+          alt={collection.name}
+          className="w-full h-full object-cover"
+          onError={(e) => { e.target.src = FALLBACK_IMG; }}
+        />
         
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity">
           <div className="absolute bottom-0 left-0 right-0 p-4 flex gap-2">
@@ -129,16 +120,9 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete, o
 
         {collection.status === 'failed' && (
           <div
-            className="absolute top-3 right-3 px-3 py-1 rounded-full bg-red-500/20 border border-red-500 cursor-help"
-            title={collection.errorMessage || 'Processing failed'}
+            className="absolute top-3 right-3 px-3 py-1 rounded-full bg-red-500/20 border border-red-500"
           >
             <span className="text-xs font-medium">Failed</span>
-          </div>
-        )}
-        {isMissingCover && (
-          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full bg-red-600/90 border border-red-400 flex items-center gap-1.5 shadow-lg">
-            <AlertCircle size={11} className="text-white" />
-            <span className="text-[10px] font-bold text-white uppercase tracking-wide">Hidden – No Cover</span>
           </div>
         )}
       </div>
@@ -179,6 +163,12 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete, o
         {reprocessError && (
           <p className="mt-2 text-xs text-red-400 flex items-center gap-1">
             <AlertCircle size={11} />{reprocessError}
+          </p>
+        )}
+        {collection.errorMessage && (
+          <p className="mt-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded px-2 py-1.5 flex items-start gap-1">
+            <AlertCircle size={11} className="flex-shrink-0 mt-0.5" />
+            <span>{collection.errorMessage}</span>
           </p>
         )}
         <div className="mt-3 pt-3 border-t border-white/10 flex items-center justify-between text-xs">

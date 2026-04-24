@@ -158,10 +158,12 @@ async function autoAssignThumbnails(collectionId) {
         collection.missingThumbnail = false;
         await collection.save();
       } else {
-        // No cover art found at all — flag for admin review
-        collection.missingThumbnail = true;
+        // No cover art found — use fallback logo so collection stays visible
+        const fallbackThumb = `${process.env.FRONTEND_URL || 'https://tododjs.com'}/images/ToDoDjs_Logo.png`;
+        collection.thumbnail = fallbackThumb;
+        collection.missingThumbnail = false;
         await collection.save();
-        console.log(`⚠ No cover art found for collection "${collection.name}" — flagged for admin`);
+        console.log(`ℹ️  No cover art in ZIP for "${collection.name}" — using fallback logo`);
       }
     }
 
