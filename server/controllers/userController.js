@@ -109,7 +109,24 @@ export const updateUser = async (req, res) => {
     }
 
     if (role) user.role = role;
-    if (plan) user.subscription.plan = plan;
+
+    if (plan) {
+      user.subscription.plan = plan;
+      if (plan !== 'free') {
+        user.subscription.status = 'active';
+        if (!user.subscription.startDate) {
+          user.subscription.startDate = new Date();
+        }
+        user.subscription.endDate = null;
+        user.subscription.grantedByAdmin = true;
+      } else {
+        user.subscription.status = 'inactive';
+        user.subscription.startDate = null;
+        user.subscription.endDate = null;
+        user.subscription.grantedByAdmin = false;
+      }
+    }
+
     if (isActive !== undefined) user.isActive = isActive;
 
     await user.save();

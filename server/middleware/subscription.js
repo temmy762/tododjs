@@ -20,7 +20,8 @@ export const requireSubscription = async (req, res, next) => {
       return next();
     }
 
-    if (!user.subscription.planId || user.subscription.status !== 'active') {
+    const hasPlan = user.subscription.planId || (user.subscription.plan && user.subscription.plan !== 'free');
+    if (!hasPlan || user.subscription.status !== 'active') {
       return res.status(403).json({
         success: false,
         message: 'Active subscription required',
@@ -66,6 +67,11 @@ export const checkDeviceLimit = async (req, res, next) => {
         success: false,
         message: 'Device ID required'
       });
+    }
+
+    // Admin-granted subscriptions may not have a Stripe planId — skip device limit
+    if (!user.subscription.planId && user.subscription.grantedByAdmin) {
+      return next();
     }
 
     const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
@@ -203,7 +209,8 @@ export const optionalSubscription = async (req, res, next) => {
 
     const user = await User.findById(req.user.id);
 
-    if (!user.subscription.planId || user.subscription.status !== 'active') {
+    const hasPlan = user.subscription.planId || (user.subscription.plan && user.subscription.plan !== 'free');
+    if (!hasPlan || user.subscription.status !== 'active') {
       req.hasSubscription = false;
       return next();
     }

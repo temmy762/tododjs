@@ -63,6 +63,10 @@ const userSchema = new mongoose.Schema({
       type: Boolean,
       default: false
     },
+    grantedByAdmin: {
+      type: Boolean,
+      default: false
+    },
     stripeCustomerId: String,
     stripeSubscriptionId: String,
     stripePaymentIntentId: String,

@@ -193,6 +193,35 @@ function App() {
     return () => stopTokenRefreshScheduler();
   }, [user, i18n]);
 
+  // Periodically re-fetch user data so admin-applied role/plan changes
+  // take effect without requiring the user to re-login.
+  useEffect(() => {
+    if (!user) return;
+    const USER_SYNC_INTERVAL = 60 * 1000; // 60 seconds
+    const interval = setInterval(async () => {
+      try {
+        const fresh = await authService.getCurrentUser();
+        if (fresh) {
+          setUser(prev => {
+            // Only update if something actually changed
+            if (
+              prev?.role !== fresh.role ||
+              prev?.subscription?.plan !== fresh.subscription?.plan ||
+              prev?.subscription?.status !== fresh.subscription?.status ||
+              prev?.isActive !== fresh.isActive
+            ) {
+              return fresh;
+            }
+            return prev;
+          });
+        }
+      } catch {
+        // ignore transient errors
+      }
+    }, USER_SYNC_INTERVAL);
+    return () => clearInterval(interval);
+  }, [user?._id]);
+
   useEffect(() => {
     if (!searchQuery.trim()) {
       setSearchResults([]);
