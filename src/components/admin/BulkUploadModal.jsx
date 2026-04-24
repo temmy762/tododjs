@@ -704,7 +704,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   const failedItemCount = uploadItems.filter(i => i.uploadStatus === 'failed').length;
   const activeCount = uploadItems.filter(i => i.uploadStatus === 'uploading' || i.uploadStatus === 'processing').length;
   const allDone = uploadItems.length > 0 && uploadItems.every(i => i.uploadStatus === 'completed' || i.uploadStatus === 'failed');
-  const activeItem = uploadItems.find(i => i.uploadStatus === 'uploading' || i.uploadStatus === 'processing');
+  const currentlyActiveItem = uploadItems.find(i => i.uploadStatus === 'uploading' || i.uploadStatus === 'processing');
 
   if (minimized) {
     return (
@@ -747,18 +747,18 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
             </div>
           </div>
         )}
-        {activeItem && (
+        {currentlyActiveItem && (
           <div className="px-4 py-2">
-            <p className="text-xs text-white font-medium truncate">{activeItem.overrides?.collectionName || activeItem.file?.name}</p>
+            <p className="text-xs text-white font-medium truncate">{currentlyActiveItem.overrides?.collectionName || currentlyActiveItem.file?.name}</p>
             <div className="flex items-center gap-2 mt-1">
               <div className="flex-1 bg-white/10 rounded-full h-1">
                 <div
-                  className={`h-1 rounded-full transition-all duration-300 ${activeItem.uploadStatus === 'uploading' ? 'bg-accent' : 'bg-yellow-400'}`}
-                  style={{ width: `${activeItem.uploadStatus === 'uploading' ? (activeItem.uploadProgress ?? 0) : (activeItem.processingProgress ?? 0)}%` }}
+                  className={`h-1 rounded-full transition-all duration-300 ${currentlyActiveItem.uploadStatus === 'uploading' ? 'bg-accent' : 'bg-yellow-400'}`}
+                  style={{ width: `${currentlyActiveItem.uploadStatus === 'uploading' ? (currentlyActiveItem.uploadProgress ?? 0) : (currentlyActiveItem.processingProgress ?? 0)}%` }}
                 />
               </div>
               <span className="text-[10px] text-accent font-medium">
-                {activeItem.uploadStatus === 'uploading' ? `${activeItem.uploadProgress ?? 0}%` : `${activeItem.processingProgress ?? 0}%`}
+                {currentlyActiveItem.uploadStatus === 'uploading' ? `${currentlyActiveItem.uploadProgress ?? 0}%` : `${currentlyActiveItem.processingProgress ?? 0}%`}
               </span>
             </div>
           </div>
