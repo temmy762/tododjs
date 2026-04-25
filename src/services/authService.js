@@ -67,16 +67,20 @@ export const authService = {
         credentials: 'include'
       });
 
+      // Only invalidate session on explicit auth rejection
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        return null;
+      }
+
       const data = await response.json();
       
       if (data.success) {
         return data.data;
-      } else {
-        localStorage.removeItem('token');
-        return null;
       }
+      return null;
     } catch (error) {
-      localStorage.removeItem('token');
+      // Network error — do NOT remove token, just return null
       return null;
     }
   },

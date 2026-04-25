@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useLocation } from 'react-router-dom';
 import TopBar from './components/TopBar';
@@ -193,34 +193,45 @@ function App() {
     return () => stopTokenRefreshScheduler();
   }, [user, i18n]);
 
-  // Periodically re-fetch user data so admin-applied role/plan changes
-  // take effect without requiring the user to re-login.
+  // Sync user data from server and apply if anything changed
+  const syncUserFromServer = useCallback(async () => {
+    try {
+      const fresh = await authService.getCurrentUser();
+      if (fresh) {
+        setUser(prev => {
+          if (
+            prev?.role !== fresh.role ||
+            prev?.subscription?.plan !== fresh.subscription?.plan ||
+            prev?.subscription?.status !== fresh.subscription?.status ||
+            prev?.isActive !== fresh.isActive
+          ) {
+            return fresh;
+          }
+          return prev;
+        });
+      }
+    } catch {
+      // ignore transient errors
+    }
+  }, []);
+
+  // Re-fetch user data every 15 s and immediately on page focus/tab-switch
+  // so admin-applied role/plan changes take effect without re-login.
   useEffect(() => {
     if (!user) return;
-    const USER_SYNC_INTERVAL = 60 * 1000; // 60 seconds
-    const interval = setInterval(async () => {
-      try {
-        const fresh = await authService.getCurrentUser();
-        if (fresh) {
-          setUser(prev => {
-            // Only update if something actually changed
-            if (
-              prev?.role !== fresh.role ||
-              prev?.subscription?.plan !== fresh.subscription?.plan ||
-              prev?.subscription?.status !== fresh.subscription?.status ||
-              prev?.isActive !== fresh.isActive
-            ) {
-              return fresh;
-            }
-            return prev;
-          });
-        }
-      } catch {
-        // ignore transient errors
-      }
-    }, USER_SYNC_INTERVAL);
-    return () => clearInterval(interval);
-  }, [user?._id]);
+
+    const interval = setInterval(syncUserFromServer, 15 * 1000);
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') syncUserFromServer();
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [user?._id, syncUserFromServer]);
 
   useEffect(() => {
     if (!searchQuery.trim()) {
