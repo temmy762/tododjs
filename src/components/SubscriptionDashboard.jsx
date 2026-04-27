@@ -294,32 +294,6 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
         </div>
       )}
 
-      {/* Share Subscription */}
-      {plan?.type === 'shared' && subscription.sharedWith?.length < plan.features.maxUsers - 1 && (
-        <div className="bg-dark-surface/95 backdrop-blur-xl rounded-2xl border border-white/10 p-6">
-          <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-            <Share2 className="w-5 h-5 text-accent" />
-            {t('subscription.shareSubscription')}
-          </h3>
-          <form onSubmit={handleShareSubscription} className="flex gap-3">
-            <input
-              type="email"
-              value={shareEmail}
-              onChange={(e) => setShareEmail(e.target.value)}
-              placeholder={t('subscription.enterEmail')}
-              required
-              className="flex-1 px-4 py-3 bg-dark-elevated border border-white/10 rounded-lg text-white placeholder-brand-text-tertiary focus:border-accent focus:outline-none"
-            />
-            <button
-              type="submit"
-              disabled={shareLoading}
-              className="px-6 py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-all duration-150 disabled:opacity-50"
-            >
-              {shareLoading ? t('common.loading') : t('subscription.shareWith')}
-            </button>
-          </form>
-        </div>
-      )}
     </div>
   );
 }
