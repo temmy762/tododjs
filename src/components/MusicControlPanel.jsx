@@ -211,10 +211,11 @@ export default function MusicControlPanel({
     const audio = audioRef.current;
     if (audio && audio.currentTime > 3) {
       audio.currentTime = 0;
+      onProgressChange?.(0);
     } else {
       onPrev?.();
     }
-  }, [onPrev]);
+  }, [onPrev, onProgressChange]);
 
   useEffect(() => {
     if (!isInfoOpen) return;

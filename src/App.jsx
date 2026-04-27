@@ -627,10 +627,10 @@ function App() {
     );
   }
 
-  const playerContextValue = {
+  const playerContextValue = useMemo(() => ({
     currentTrackId: panelOpen ? (panelTrack?.id || panelTrack?._id) : null,
     isPanelPlaying: panelIsPlaying,
-  };
+  }), [panelOpen, panelTrack?.id, panelTrack?._id, panelIsPlaying]);
 
   return (
     <PlayerContext.Provider value={playerContextValue}>
