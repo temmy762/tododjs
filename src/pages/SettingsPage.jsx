@@ -343,7 +343,7 @@ export default function SettingsPage({ user, onUserUpdate, onLogout }) {
             </div>
           </SectionCard>
 
-          {/* ── Audio Preferences ── */}
+          {/* ── Audio Preferences ── (future feature)
           <SectionCard icon={Volume2} title={t('settingsPage.audioPreferences', 'Audio Preferences')} subtitle={t('settingsPage.configurePlayback', 'Configure playback settings')}>
             <div className="p-6 space-y-4">
               <div className="flex items-center justify-between py-3 border-b border-white/5">
@@ -365,14 +365,14 @@ export default function SettingsPage({ user, onUserUpdate, onLogout }) {
                 <Toggle checked={autoDownload} onChange={e => setAutoDownload(e.target.checked)} />
               </div>
             </div>
-          </SectionCard>
+          </SectionCard> */}
 
           {/* ── Devices ── */}
           <SectionCard icon={Smartphone} title={t('settingsPage.devicesAndSecurity', 'Devices & Security')} subtitle={t('settingsPage.manageDevices', 'Manage your active devices')}>
             <div className="p-0"><DeviceManagement /></div>
           </SectionCard>
 
-          {/* ── Notifications ── */}
+          {/* ── Notifications ── (future feature)
           <SectionCard icon={Bell} title={t('settingsPage.notifications', 'Notifications')} subtitle={t('settingsPage.chooseUpdates', 'Choose what notifications you receive')}>
             <div className="p-6 space-y-4">
               {Object.entries(notifications).map(([key, value]) => (
@@ -382,7 +382,7 @@ export default function SettingsPage({ user, onUserUpdate, onLogout }) {
                 </div>
               ))}
             </div>
-          </SectionCard>
+          </SectionCard> */}
 
         </div>
       </div>
