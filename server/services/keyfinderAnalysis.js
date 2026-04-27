@@ -95,14 +95,19 @@ export async function detectKeyWithKeyfinder(audioBuffer) {
   try {
     await writeFile(tmpFile, audioBuffer);
 
-    // Try both binary names
+    // Use -n camelot for direct Camelot output (e.g. "8A"); fall back to default format
     let stdout = '';
     try {
-      const result = await execAsync(`keyfinder-cli "${tmpFile}"`, { timeout: 30000 });
+      const result = await execAsync(`keyfinder-cli -n camelot "${tmpFile}"`, { timeout: 30000 });
       stdout = result.stdout;
     } catch {
-      const result = await execAsync(`keyfinder "${tmpFile}"`, { timeout: 30000 });
-      stdout = result.stdout;
+      try {
+        const result = await execAsync(`keyfinder-cli "${tmpFile}"`, { timeout: 30000 });
+        stdout = result.stdout;
+      } catch {
+        const result = await execAsync(`keyfinder "${tmpFile}"`, { timeout: 30000 });
+        stdout = result.stdout;
+      }
     }
 
     const parsed = parseKeyfinderOutput(stdout);
