@@ -619,6 +619,11 @@ function App() {
     return filtered;
   }, [activeGenre, activeTonality, liveTracks]);
 
+  const playerContextValue = useMemo(() => ({
+    currentTrackId: panelOpen ? (panelTrack?.id || panelTrack?._id) : null,
+    isPanelPlaying: panelIsPlaying,
+  }), [panelOpen, panelTrack?.id, panelTrack?._id, panelIsPlaying]);
+
   if (authLoading) {
     return (
       <div style={{ minHeight: '100vh', backgroundColor: '#0d0d0d', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -626,11 +631,6 @@ function App() {
       </div>
     );
   }
-
-  const playerContextValue = useMemo(() => ({
-    currentTrackId: panelOpen ? (panelTrack?.id || panelTrack?._id) : null,
-    isPanelPlaying: panelIsPlaying,
-  }), [panelOpen, panelTrack?.id, panelTrack?._id, panelIsPlaying]);
 
   return (
     <PlayerContext.Provider value={playerContextValue}>
