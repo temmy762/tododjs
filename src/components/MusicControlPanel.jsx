@@ -328,9 +328,8 @@ export default function MusicControlPanel({
             return (
               <div
                 key={i}
-                className="rounded-full"
+                className="rounded-full flex-1 min-w-0"
                 style={{
-                  width: '2px',
                   height: `${h}px`,
                   backgroundColor: `rgba(255,255,255,${opacity})`,
                 }}
@@ -338,15 +337,15 @@ export default function MusicControlPanel({
             );
           })}
         </div>
-        {/* Glow under played portion */}
+        {/* Glow under played portion — aligned to bar area (px-2 = 8px each side) */}
         <div
-          className="absolute bottom-0 left-0 h-[2px] bg-gradient-to-r from-accent to-accent/50 transition-all duration-100"
-          style={{ width: `${progressPct}%` }}
+          className="absolute bottom-0 h-[2px] bg-gradient-to-r from-accent to-accent/50 transition-all duration-100"
+          style={{ left: '8px', width: `calc(${progressPct / 100} * (100% - 16px))` }}
         />
-        {/* Scrub head */}
+        {/* Scrub head — aligned to bar area */}
         <div
           className="absolute top-1/2 w-3 h-3 bg-white rounded-full shadow-lg shadow-black/40 ring-2 ring-accent/50 opacity-0 group-hover/wave:opacity-100 transition-opacity duration-150"
-          style={{ left: `${progressPct}%`, transform: 'translate(-50%, -50%)' }}
+          style={{ left: `calc(8px + ${progressPct / 100} * (100% - 16px))`, transform: 'translate(-50%, -50%)' }}
         />
       </div>
     );
