@@ -76,6 +76,7 @@ function App() {
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelIsPlaying, setPanelIsPlaying] = useState(false);
   const [panelProgress, setPanelProgress] = useState(0);
+  const [panelQueue, setPanelQueue] = useState([]);
   const [activeGenre, setActiveGenre] = useState('all');
   const [activeCategory, setActiveCategory] = useState(null); // category NAME, e.g. "Latin Box"
   const [activeTonality, setActiveTonality] = useState('all');
@@ -303,6 +304,11 @@ function App() {
 
   const handleTrackInteraction = (action, track) => {
     if (action === 'play') {
+      // Capture queue from current page context for next/prev navigation
+      const contextQueue = (selectedAlbumDetail && !albumDetailLoading && albumDetailTracks.length)
+        ? albumDetailTracks
+        : liveTracks.length ? liveTracks : [track];
+      setPanelQueue(contextQueue);
       setPanelOpen(true);
       setPanelTrack((prev) => {
         const isSame = prev?.id === track?.id;
@@ -395,6 +401,43 @@ function App() {
       return;
     }
   };
+
+  const handleNextTrack = useCallback((shuffle) => {
+    setPanelQueue(q => {
+      if (!q.length) return q;
+      setPanelTrack(cur => {
+        const currentId = cur?.id || cur?._id;
+        const idx = q.findIndex(t => (t.id || t._id) === currentId);
+        let nextIdx;
+        if (shuffle) {
+          const pool = q.filter((_, i) => i !== idx);
+          if (!pool.length) return cur;
+          nextIdx = q.indexOf(pool[Math.floor(Math.random() * pool.length)]);
+        } else {
+          nextIdx = (idx + 1) % q.length;
+        }
+        setPanelProgress(0);
+        setPanelIsPlaying(true);
+        return q[nextIdx];
+      });
+      return q;
+    });
+  }, []);
+
+  const handlePrevTrack = useCallback(() => {
+    setPanelQueue(q => {
+      if (!q.length) return q;
+      setPanelTrack(cur => {
+        const currentId = cur?.id || cur?._id;
+        const idx = q.findIndex(t => (t.id || t._id) === currentId);
+        const prevIdx = idx <= 0 ? q.length - 1 : idx - 1;
+        setPanelProgress(0);
+        setPanelIsPlaying(true);
+        return q[prevIdx];
+      });
+      return q;
+    });
+  }, []);
 
   const handleAuthSuccess = (userData) => {
     setUser(userData);
@@ -756,6 +799,8 @@ function App() {
         onSubscribe={() => {
           navigate('/pricing');
         }}
+        onNext={handleNextTrack}
+        onPrev={handlePrevTrack}
       />
 
       {selectedProfile && (

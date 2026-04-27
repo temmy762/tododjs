@@ -1,4 +1,4 @@
-import { X, Pause, Play, Info, Volume2, VolumeX, SkipBack, SkipForward, Music, User } from 'lucide-react';
+import { X, Pause, Play, Info, Volume2, VolumeX, SkipBack, SkipForward, Music, User, Shuffle, Repeat2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import PremiumPrompt from './PremiumPrompt';
@@ -57,6 +57,8 @@ export default function MusicControlPanel({
   onSubscribe,
   onAuthRequired,
   user,
+  onNext,
+  onPrev,
 }) {
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
@@ -69,6 +71,8 @@ export default function MusicControlPanel({
   const [showVolume, setShowVolume] = useState(false);
   const [previewLimitHit, setPreviewLimitHit] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
+  const [isShuffle, setIsShuffle] = useState(false);
+  const [isAutoPlay, setIsAutoPlay] = useState(true);
   const audioRef = useRef(null);
   const infoButtonRef = useRef(null);
   const infoPopoverRef = useRef(null);
@@ -187,23 +191,26 @@ export default function MusicControlPanel({
   }, []);
 
   const handleAudioEnded = useCallback(() => {
-    onProgressChange?.(100);
-    onPlayPause?.();
-  }, [onProgressChange, onPlayPause]);
+    if (isAutoPlay && onNext) {
+      onNext(isShuffle);
+    } else {
+      onProgressChange?.(100);
+      onPlayPause?.();
+    }
+  }, [isAutoPlay, isShuffle, onNext, onProgressChange, onPlayPause]);
 
   const skipForward = useCallback(() => {
-    const audio = audioRef.current;
-    if (audio && audio.duration) {
-      audio.currentTime = Math.min(audio.currentTime + 10, audio.duration);
-    }
-  }, []);
+    onNext?.(isShuffle);
+  }, [onNext, isShuffle]);
 
   const skipBack = useCallback(() => {
     const audio = audioRef.current;
-    if (audio) {
-      audio.currentTime = Math.max(audio.currentTime - 10, 0);
+    if (audio && audio.currentTime > 3) {
+      audio.currentTime = 0;
+    } else {
+      onPrev?.();
     }
-  }, []);
+  }, [onPrev]);
 
   useEffect(() => {
     if (!isInfoOpen) return;
@@ -420,9 +427,19 @@ export default function MusicControlPanel({
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <button
                     type="button"
+                    onClick={() => setIsShuffle(s => !s)}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-150 ${
+                      isShuffle ? 'text-accent' : 'text-white/40 hover:text-white/70'
+                    }`}
+                    title={t('player.shuffle', 'Shuffle')}
+                  >
+                    <Shuffle className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
                     onClick={skipBack}
                     className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.06] transition-all duration-150"
-                    title={t('player.back10s')}
+                    title={t('player.previousTrack', 'Previous')}
                   >
                     <SkipBack className="w-3.5 h-3.5" fill="currentColor" />
                   </button>
@@ -441,9 +458,19 @@ export default function MusicControlPanel({
                     type="button"
                     onClick={skipForward}
                     className="w-8 h-8 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/[0.06] transition-all duration-150"
-                    title={t('player.forward10s')}
+                    title={t('player.nextTrack', 'Next')}
                   >
                     <SkipForward className="w-3.5 h-3.5" fill="currentColor" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setIsAutoPlay(a => !a)}
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-150 ${
+                      isAutoPlay ? 'text-accent' : 'text-white/40 hover:text-white/70'
+                    }`}
+                    title={t('player.autoPlay', 'Auto Play')}
+                  >
+                    <Repeat2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
 
@@ -572,6 +599,28 @@ export default function MusicControlPanel({
                 <span className="text-[9px] font-mono text-brand-text-tertiary w-7 text-right tabular-nums">{formatTime(audioCurrentTime)}</span>
                 {renderWaveform(waveform, 80, progress)}
                 <span className="text-[9px] font-mono text-brand-text-tertiary w-7 tabular-nums">{formatTime(totalSeconds)}</span>
+              </div>
+              <div className="flex items-center justify-center gap-6 pb-0.5">
+                <button
+                  type="button"
+                  onClick={() => setIsShuffle(s => !s)}
+                  className={`flex items-center gap-1 transition-colors ${
+                    isShuffle ? 'text-accent' : 'text-white/40'
+                  }`}
+                >
+                  <Shuffle className="w-3 h-3" />
+                  <span className="text-[10px] font-medium">{t('player.shuffle', 'Shuffle')}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsAutoPlay(a => !a)}
+                  className={`flex items-center gap-1 transition-colors ${
+                    isAutoPlay ? 'text-accent' : 'text-white/40'
+                  }`}
+                >
+                  <Repeat2 className="w-3 h-3" />
+                  <span className="text-[10px] font-medium">{t('player.autoPlay', 'Auto Play')}</span>
+                </button>
               </div>
             </div>
 
