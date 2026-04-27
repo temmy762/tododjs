@@ -3,6 +3,7 @@ import { analyzeAudio } from './audioAnalysis.js';
 import { detectTonalityWithAI } from './openai.js';
 import { lookupSpotifyFeatures } from './spotifyBpm.js';
 import { lookupAuddFeatures } from './auddBpm.js';
+import { detectKeyWithKeyfinder } from './keyfinderAnalysis.js';
 
 const CAMELOT_MAP = {
   'C major': '8B', 'A minor': '8A',
@@ -143,7 +144,28 @@ export async function detectTonality(audioBuffer, metadata) {
     console.log('   ⚠ ID3 extraction failed:', error.message);
   }
 
-  // Step 2: Essentia.js real audio analysis (accurate, analyzes waveform)
+  // Step 2: KeyFinder (libkeyfinder) — DJ-optimized key detection, highest accuracy for remixes
+  // Only runs if keyfinder-cli binary is installed; skips silently otherwise.
+  if (!tonality) {
+    try {
+      const kf = await detectKeyWithKeyfinder(audioBuffer);
+      if (kf?.camelot) {
+        tonality = {
+          key: kf.key || null,
+          scale: kf.scale || null,
+          camelot: kf.camelot,
+          source: 'keyfinder',
+          confidence: kf.confidence || 0.9,
+          needsManualReview: false
+        };
+        console.log(`   ✓ Key from KeyFinder: ${tonality.camelot}`);
+      }
+    } catch (err) {
+      console.log('   ⚠ KeyFinder step failed:', err.message);
+    }
+  }
+
+  // Step 3: Essentia.js real audio analysis (accurate, analyzes waveform)
   if ((!tonality || !detectedBpm) && !(tonality?.source === 'spotify' && detectedBpm)) {
     try {
       console.log(`   🎵 Running Essentia.js audio analysis...`);
@@ -172,7 +194,7 @@ export async function detectTonality(audioBuffer, metadata) {
     }
   }
 
-  // Step 3: OpenAI text fallback (least reliable, only for key)
+  // Step 4: OpenAI text fallback (least reliable, only for key)
   if (!tonality && process.env.TONALITY_AI_FALLBACK === 'true' && metadata.title && metadata.artist) {
     try {
       console.log(`   🤖 Falling back to AI for: ${metadata.title} - ${metadata.artist}`);
@@ -190,7 +212,7 @@ export async function detectTonality(audioBuffer, metadata) {
     }
   }
 
-  // Step 4: Try to extract BPM from filename as last resort
+  // Step 5: Try to extract BPM from filename as last resort
   if (!detectedBpm && metadata.title) {
     // Match "128 BPM", "128BPM", or BPM in brackets like [128]
     const bpmMatch = metadata.title.match(/(\d{2,3})\s*BPM/i) || metadata.title.match(/\[(\d{2,3})\]/);
