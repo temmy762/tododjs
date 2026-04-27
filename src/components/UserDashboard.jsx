@@ -85,13 +85,22 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
 
   const subscriptionStatus = user?.subscription?.status;
   const subscriptionPlanId = user?.subscription?.planId;
+  const subscriptionPlan = user?.subscription?.plan;
   const isAdmin = user?.role === 'admin';
-  const isActivePaid = subscriptionStatus === 'active' && !!subscriptionPlanId;
+  // Recognize both Stripe-paid (has planId) and admin-granted (has plan name but no planId)
+  const hasPlan = !!subscriptionPlanId || (!!subscriptionPlan && subscriptionPlan !== 'free');
+  const isActivePaid = subscriptionStatus === 'active' && hasPlan;
+  const normalizePlanLabel = (raw) => {
+    if (!raw || raw === 'free') return 'Free';
+    if (['premium', 'individual-monthly', 'individual-quarterly'].includes(raw)) return 'Premium';
+    if (['pro', 'shared-monthly', 'shared-quarterly'].includes(raw)) return 'Pro';
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  };
   const planLabel = useMemo(() => {
     if (isAdmin) return 'Admin';
     if (!isActivePaid) return 'Free';
-    return subscriptionPlanId || user?.subscription?.plan || 'Premium';
-  }, [isAdmin, isActivePaid, subscriptionPlanId, user?.subscription?.plan]);
+    return normalizePlanLabel(subscriptionPlan || subscriptionPlanId || 'premium');
+  }, [isAdmin, isActivePaid, subscriptionPlan, subscriptionPlanId]);
 
   const planColor = isAdmin ? 'text-purple-400' : (isActivePaid ? 'text-yellow-400' : 'text-brand-text-tertiary');
 
@@ -386,10 +395,10 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
                     <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
                       isAdmin ? 'bg-purple-500/20 text-purple-400' :
                       subscriptionStatus === 'active' ? 'bg-green-500/20 text-green-400' :
-                      !subscriptionPlanId ? 'bg-blue-500/20 text-blue-400' :
+                      !hasPlan ? 'bg-blue-500/20 text-blue-400' :
                       'bg-red-500/20 text-red-400'
                     }`}>
-                      {isAdmin ? 'Admin' : subscriptionStatus === 'active' ? t('userDashboard.active', 'Active') : !subscriptionPlanId ? t('userDashboard.free', 'Free') : t('userDashboard.inactive', 'Inactive')}
+                      {isAdmin ? 'Admin' : subscriptionStatus === 'active' ? t('userDashboard.active', 'Active') : !hasPlan ? t('userDashboard.free', 'Free') : t('userDashboard.inactive', 'Inactive')}
                     </span>
                   </div>
                   <div>
