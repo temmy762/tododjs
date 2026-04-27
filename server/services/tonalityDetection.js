@@ -146,7 +146,8 @@ export async function detectTonality(audioBuffer, metadata) {
 
   // Step 2: KeyFinder (libkeyfinder) — DJ-optimized key detection, highest accuracy for remixes
   // Only runs if keyfinder-cli binary is installed; skips silently otherwise.
-  if (!tonality) {
+  // Also runs when ID3 gave a key but no valid Camelot mapping could be derived.
+  if (!tonality?.camelot) {
     try {
       const kf = await detectKeyWithKeyfinder(audioBuffer);
       if (kf?.camelot) {

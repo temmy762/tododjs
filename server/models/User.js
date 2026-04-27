@@ -194,8 +194,9 @@ userSchema.methods.resetDailyDownloads = function() {
 userSchema.methods.canDownload = function() {
   this.resetDailyDownloads();
   
-  // Check if user has active subscription
-  const hasActiveSubscription = this.subscription.status === 'active' && this.subscription.planId;
+  // Check if user has active subscription (admin-granted plans may have no planId)
+  const hasActiveSubscription = this.subscription.status === 'active' &&
+    (this.subscription.planId || (this.subscription.plan && this.subscription.plan !== 'free'));
   
   const limits = {
     free: 5,
