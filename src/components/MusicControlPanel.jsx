@@ -160,12 +160,20 @@ export default function MusicControlPanel({
     setAudioCurrentTime(audio.currentTime);
 
     // Enforce preview limit for non-premium users
-    if (!isPremium && audio.currentTime >= PREVIEW_LIMIT_SECONDS && !previewLimitHit) {
-      audio.pause();
-      setPreviewLimitHit(true);
-      setShowPrompt(true);
-      onPlayPause?.(); // sync parent isPlaying state
-      return;
+    if (!isPremium) {
+      if (audio.currentTime >= PREVIEW_LIMIT_SECONDS) {
+        if (!previewLimitHit) {
+          audio.pause();
+          setPreviewLimitHit(true);
+          setShowPrompt(true);
+          onPlayPause?.(); // sync parent isPlaying state
+        }
+        return;
+      }
+      // Reset flag when user scrubs back before the limit so it re-enforces on next play-through
+      if (previewLimitHit && audio.currentTime < PREVIEW_LIMIT_SECONDS) {
+        setPreviewLimitHit(false);
+      }
     }
 
     if (audio.duration) {
@@ -508,13 +516,15 @@ export default function MusicControlPanel({
                   <X className="w-4 h-4" strokeWidth={2.5} />
                 </button>
 
-                <button
-                  type="button"
-                  onClick={onSubscribe}
-                  className="ml-1 px-4 py-1.5 rounded-full bg-accent hover:bg-accent-hover transition-all duration-200 text-white text-[11px] font-bold shadow-lg shadow-accent/20 hover:shadow-accent/30 hover:scale-105 active:scale-95 whitespace-nowrap"
-                >
-                  {t('player.subscribe')}
-                </button>
+                {!isPremium && (
+                  <button
+                    type="button"
+                    onClick={onSubscribe}
+                    className="ml-1 px-4 py-1.5 rounded-full bg-accent hover:bg-accent-hover transition-all duration-200 text-white text-[11px] font-bold shadow-lg shadow-accent/20 hover:shadow-accent/30 hover:scale-105 active:scale-95 whitespace-nowrap"
+                  >
+                    {t('player.subscribe')}
+                  </button>
+                )}
               </div>
             </div>
 
