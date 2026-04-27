@@ -76,7 +76,8 @@ export default function MusicControlPanel({
   const volumeTimeoutRef = useRef(null);
 
   const { t } = useTranslation();
-  const isPremium = !!(user?.subscription?.status === 'active' && user?.subscription?.planId);
+  const isPremium = user?.role === 'admin' || !!(user?.subscription?.status === 'active' &&
+    (user?.subscription?.planId || (user?.subscription?.plan && user?.subscription?.plan !== 'free')));
 
   const totalSeconds = audioDuration || track?.duration || 0;
 
@@ -88,24 +89,41 @@ export default function MusicControlPanel({
   // Fetch signed playback URL when track changes
   useEffect(() => {
     const trackId = track?.id || track?._id;
-    if (!trackId || trackId === lastTrackIdRef.current) return;
+
+    // Reset ref when panel closes so same track can be re-fetched on reopen
+    if (!trackId) {
+      lastTrackIdRef.current = null;
+      setAudioUrl(null);
+      setShowPrompt(false);
+      setPreviewLimitHit(false);
+      return;
+    }
+
+    if (trackId === lastTrackIdRef.current) return;
     lastTrackIdRef.current = trackId;
 
     setPreviewLimitHit(false);
+    setShowPrompt(false);
+    setAudioUrl(null);
 
     const fetchPlaybackUrl = async () => {
       setAudioLoading(true);
       try {
-        const res = await fetch(`${API_URL}/tracks/${trackId}/playback`);
+        const token = localStorage.getItem('token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
+        const res = await fetch(`${API_URL}/tracks/${trackId}/playback`, { headers });
         const data = await res.json();
         if (data.success && data.data?.url) {
           setAudioUrl(data.data.url);
         } else {
+          console.error('Playback URL error:', data.message);
           setAudioUrl(null);
+          lastTrackIdRef.current = null; // allow retry
         }
       } catch (err) {
         console.error('Error fetching playback URL:', err);
         setAudioUrl(null);
+        lastTrackIdRef.current = null; // allow retry
       } finally {
         setAudioLoading(false);
       }

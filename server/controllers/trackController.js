@@ -388,6 +388,13 @@ export const getTrackPlaybackUrl = async (req, res) => {
       });
     }
 
+    if (!track.audioFile?.key) {
+      return res.status(404).json({
+        success: false,
+        message: 'Audio file not available for this track'
+      });
+    }
+
     // Generate signed URL for streaming (valid for 1 hour)
     const playbackUrl = await getSignedDownloadUrl(track.audioFile.key, 3600);
 
