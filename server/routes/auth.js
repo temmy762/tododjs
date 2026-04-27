@@ -7,6 +7,7 @@ import {
   refreshToken,
   updateDetails,
   updatePassword,
+  deleteMe,
   forgotPassword,
   resetPassword
 } from '../controllers/authController.js';
@@ -21,6 +22,7 @@ router.get('/me', protect, getMe);
 router.post('/refresh', protect, refreshToken);
 router.put('/updatedetails', protect, updateDetails);
 router.put('/updatepassword', protect, updatePassword);
+router.delete('/me', protect, deleteMe);
 router.post('/forgotpassword', forgotPassword);
 router.put('/resetpassword/:resettoken', resetPassword);
 

@@ -418,6 +418,24 @@ export const updatePassword = async (req, res) => {
   }
 };
 
+// @desc    Delete own account
+// @route   DELETE /api/auth/me
+// @access  Private
+export const deleteMe = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (user.role === 'admin') return res.status(400).json({ success: false, message: 'Admin accounts cannot be self-deleted' });
+
+    await User.findByIdAndDelete(req.user.id);
+
+    res.cookie('token', 'none', { expires: new Date(Date.now() + 10 * 1000), httpOnly: true });
+    res.status(200).json({ success: true, message: 'Account deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Forgot password
 // @route   POST /api/auth/forgotpassword
 // @access  Public

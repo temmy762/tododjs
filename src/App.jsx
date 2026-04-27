@@ -735,7 +735,7 @@ function App() {
             }}
           />
         ) : activePage === 'settings' ? (
-          <SettingsPage />
+          <SettingsPage user={user} onUserUpdate={setUser} onLogout={handleLogout} />
         ) : activePage === 'home' ? (
           <>
             <div className="sticky top-14 md:top-16 z-20 bg-dark-bg/95 backdrop-blur-md border-b border-white/5">
