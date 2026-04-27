@@ -178,7 +178,14 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
   }
 
   const isSpanish = i18n.language === 'es';
-  const planName = isSpanish ? plan?.nameEs : plan?.name;
+  // For admin-granted plans, plan document is null — derive name from subscription.plan
+  const normalizePlanName = (raw) => {
+    if (!raw || raw === 'free') return 'Free';
+    if (['premium', 'individual-monthly', 'individual-quarterly'].includes(raw)) return 'Premium';
+    if (['pro', 'shared-monthly', 'shared-quarterly'].includes(raw)) return 'Pro';
+    return raw.charAt(0).toUpperCase() + raw.slice(1);
+  };
+  const planName = plan ? (isSpanish ? plan.nameEs : plan.name) : normalizePlanName(subscription?.plan);
 
   return (
     <div className="space-y-6">
@@ -229,14 +236,14 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
               <CreditCard className="w-5 h-5 text-accent" />
               <div>
                 <p className="text-sm text-brand-text-tertiary">{t('subscription.daysRemaining')}</p>
-                <p className="text-lg font-semibold text-white">{daysRemaining} {t('admin.days')}</p>
+                <p className="text-lg font-semibold text-white">{daysRemaining === -1 ? t('subscription.unlimited', 'Unlimited') : `${daysRemaining} ${t('admin.days')}`}</p>
               </div>
             </div>
           </div>
 
-          {/* Actions */}
+          {/* Actions — only show cancel for Stripe-managed (non-admin-granted) plans */}
           <div className="space-y-3">
-            {subscription.status === 'active' && (
+            {subscription.status === 'active' && !subscription.grantedByAdmin && (
               <button
                 onClick={handleCancelSubscription}
                 className="w-full py-3 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors"

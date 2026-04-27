@@ -56,18 +56,25 @@ export const getSubscriptionStatus = async (req, res) => {
       .populate('subscription.sharedWith', 'name email')
       .populate('subscription.sharedBy', 'name email');
     
-    if (!user.subscription.planId) {
+    // Recognize both Stripe-paid (planId set) and admin-granted (plan name set, no planId)
+    const hasPlan = user.subscription.planId ||
+      (user.subscription.plan && user.subscription.plan !== 'free');
+
+    if (!hasPlan || user.subscription.status === 'inactive') {
       return res.status(200).json({
         success: true,
         data: {
           hasSubscription: false,
-          status: 'inactive'
+          status: user.subscription.status || 'inactive'
         }
       });
     }
-    
-    const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
-    
+
+    // Look up Stripe plan document (null for admin-granted plans)
+    const plan = user.subscription.planId
+      ? await SubscriptionPlan.findOne({ planId: user.subscription.planId })
+      : null;
+
     // Check if subscription expired (past endDate)
     if (user.subscription.endDate && new Date() > user.subscription.endDate) {
       if (user.subscription.status !== 'expired') {
@@ -77,11 +84,12 @@ export const getSubscriptionStatus = async (req, res) => {
     }
 
     const status = user.subscription.status;
-    const daysRemaining = user.subscription.endDate 
+    // Admin-granted plans with no endDate = unlimited (-1 signals "no expiry")
+    const daysRemaining = user.subscription.endDate
       ? Math.max(0, Math.ceil((user.subscription.endDate - new Date()) / (1000 * 60 * 60 * 24)))
-      : 0;
+      : -1;
     const isActive = status === 'active';
-    
+
     res.status(200).json({
       success: true,
       data: {
