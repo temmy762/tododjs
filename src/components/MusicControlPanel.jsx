@@ -72,7 +72,7 @@ export default function MusicControlPanel({
   const [previewLimitHit, setPreviewLimitHit] = useState(false);
   const [showPrompt, setShowPrompt] = useState(false);
   const [isShuffle, setIsShuffle] = useState(false);
-  const [isAutoPlay, setIsAutoPlay] = useState(true);
+  const [isRepeat, setIsRepeat] = useState(false);
   const audioRef = useRef(null);
   const infoButtonRef = useRef(null);
   const infoPopoverRef = useRef(null);
@@ -191,13 +191,17 @@ export default function MusicControlPanel({
   }, []);
 
   const handleAudioEnded = useCallback(() => {
-    if (isAutoPlay && onNext) {
-      onNext(isShuffle);
+    if (isRepeat) {
+      const audio = audioRef.current;
+      if (audio) {
+        audio.currentTime = 0;
+        onProgressChange?.(0);
+        audio.play().catch(() => {});
+      }
     } else {
-      onProgressChange?.(100);
-      onPlayPause?.();
+      onNext?.(isShuffle);
     }
-  }, [isAutoPlay, isShuffle, onNext, onProgressChange, onPlayPause]);
+  }, [isRepeat, isShuffle, onNext, onProgressChange]);
 
   const skipForward = useCallback(() => {
     onNext?.(isShuffle);
@@ -464,11 +468,11 @@ export default function MusicControlPanel({
                   </button>
                   <button
                     type="button"
-                    onClick={() => setIsAutoPlay(a => !a)}
+                    onClick={() => setIsRepeat(r => !r)}
                     className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-150 ${
-                      isAutoPlay ? 'text-accent' : 'text-white/40 hover:text-white/70'
+                      isRepeat ? 'text-accent' : 'text-white/40 hover:text-white/70'
                     }`}
-                    title={t('player.autoPlay', 'Auto Play')}
+                    title={t('player.repeat', 'Repeat')}
                   >
                     <Repeat2 className="w-3.5 h-3.5" />
                   </button>
@@ -613,13 +617,13 @@ export default function MusicControlPanel({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsAutoPlay(a => !a)}
+                  onClick={() => setIsRepeat(r => !r)}
                   className={`flex items-center gap-1 transition-colors ${
-                    isAutoPlay ? 'text-accent' : 'text-white/40'
+                    isRepeat ? 'text-accent' : 'text-white/40'
                   }`}
                 >
                   <Repeat2 className="w-3 h-3" />
-                  <span className="text-[10px] font-medium">{t('player.autoPlay', 'Auto Play')}</span>
+                  <span className="text-[10px] font-medium">{t('player.repeat', 'Repeat')}</span>
                 </button>
               </div>
             </div>
