@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { usePlayer } from '../context/PlayerContext';
 import { Play, Pause, Heart, Download, Clock } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import GenericCoverArt from './GenericCoverArt';
@@ -55,23 +55,13 @@ const getTonalityColor = (tonality) => {
 export default function TrackListView({ tracks, onTrackInteraction, userFavorites = new Set() }) {
   const { t, i18n } = useTranslation();
   const dateLocale = i18n.language === 'es' ? 'es-ES' : 'en-US';
-  const [playingTrackId, setPlayingTrackId] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const { currentTrackId, isPanelPlaying } = usePlayer();
 
   const getTrackId = (track) => track?.id || track?._id;
 
   const handlePlayPause = (track) => {
-    const trackId = getTrackId(track);
-    if (!trackId) return;
-
-    if (playingTrackId === trackId) {
-      setIsPlaying(!isPlaying);
-      onTrackInteraction?.('play', track);
-    } else {
-      setPlayingTrackId(trackId);
-      setIsPlaying(true);
-      onTrackInteraction?.('play', track);
-    }
+    if (!getTrackId(track)) return;
+    onTrackInteraction?.('play', track);
   };
 
   return (
@@ -80,7 +70,7 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
       <div className="md:hidden space-y-2 py-2">
         {tracks.map((track, index) => {
           const trackId = getTrackId(track);
-          const isCurrentlyPlaying = playingTrackId === trackId && isPlaying;
+          const isCurrentlyPlaying = currentTrackId === trackId && isPanelPlaying;
           const isLiked = userFavorites.has(trackId);
           
           return (
@@ -203,7 +193,7 @@ export default function TrackListView({ tracks, onTrackInteraction, userFavorite
 
         {tracks.map((track, index) => {
           const trackId = getTrackId(track);
-          const isCurrentlyPlaying = playingTrackId === trackId && isPlaying;
+          const isCurrentlyPlaying = currentTrackId === trackId && isPanelPlaying;
           const isLiked = userFavorites.has(trackId);
           
           return (

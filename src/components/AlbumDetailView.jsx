@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { usePlayer } from '../context/PlayerContext';
 import { Play, Download, Heart, Clock, Music, X, Loader, Archive, Share2, Pause, Check, ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import GenericCoverArt from './GenericCoverArt';
@@ -49,8 +50,7 @@ const getTonalityColor = (tonality) => {
 export default function AlbumDetailView({ album, tracks = [], isLoading = false, autoPlay = false, onClose, onTrackInteraction, userFavorites = new Set(), user, onAuthRequired, onSubscribe }) {
   const { t, i18n } = useTranslation();
   const dateLocale = i18n.language === 'es' ? 'es-ES' : 'en-US';
-  const [playingTrackId, setPlayingTrackId] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const { currentTrackId, isPanelPlaying } = usePlayer();
   const likedTracks = userFavorites;
   const [promptType, setPromptType] = useState(null); // 'signup' | 'subscribe' | null
   const [shareToast, setShareToast] = useState(false);
@@ -62,13 +62,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
   const autoPlayTriggered = useRef(false);
 
   const handlePlayPause = (track) => {
-    if (!track || !track.id) return;
-    if (playingTrackId === track.id) {
-      setIsPlaying(!isPlaying);
-    } else {
-      setPlayingTrackId(track.id);
-      setIsPlaying(true);
-    }
+    if (!track || !(track.id || track._id)) return;
     onTrackInteraction?.('play', track);
   };
 
@@ -328,7 +322,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
                   )}
                   
                   {!isLoading && tracks.map((track, index) => {
-                    const isCurrentlyPlaying = playingTrackId === track.id && isPlaying;
+                    const isCurrentlyPlaying = currentTrackId === (track.id || track._id) && isPanelPlaying;
                     const isLiked = likedTracks.has(track.id);
 
                     return (

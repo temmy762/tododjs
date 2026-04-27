@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { usePlayer } from '../context/PlayerContext';
 import { Play, Pause, Heart, Download, MoreHorizontal } from 'lucide-react';
 import GenericCoverArt from './GenericCoverArt';
 
@@ -33,17 +33,10 @@ const getTonalityColor = (tonality) => {
 };
 
 export default function TrackGridView({ tracks, onTrackInteraction, userFavorites = new Set() }) {
-  const [playingTrackId, setPlayingTrackId] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(false);
+  const { currentTrackId, isPanelPlaying } = usePlayer();
   const likedTracks = userFavorites;
 
   const handlePlayPause = (track) => {
-    if (playingTrackId === track.id) {
-      setIsPlaying(!isPlaying);
-    } else {
-      setPlayingTrackId(track.id);
-      setIsPlaying(true);
-    }
     onTrackInteraction?.('play', track);
   };
 
@@ -55,7 +48,7 @@ export default function TrackGridView({ tracks, onTrackInteraction, userFavorite
     <div className="px-3 md:px-10 py-4 md:py-6">
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
         {tracks.map((track) => {
-          const isCurrentlyPlaying = playingTrackId === track.id && isPlaying;
+          const isCurrentlyPlaying = currentTrackId === (track.id || track._id) && isPanelPlaying;
           const isLiked = likedTracks.has(track.id);
           
           return (

@@ -26,6 +26,7 @@ const CheckoutPage = lazy(() => import('./components/CheckoutPage'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage'));
 const UserDashboard = lazy(() => import('./components/UserDashboard'));
 import BackgroundGradients from './components/BackgroundGradients';
+import { PlayerContext } from './context/PlayerContext';
 import MusicControlPanel from './components/MusicControlPanel';
 import TrendingSection from './components/TrendingSection';
 import CheckoutModal from './components/CheckoutModal';
@@ -626,7 +627,13 @@ function App() {
     );
   }
 
+  const playerContextValue = {
+    currentTrackId: panelOpen ? (panelTrack?.id || panelTrack?._id) : null,
+    isPanelPlaying: panelIsPlaying,
+  };
+
   return (
+    <PlayerContext.Provider value={playerContextValue}>
     <div className="min-h-screen bg-dark-bg relative">
       <BackgroundGradients />
       
@@ -884,6 +891,7 @@ function App() {
         />
       )}
     </div>
+    </PlayerContext.Provider>
   );
 }
 
