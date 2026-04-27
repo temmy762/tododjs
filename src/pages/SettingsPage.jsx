@@ -65,7 +65,7 @@ export default function SettingsPage({ user, onUserUpdate, onLogout }) {
       try {
         const res = await fetch(`${API_URL}/subscriptions/status`, { headers: { 'Authorization': `Bearer ${token}` } });
         const data = await res.json();
-        if (data.success) setSubStatus(data.data);
+        if (data.success) setSubStatus(data.data || null);
       } catch {}
       setSubLoading(false);
     })();
@@ -122,7 +122,7 @@ export default function SettingsPage({ user, onUserUpdate, onLogout }) {
       const res = await fetch(`${API_URL}/subscriptions/cancel`, { method: 'PUT', headers: authHeaders });
       const data = await res.json();
       if (data.success) {
-        setSubStatus(prev => ({ ...prev, status: 'cancelled', isActive: false }));
+        setSubStatus(prev => ({ ...prev, isActive: false, subscription: { ...prev?.subscription, status: 'cancelled' } }));
         setSubMsg({ type: 'success', text: 'Subscription cancelled. Access continues until end of billing period.' });
         setShowCancelConfirm(false);
       } else { setSubMsg({ type: 'error', text: data.message || 'Failed to cancel subscription' }); }
@@ -157,11 +157,12 @@ export default function SettingsPage({ user, onUserUpdate, onLogout }) {
     </div>
   );
 
-  const renewsDate = subStatus?.currentPeriodEnd ? new Date(subStatus.currentPeriodEnd).toLocaleDateString() : null;
+  const subSub = subStatus?.subscription;
+  const renewsDate = subSub?.endDate ? new Date(subSub.endDate).toLocaleDateString() : null;
   const subStatusColor = subStatus?.isActive ? 'text-green-400 bg-green-500/10 border-green-500/20'
-    : subStatus?.status === 'cancelled' ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20'
+    : subSub?.status === 'cancelled' ? 'text-yellow-400 bg-yellow-500/10 border-yellow-500/20'
     : 'text-red-400 bg-red-500/10 border-red-500/20';
-  const subStatusLabel = subStatus?.isActive ? 'Active' : subStatus?.status === 'cancelled' ? 'Cancelled' : 'Inactive';
+  const subStatusLabel = subStatus?.isActive ? 'Active' : subSub?.status === 'cancelled' ? 'Cancelled' : 'Inactive';
 
   if (!user) return (
     <div className="min-h-screen bg-dark-bg pt-20 flex items-center justify-center">
@@ -286,15 +287,15 @@ export default function SettingsPage({ user, onUserUpdate, onLogout }) {
             <div className="p-6">
               {subLoading ? (
                 <div className="flex items-center gap-2 text-brand-text-tertiary"><Loader2 className="w-4 h-4 animate-spin" /><span className="text-sm">Loading…</span></div>
-              ) : subStatus?.planId ? (
+              ) : subStatus?.hasSubscription ? (
                 <>
                   <div className="flex items-start justify-between mb-2">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-sm font-semibold text-white capitalize">{subStatus.plan || 'Pro'} Plan</span>
+                        <span className="text-sm font-semibold text-white capitalize">{subStatus?.plan?.name || subSub?.plan || 'Pro'} Plan</span>
                         <span className={`px-2 py-0.5 rounded-full border text-xs font-bold ${subStatusColor}`}>{subStatusLabel}</span>
                       </div>
-                      {renewsDate && <div className="text-xs text-brand-text-tertiary">{subStatus.status === 'cancelled' ? `Access until ${renewsDate}` : `Renews ${renewsDate}`}</div>}
+                      {renewsDate && <div className="text-xs text-brand-text-tertiary">{subSub?.status === 'cancelled' ? `Access until ${renewsDate}` : `Renews ${renewsDate}`}</div>}
                     </div>
                   </div>
                   <MsgBanner msg={subMsg} />
