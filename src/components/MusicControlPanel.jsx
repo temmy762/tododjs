@@ -111,7 +111,8 @@ export default function MusicControlPanel({
       try {
         const token = localStorage.getItem('token');
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
-        const res = await fetch(`${API_URL}/tracks/${trackId}/playback`, { headers });
+        const collection = track?.source === 'mashup' ? 'mashups' : 'tracks';
+        const res = await fetch(`${API_URL}/${collection}/${trackId}/playback`, { headers });
         const data = await res.json();
         if (data.success && data.data?.url) {
           setAudioUrl(data.data.url);
