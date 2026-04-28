@@ -196,6 +196,38 @@ export async function detectTonalityWithWebSearch(trackTitle, artist, album = nu
 }
 
 
+export async function detectCategoryWithAI(title, artist, knownCategories = []) {
+  if (!process.env.OPENAI_API_KEY || !knownCategories.length) return null;
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [{
+        role: 'user',
+        content: `You are a DJ record pool librarian. Based on the track title and artist below, determine which record pool brand category this track most likely belongs to.
+
+Track: "${title}"
+Artist: "${artist || 'Unknown'}"
+
+Known categories: ${knownCategories.join(', ')}
+
+Rules:
+- Pick EXACTLY ONE category from the list, or "Others" if none fit
+- Categories like "Latin Box", "DJ City", "BPM Supreme", "Heavy Hits", "Club Killer", "Intensa Music" are DJ record pool brand names
+- Use genre/style cues and naming conventions to decide
+- Reply with ONLY the category name, nothing else`
+      }],
+      max_tokens: 20,
+      temperature: 0,
+    });
+    const suggested = response.choices[0]?.message?.content?.trim();
+    if (!suggested) return null;
+    const match = knownCategories.find(c => c.toLowerCase() === suggested.toLowerCase());
+    return match || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function detectGenreWithAI(trackTitle, artist, album = null) {
   if (!process.env.OPENAI_API_KEY) {
     return null;

@@ -4,8 +4,8 @@ import Mashup from '../models/Mashup.js';
 import MashupSettings from '../models/MashupSettings.js';
 import { getSignedDownloadUrl, uploadToWasabi, deleteFromWasabi, ensureSignedUrl } from '../config/wasabi.js';
 import { resolveSignedUrls } from '../utils/signedUrls.js';
-import { detectGenreWithAI } from '../services/openai.js';
-import { detectCategoryAsync } from '../services/categoryDetection.js';
+import { detectGenreWithAI, detectCategoryWithAI } from '../services/openai.js';
+import { detectCategoryAsync, getKnownCategoryNames } from '../services/categoryDetection.js';
 import { detectTonality } from '../services/tonalityDetection.js';
 import { parseBuffer } from 'music-metadata';
 
@@ -209,22 +209,32 @@ export const detectMashupTonalitySSE = async (req, res) => {
 // @access  Admin
 export const autoCategorizeMashups = async (req, res) => {
   try {
-    const { force = false, dryRun = false } = req.body;
+    const { force = false, dryRun = false, useAI = true } = req.body;
 
-    // In non-force mode, re-process mashups that still carry old genre-style categories
     const OLD_GENRE_CATS = new Set(['Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap', 'House', 'EDM', 'Afro House', 'Remember', 'International']);
     const filter = force
       ? {}
-      : { $or: [{ category: { $exists: false } }, { category: null }, { category: '' }, { category: { $in: [...OLD_GENRE_CATS] } }] };
+      : { $or: [{ category: { $exists: false } }, { category: null }, { category: '' }, { category: { $in: [...OLD_GENRE_CATS] } }, { category: 'Others' }] };
 
     const mashups = await Mashup.find(filter).lean();
+    const knownNames = await getKnownCategoryNames();
 
     const results = [];
     let updated = 0;
 
     for (const m of mashups) {
       const cleanedTitle = cleanMashupTitle(m.title);
-      const { category: detectedCategory, raw: categoryRaw } = await detectCategoryAsync(cleanedTitle, null);
+      let { category: detectedCategory, raw: categoryRaw } = await detectCategoryAsync(cleanedTitle, null);
+      let aiUsed = false;
+
+      if (detectedCategory === 'Others' && useAI && knownNames.length) {
+        const aiCategory = await detectCategoryWithAI(cleanedTitle, m.artist, knownNames);
+        if (aiCategory && aiCategory !== 'Others') {
+          detectedCategory = aiCategory;
+          categoryRaw = `ai:${aiCategory}`;
+          aiUsed = true;
+        }
+      }
 
       const categoryChanged = detectedCategory !== m.category;
       const titleChanged    = cleanedTitle !== m.title;
@@ -238,6 +248,7 @@ export const autoCategorizeMashups = async (req, res) => {
         category:    m.category,
         newCategory: categoryChanged ? detectedCategory  : m.category,
         raw:         categoryRaw,
+        aiUsed,
       };
       results.push(entry);
 
@@ -263,7 +274,27 @@ export const autoCategorizeMashups = async (req, res) => {
   }
 };
 
+// @desc    Bulk assign a category to multiple mashups
+// @route   POST /api/mashups/bulk-assign-category
+// @access  Admin
+export const bulkAssignCategory = async (req, res) => {
+  try {
+    const { ids, category } = req.body;
+    if (!Array.isArray(ids) || !ids.length || !category) {
+      return res.status(400).json({ success: false, message: 'ids (array) and category are required' });
+    }
+    const result = await Mashup.updateMany(
+      { _id: { $in: ids } },
+      { $set: { category, categoryRaw: null } }
+    );
+    res.json({ success: true, updated: result.modifiedCount });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get distinct genres from published mashups
+// (bulkAssignCategory defined above)
 // @route   GET /api/mashups/genres
 // @access  Public
 export const getMashupGenres = async (req, res) => {

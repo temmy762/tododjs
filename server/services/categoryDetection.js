@@ -156,7 +156,7 @@ let _categoryCache   = null;
 let _categoryCacheTs = 0;
 const CACHE_TTL_MS   = 60_000; // refresh every 60 s
 
-async function getKnownCategoryNames() {
+export async function getKnownCategoryNames() {
   if (_categoryCache && (Date.now() - _categoryCacheTs) < CACHE_TTL_MS) {
     return _categoryCache;
   }

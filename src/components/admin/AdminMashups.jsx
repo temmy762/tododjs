@@ -49,6 +49,10 @@ export default function AdminMashups() {
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
   const [showUploadPanel, setShowUploadPanel] = useState(false);
+  const [selectedMashups, setSelectedMashups] = useState(new Set());
+  const [bulkCategory, setBulkCategory] = useState('');
+  const [bulkAssigning, setBulkAssigning] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState('all');
   const [isMinimized, setIsMinimized] = useState(false);
   const audioRef = useRef(null);
   const coverRef = useRef(null);
@@ -159,6 +163,33 @@ export default function AdminMashups() {
       console.error('Tonality detection error:', err);
     } finally {
       setTonalityRunning(false);
+    }
+  };
+
+  const handleBulkAssign = async () => {
+    if (!selectedMashups.size || !bulkCategory) return;
+    setBulkAssigning(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API}/mashups/bulk-assign-category`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ ids: [...selectedMashups], category: bulkCategory }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ type: 'success', text: `Updated ${data.updated} mashup(s) to "${bulkCategory}"` });
+        setSelectedMashups(new Set());
+        setBulkCategory('');
+        fetchMashups();
+        fetchPoolCategories();
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Bulk assign failed' });
+      }
+    } catch (err) {
+      setMessage({ type: 'error', text: err.message });
+    } finally {
+      setBulkAssigning(false);
     }
   };
 
@@ -1104,14 +1135,87 @@ export default function AdminMashups() {
           <h3 className="text-sm font-semibold text-white flex items-center gap-2">
             <Music className="w-4 h-4 text-accent" />
             All Mashups ({mashups.length})
+            {selectedMashups.size > 0 && (
+              <span className="text-xs font-normal text-accent ml-1">{selectedMashups.size} selected</span>
+            )}
           </h3>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search title or artist…"
-            className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs w-full sm:w-56"
-          />
+          <div className="flex items-center gap-2 flex-wrap">
+            <select
+              value={categoryFilter}
+              onChange={e => { setCategoryFilter(e.target.value); setSelectedMashups(new Set()); }}
+              className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs"
+            >
+              <option value="all">All categories</option>
+              <option value="Others">Others / Uncategorized</option>
+              {poolCategories.map(cat => (
+                <option key={cat._id} value={cat.name}>{cat.name} ({cat.mashupCount})</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search title or artist…"
+              className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs w-full sm:w-48"
+            />
+          </div>
+        </div>
+
+        {selectedMashups.size > 0 && (
+          <div className="flex items-center gap-3 mb-3 p-3 rounded-lg bg-accent/10 border border-accent/20">
+            <span className="text-xs text-accent font-medium flex-shrink-0">{selectedMashups.size} selected</span>
+            <select
+              value={bulkCategory}
+              onChange={e => setBulkCategory(e.target.value)}
+              className="flex-1 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs"
+            >
+              <option value="">— Pick category to assign —</option>
+              {poolCategories.map(cat => (
+                <option key={cat._id} value={cat.name}>{cat.name}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleBulkAssign}
+              disabled={!bulkCategory || bulkAssigning}
+              className="px-4 py-1.5 bg-accent hover:bg-accent-hover disabled:opacity-50 rounded-lg text-xs font-medium text-white transition-colors flex items-center gap-2 flex-shrink-0"
+            >
+              {bulkAssigning ? <Loader size={12} className="animate-spin" /> : <Check size={12} />}
+              Assign
+            </button>
+            <button
+              onClick={() => setSelectedMashups(new Set())}
+              className="p-1.5 text-brand-text-tertiary hover:text-white transition-colors flex-shrink-0"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+
+        <div className="text-[10px] text-brand-text-tertiary mb-3 flex items-center gap-3">
+          {(() => {
+            const filtered = mashups.filter(m => {
+              const catOk = categoryFilter === 'all' || (categoryFilter === 'Others' ? (!m.category || m.category === 'Others') : m.category === categoryFilter);
+              if (!searchQuery.trim()) return catOk;
+              const q = searchQuery.toLowerCase();
+              return catOk && (m.title?.toLowerCase().includes(q) || m.artist?.toLowerCase().includes(q));
+            });
+            if (!filtered.length) return null;
+            const allSelected = filtered.every(m => selectedMashups.has(m._id));
+            return (
+              <button
+                onClick={() => {
+                  if (allSelected) {
+                    setSelectedMashups(prev => { const n = new Set(prev); filtered.forEach(m => n.delete(m._id)); return n; });
+                  } else {
+                    setSelectedMashups(prev => { const n = new Set(prev); filtered.forEach(m => n.add(m._id)); return n; });
+                  }
+                }}
+                className="hover:text-white transition-colors"
+              >
+                {allSelected ? 'Deselect all visible' : `Select all ${filtered.length} visible`}
+              </button>
+            );
+          })()}
         </div>
 
         {loading ? (
@@ -1134,14 +1238,30 @@ export default function AdminMashups() {
         ) : (
           <div className="space-y-1.5">
             {mashups.filter(m => {
-              if (!searchQuery.trim()) return true;
+              const catOk = categoryFilter === 'all' || (categoryFilter === 'Others' ? (!m.category || m.category === 'Others') : m.category === categoryFilter);
+              if (!searchQuery.trim()) return catOk;
               const q = searchQuery.toLowerCase();
-              return m.title?.toLowerCase().includes(q) || m.artist?.toLowerCase().includes(q);
+              return catOk && (m.title?.toLowerCase().includes(q) || m.artist?.toLowerCase().includes(q));
             }).map((mashup) => (
               <div
                 key={mashup._id}
-                className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors"
+                className={`flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer ${
+                  selectedMashups.has(mashup._id)
+                    ? 'bg-accent/10 border-accent/30'
+                    : 'bg-white/[0.02] border-white/[0.04] hover:bg-white/[0.04]'
+                }`}
+                onClick={(e) => {
+                  if (e.target.closest('button') || e.target.closest('input[type="text"]') || e.target.closest('select') || editingId === mashup._id) return;
+                  setSelectedMashups(prev => { const n = new Set(prev); n.has(mashup._id) ? n.delete(mashup._id) : n.add(mashup._id); return n; });
+                }}
               >
+                <input
+                  type="checkbox"
+                  checked={selectedMashups.has(mashup._id)}
+                  onChange={() => setSelectedMashups(prev => { const n = new Set(prev); n.has(mashup._id) ? n.delete(mashup._id) : n.add(mashup._id); return n; })}
+                  onClick={e => e.stopPropagation()}
+                  className="w-3.5 h-3.5 accent-accent flex-shrink-0 cursor-pointer"
+                />
                 <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-dark-elevated">
                   <MashupCover mashup={mashup} />
                 </div>
