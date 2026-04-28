@@ -17,6 +17,7 @@ export default function AdminMashups() {
   const [autoRunning, setAutoRunning] = useState(false);
   const [autoPreview, setAutoPreview] = useState(null);
   const [tonalityRunning, setTonalityRunning] = useState(false);
+  const [tonalityRunId, setTonalityRunId] = useState(0);
   const [tonalityProgress, setTonalityProgress] = useState({ current: 0, total: 0, done: false, stats: null });
   const [tonalityResults, setTonalityResults] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -90,6 +91,7 @@ export default function AdminMashups() {
   };
 
   const handleDetectTonality = async (force = false) => {
+    setTonalityRunId(id => id + 1);
     setTonalityRunning(true);
     setTonalityProgress({ current: 0, total: 0, done: false, stats: null });
     setTonalityResults([]);
@@ -615,46 +617,42 @@ export default function AdminMashups() {
         </div>
 
         {(tonalityRunning || tonalityResults.length > 0 || tonalityProgress.done) && (
-          <div className="mt-4 space-y-3">
-            {tonalityProgress.total > 0 && (
-              <div>
-                <div className="flex items-center justify-between text-xs text-brand-text-tertiary mb-1.5">
-                  <span>
-                    {tonalityProgress.done
-                      ? `Done — ${tonalityProgress.total} processed`
-                      : `Processing ${tonalityProgress.current} / ${tonalityProgress.total}…`}
+          <div key={tonalityRunId} className="mt-4 space-y-3">
+            <div className={tonalityProgress.total > 0 ? '' : 'hidden'}>
+              <div className="flex items-center justify-between text-xs text-brand-text-tertiary mb-1.5">
+                <span>
+                  {tonalityProgress.done
+                    ? `Done — ${tonalityProgress.total} processed`
+                    : `Processing ${tonalityProgress.current} / ${tonalityProgress.total}…`}
+                </span>
+                {tonalityProgress.done && tonalityProgress.stats && (
+                  <span className="flex items-center gap-2">
+                    <span className="text-green-400">✓ {tonalityProgress.stats.ok} detected</span>
+                    {tonalityProgress.stats.needsReview > 0 && <span className="text-orange-400">⚠ {tonalityProgress.stats.needsReview} flagged</span>}
+                    {tonalityProgress.stats.failed > 0 && <span className="text-red-400">✗ {tonalityProgress.stats.failed} failed</span>}
                   </span>
-                  {tonalityProgress.done && tonalityProgress.stats && (
-                    <span className="flex items-center gap-2">
-                      <span className="text-green-400">✓ {tonalityProgress.stats.ok} detected</span>
-                      {tonalityProgress.stats.needsReview > 0 && <span className="text-orange-400">⚠ {tonalityProgress.stats.needsReview} flagged</span>}
-                      {tonalityProgress.stats.failed > 0 && <span className="text-red-400">✗ {tonalityProgress.stats.failed} failed</span>}
-                    </span>
-                  )}
-                </div>
-                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all duration-300 ${tonalityProgress.done ? 'bg-green-500' : 'bg-accent animate-pulse'}`}
-                    style={{ width: tonalityProgress.total ? `${(tonalityProgress.current / tonalityProgress.total) * 100}%` : '0%' }}
-                  />
-                </div>
+                )}
               </div>
-            )}
-            {tonalityResults.length > 0 && (
-              <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
-                {tonalityResults.map((r, i) => (
-                  <div key={r.id || `result-${i}`} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs border ${
-                    r.error ? 'bg-red-500/5 border-red-500/10' : r.needsReview ? 'bg-orange-500/5 border-orange-500/10' : 'bg-green-500/5 border-green-500/10'
-                  }`}>
-                    <span className={`truncate flex-1 ${r.error ? 'text-red-400' : r.needsReview ? 'text-orange-300' : 'text-white'}`}>{r.title}</span>
-                    <span className="flex-shrink-0 ml-3 font-mono font-bold">
-                      {r.error ? <span className="text-red-400">✗</span> : r.tonality ? <span className="text-accent">{r.tonality}</span> : <span className="text-orange-400">⚠ No key</span>}
-                    </span>
-                    {r.bpm && <span className="flex-shrink-0 ml-2 text-brand-text-tertiary">{r.bpm} BPM</span>}
-                  </div>
-                ))}
+              <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${tonalityProgress.done ? 'bg-green-500' : 'bg-accent animate-pulse'}`}
+                  style={{ width: tonalityProgress.total ? `${(tonalityProgress.current / tonalityProgress.total) * 100}%` : '0%' }}
+                />
               </div>
-            )}
+            </div>
+            <div className={tonalityResults.length > 0 ? 'max-h-56 overflow-y-auto space-y-1 pr-1' : 'hidden'}>
+              {tonalityResults.map((r, i) => (
+                <div key={r.id || `result-${i}`} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs border ${
+                  r.error ? 'bg-red-500/5 border-red-500/10' : r.needsReview ? 'bg-orange-500/5 border-orange-500/10' : 'bg-green-500/5 border-green-500/10'
+                }`}>
+                  <span className={`truncate flex-1 ${r.error ? 'text-red-400' : r.needsReview ? 'text-orange-300' : 'text-white'}`}>{r.title}</span>
+                  <span className="flex-shrink-0 ml-3 font-mono font-bold">
+                    {r.error ? <span className="text-red-400">✗</span> : r.tonality ? <span className="text-accent">{r.tonality}</span> : <span className="text-orange-400">⚠ No key</span>}
+                  </span>
+                  {r.bpm && <span className="flex-shrink-0 ml-2 text-brand-text-tertiary">{r.bpm} BPM</span>}
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
