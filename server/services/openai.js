@@ -112,32 +112,43 @@ Instructions:
 Respond ONLY with valid JSON, no markdown, no explanation:
 {"key": "C", "scale": "minor", "camelot": "5A", "confidence": "high"}`;
 
-  try {
-    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
-    const model = genAI.getGenerativeModel({
-      model: process.env.GOOGLE_AI_MODEL || 'gemini-1.5-flash',
-      generationConfig: { temperature: 0.1, maxOutputTokens: 120 }
-    });
+  const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
+  const model = genAI.getGenerativeModel({
+    model: process.env.GOOGLE_AI_MODEL || 'gemini-2.0-flash-lite',
+    generationConfig: { temperature: 0.1, maxOutputTokens: 120 }
+  });
 
-    const result = await model.generateContent(prompt);
-    const raw = result.response.text().trim()
-      .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+  const MAX_RETRIES = 2;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const result = await model.generateContent(prompt);
+      const raw = result.response.text().trim()
+        .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
 
-    const parsed = JSON.parse(raw);
-    if (!parsed.camelot || parsed.confidence === 'unknown' || parsed.camelot === null) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed.camelot || parsed.confidence === 'unknown' || parsed.camelot === null) return null;
 
-    const confidenceMap = { high: 0.88, medium: 0.65, low: 0.45, unknown: 0 };
-    return {
-      key:        parsed.key   || null,
-      scale:      parsed.scale || null,
-      camelot:    parsed.camelot,
-      source:     'gemini',
-      confidence: confidenceMap[parsed.confidence] ?? 0.65,
-    };
-  } catch (err) {
-    console.error('Gemini tonality detection error:', err.message);
-    return null;
+      const confidenceMap = { high: 0.88, medium: 0.65, low: 0.45, unknown: 0 };
+      return {
+        key:        parsed.key   || null,
+        scale:      parsed.scale || null,
+        camelot:    parsed.camelot,
+        source:     'gemini',
+        confidence: confidenceMap[parsed.confidence] ?? 0.65,
+      };
+    } catch (err) {
+      const is429 = err.message?.includes('429') || err.message?.includes('quota') || err.message?.includes('Too Many Requests');
+      if (is429 && attempt < MAX_RETRIES) {
+        const wait = (attempt + 1) * 8000;
+        console.log(`   ⏳ Gemini rate-limited, retrying in ${wait / 1000}s… (attempt ${attempt + 1}/${MAX_RETRIES})`);
+        await new Promise(r => setTimeout(r, wait));
+        continue;
+      }
+      console.error('Gemini tonality detection error:', err.message);
+      return null;
+    }
   }
+  return null;
 }
 
 export async function detectGenreWithAI(trackTitle, artist, album = null) {
