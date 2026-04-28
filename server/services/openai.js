@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -82,6 +83,59 @@ If you don't know the key, return: {"key": null, "scale": null, "camelot": null,
     };
   } catch (error) {
     console.error('OpenAI tonality detection error:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Google Gemini fallback for tonality detection.
+ * Uses Gemini's broad music knowledge to infer the Camelot key when
+ * audio analysis and external lookups all fail.
+ * Requires GOOGLE_AI_API_KEY in .env.
+ */
+export async function detectTonalityWithGemini(trackTitle, artist, album = null) {
+  if (!process.env.GOOGLE_AI_API_KEY) return null;
+
+  const prompt = `You are a music theory expert with deep knowledge of DJ record pools, Latin music, and popular tracks.
+
+Identify the musical key (tonality) for this specific track:
+Title: ${trackTitle}
+Artist: ${artist}
+${album ? `Album: ${album}` : ''}
+
+Instructions:
+- Use your training knowledge of this exact track if you know it
+- Provide the Camelot wheel key (used by DJs) such as "5A", "10B", "8B", etc.
+- Set confidence "high" if you know this track's key specifically, "medium" if educated guess from genre/artist style, "low" if uncertain
+- If you truly have no idea, return null values
+
+Respond ONLY with valid JSON, no markdown, no explanation:
+{"key": "C", "scale": "minor", "camelot": "5A", "confidence": "high"}`;
+
+  try {
+    const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
+    const model = genAI.getGenerativeModel({
+      model: process.env.GOOGLE_AI_MODEL || 'gemini-1.5-flash',
+      generationConfig: { temperature: 0.1, maxOutputTokens: 120 }
+    });
+
+    const result = await model.generateContent(prompt);
+    const raw = result.response.text().trim()
+      .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+
+    const parsed = JSON.parse(raw);
+    if (!parsed.camelot || parsed.confidence === 'unknown' || parsed.camelot === null) return null;
+
+    const confidenceMap = { high: 0.88, medium: 0.65, low: 0.45, unknown: 0 };
+    return {
+      key:        parsed.key   || null,
+      scale:      parsed.scale || null,
+      camelot:    parsed.camelot,
+      source:     'gemini',
+      confidence: confidenceMap[parsed.confidence] ?? 0.65,
+    };
+  } catch (err) {
+    console.error('Gemini tonality detection error:', err.message);
     return null;
   }
 }

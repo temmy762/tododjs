@@ -1,6 +1,6 @@
 import { parseBuffer } from 'music-metadata';
 import { analyzeAudio } from './audioAnalysis.js';
-import { detectTonalityWithAI } from './openai.js';
+import { detectTonalityWithAI, detectTonalityWithGemini } from './openai.js';
 import { lookupSpotifyFeatures } from './spotifyBpm.js';
 import { lookupAuddFeatures } from './auddBpm.js';
 import { detectKeyWithKeyfinder } from './keyfinderAnalysis.js';
@@ -195,10 +195,10 @@ export async function detectTonality(audioBuffer, metadata) {
     }
   }
 
-  // Step 4: OpenAI text fallback (least reliable, only for key)
+  // Step 4: OpenAI text fallback
   if (!tonality && process.env.TONALITY_AI_FALLBACK === 'true' && metadata.title && metadata.artist) {
     try {
-      console.log(`   🤖 Falling back to AI for: ${metadata.title} - ${metadata.artist}`);
+      console.log(`   🤖 Falling back to OpenAI for: ${metadata.title} - ${metadata.artist}`);
       const aiTonality = await detectTonalityWithAI(metadata.title, metadata.artist, metadata.album);
       
       if (aiTonality) {
@@ -206,10 +206,28 @@ export async function detectTonality(audioBuffer, metadata) {
           ...aiTonality,
           needsManualReview: aiTonality.confidence < 0.7
         };
-        console.log(`   ✓ Key from AI: ${tonality.camelot || tonality.key} (confidence: ${tonality.confidence})`);
+        console.log(`   ✓ Key from OpenAI: ${tonality.camelot || tonality.key} (confidence: ${tonality.confidence})`);
       }
     } catch (error) {
-      console.log('   ⚠ AI tonality detection failed:', error.message);
+      console.log('   ⚠ OpenAI tonality detection failed:', error.message);
+    }
+  }
+
+  // Step 4.5: Google Gemini fallback — runs whenever key is still missing, no flag required
+  if (!tonality?.camelot && process.env.GOOGLE_AI_API_KEY && metadata.title && metadata.artist) {
+    try {
+      console.log(`   🔍 Trying Google Gemini for: ${metadata.title} - ${metadata.artist}`);
+      const geminiTonality = await detectTonalityWithGemini(metadata.title, metadata.artist, metadata.album);
+
+      if (geminiTonality?.camelot) {
+        tonality = {
+          ...geminiTonality,
+          needsManualReview: geminiTonality.confidence < 0.65,
+        };
+        console.log(`   ✓ Key from Gemini: ${tonality.camelot} (confidence: ${geminiTonality.confidence})`);
+      }
+    } catch (error) {
+      console.log('   ⚠ Gemini tonality detection failed:', error.message);
     }
   }
 
