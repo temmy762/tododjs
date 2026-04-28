@@ -283,10 +283,12 @@ export const searchGlobal = async (req, res) => {
     const trackFilter = useTextSearch
       ? {
           status: { $in: ['published', 'ready'] },
+          'tonality.camelot': { $exists: true, $nin: [null, ''] },
           $text: { $search: q }
         }
       : {
           status: { $in: ['published', 'ready'] },
+          'tonality.camelot': { $exists: true, $nin: [null, ''] },
           $or: [
             { title: { $regex: q, $options: 'i' } },
             { artist: { $regex: q, $options: 'i' } },
@@ -296,6 +298,7 @@ export const searchGlobal = async (req, res) => {
 
     const mashupFilter = {
       isPublished: true,
+      tonality: { $exists: true, $nin: [null, ''] },
       $or: [
         { title: { $regex: q, $options: 'i' } },
         { artist: { $regex: q, $options: 'i' } }

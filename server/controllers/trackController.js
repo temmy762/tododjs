@@ -95,7 +95,7 @@ export const browseTracks = async (req, res) => {
       limit = 30
     } = req.query;
 
-    const query = { status: 'published' };
+    const query = { status: 'published', 'tonality.camelot': { $exists: true, $nin: [null, ''] } };
 
     if (search) {
       query.$or = [

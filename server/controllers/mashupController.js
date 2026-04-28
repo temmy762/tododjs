@@ -23,7 +23,7 @@ export const getMashups = async (req, res) => {
       tonality,
     } = req.query;
 
-    const query = { isPublished: true };
+    const query = { isPublished: true, tonality: { $exists: true, $nin: [null, ''] } };
     if (genre && genre !== 'all') query.genre = genre;
     if (category && category !== 'all') query.category = category;
     if (tonality && tonality !== 'all') query.tonality = tonality;
