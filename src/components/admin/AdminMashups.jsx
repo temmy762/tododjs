@@ -633,6 +633,11 @@ export default function AdminMashups() {
 
         {(tonalityRunning || tonalityResults.length > 0 || tonalityProgress.done) && (
           <div key={tonalityRunId} className="mt-4 space-y-3">
+            {tonalityProgress.done && tonalityProgress.total === 0 && (
+              <p className="text-xs text-green-400 flex items-center gap-1.5">
+                <CheckCircle size={12} /> All mashups already have tonality — nothing to process.
+              </p>
+            )}
             <div className={tonalityProgress.total > 0 ? '' : 'hidden'}>
               <div className="flex items-center justify-between text-xs text-brand-text-tertiary mb-1.5">
                 <span>
