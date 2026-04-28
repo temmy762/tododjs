@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   Music, Upload, Trash2, Edit3, Save, X, Eye, EyeOff,
-  Loader, CheckCircle, AlertCircle, FileAudio,
-  Image, Sparkles, FileUp, RotateCcw, Check, AlertTriangle, Tag, Plus, Pencil, Wand2
+  Loader, CheckCircle, FileAudio,
+  Image, Sparkles, RotateCcw, Check, AlertTriangle, Tag, Wand2
 } from 'lucide-react';
 import GenericCoverArt from '../GenericCoverArt';
 import API_URL from '../../config/api';
@@ -13,13 +13,11 @@ const DEFAULT_MASHUP_CATEGORIES = ['Reggaeton', 'Old School Reggaeton', 'Dembow'
 export default function AdminMashups() {
   const [mashups, setMashups] = useState([]);
   const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Mash Ups', pageDescription: '', categories: DEFAULT_MASHUP_CATEGORIES });
-  const [newCategory, setNewCategory] = useState('');
-  const [editingCategoryIdx, setEditingCategoryIdx] = useState(null);
-  const [editingCategoryValue, setEditingCategoryValue] = useState('');
-  const [savingCategories, setSavingCategories] = useState(false);
+  const [poolCategories, setPoolCategories] = useState([]);
   const [autoRunning, setAutoRunning] = useState(false);
   const [autoPreview, setAutoPreview] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   const [uploadState, setUploadState] = useState({
     status: 'idle', // idle, uploading, processing, success, error
     progress: 0,
@@ -59,6 +57,7 @@ export default function AdminMashups() {
   useEffect(() => {
     fetchMashups();
     fetchSettings();
+    fetchPoolCategories();
   }, []);
 
   const fetchMashups = async () => {
@@ -87,50 +86,13 @@ export default function AdminMashups() {
     }
   };
 
-  const handleSaveCategories = async (updatedCategories) => {
+  const fetchPoolCategories = async () => {
     try {
-      setSavingCategories(true);
       const token = localStorage.getItem('token');
-      const res = await fetch(`${API}/mashups/settings`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ categories: updatedCategories })
-      });
+      const res = await fetch(`${API}/categories`, { headers: { Authorization: `Bearer ${token}` } });
       const data = await res.json();
-      if (data.success) {
-        setSettings(prev => ({ ...prev, categories: updatedCategories }));
-        setMessage({ type: 'success', text: 'Categories saved!' });
-      } else {
-        setMessage({ type: 'error', text: data.message });
-      }
-    } catch {
-      setMessage({ type: 'error', text: 'Failed to save categories' });
-    } finally {
-      setSavingCategories(false);
-      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
-    }
-  };
-
-  const handleAddCategory = () => {
-    const trimmed = newCategory.trim();
-    if (!trimmed || (settings.categories || []).includes(trimmed)) return;
-    const updated = [...(settings.categories || []), trimmed];
-    setNewCategory('');
-    handleSaveCategories(updated);
-  };
-
-  const handleDeleteCategory = (idx) => {
-    const updated = (settings.categories || []).filter((_, i) => i !== idx);
-    handleSaveCategories(updated);
-  };
-
-  const handleRenameCategory = (idx) => {
-    const trimmed = editingCategoryValue.trim();
-    if (!trimmed) return;
-    const updated = (settings.categories || []).map((category, i) => i === idx ? trimmed : category);
-    setEditingCategoryIdx(null);
-    setEditingCategoryValue('');
-    handleSaveCategories(updated);
+      if (data.success) setPoolCategories(data.data || []);
+    } catch {}
   };
 
   const handleAutoCategorizeDryRun = async () => {
@@ -561,72 +523,42 @@ export default function AdminMashups() {
         )}
       </div>
 
-      {/* ── Tag Management ── */}
+      {/* ── Pool-Brand Categories ── */}
       <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
-        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <Tag className="w-4 h-4 text-accent" />
-          Mashup Categories
-          <span className="text-xs font-normal text-brand-text-tertiary ml-1">— category chips shown in Live Mashup page</span>
-        </h3>
-        <div className="flex flex-wrap gap-2 mb-4">
-          {(settings.categories || []).map((category, idx) => (
-            <div key={idx} className="flex items-center gap-1 group">
-              {editingCategoryIdx === idx ? (
-                <div className="flex items-center gap-1">
-                  <input
-                    autoFocus
-                    value={editingCategoryValue}
-                    onChange={e => setEditingCategoryValue(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleRenameCategory(idx); if (e.key === 'Escape') { setEditingCategoryIdx(null); setEditingCategoryValue(''); } }}
-                    className="px-2 py-1 bg-white/10 border border-accent rounded text-xs text-white focus:outline-none w-24"
-                  />
-                  <button onClick={() => handleRenameCategory(idx)} className="p-1 text-accent hover:text-white transition-colors">
-                    <Check size={12} />
-                  </button>
-                  <button onClick={() => { setEditingCategoryIdx(null); setEditingCategoryValue(''); }} className="p-1 text-brand-text-tertiary hover:text-white transition-colors">
-                    <X size={12} />
-                  </button>
-                </div>
-              ) : (
-                <span className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-white/10 text-xs font-medium text-white border border-white/10">
-                  {category}
-                  <button
-                    onClick={() => { setEditingCategoryIdx(idx); setEditingCategoryValue(category); }}
-                    className="ml-1 text-brand-text-tertiary hover:text-accent transition-colors"
-                    title="Rename"
-                  >
-                    <Pencil size={10} />
-                  </button>
-                  <button
-                    onClick={() => handleDeleteCategory(idx)}
-                    className="ml-0.5 text-brand-text-tertiary hover:text-red-400 transition-colors"
-                    title="Delete"
-                  >
-                    <X size={10} />
-                  </button>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <Tag className="w-4 h-4 text-accent" />
+            Mashup Categories
+            <span className="text-xs font-normal text-brand-text-tertiary ml-1">— filters on Live Mashup page</span>
+          </h3>
+          <span className="text-[10px] text-brand-text-tertiary bg-white/5 border border-white/10 rounded-full px-2.5 py-1">
+            Managed in Admin → Categories
+          </span>
+        </div>
+        {poolCategories.length === 0 ? (
+          <p className="text-xs text-brand-text-tertiary">Loading categories…</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {poolCategories.map((cat) => (
+              <span
+                key={cat._id}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium text-white border border-white/10"
+                style={{ backgroundColor: cat.color ? `${cat.color}20` : undefined, borderColor: cat.color ? `${cat.color}40` : undefined }}
+              >
+                {cat.thumbnail && <img src={cat.thumbnail} alt={cat.name} className="w-3 h-3 rounded-sm object-cover" />}
+                <span>{cat.name}</span>
+                <span className={`text-[10px] px-1 py-0.5 rounded-full ${
+                  cat.mashupCount > 0 ? 'bg-accent/20 text-accent' : 'bg-white/10 text-white/30'
+                }`}>
+                  {cat.mashupCount}
                 </span>
-              )}
-            </div>
-          ))}
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            value={newCategory}
-            onChange={e => setNewCategory(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') handleAddCategory(); }}
-            placeholder="New category name..."
-            className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-sm w-48"
-          />
-          <button
-            onClick={handleAddCategory}
-            disabled={!newCategory.trim() || savingCategories}
-            className="px-4 py-2 bg-accent hover:bg-accent-hover rounded-lg font-medium text-white text-sm transition-colors disabled:opacity-50 flex items-center gap-2"
-          >
-            <Plus size={14} />
-            {savingCategories ? 'Saving...' : 'Add Category'}
-          </button>
-        </div>
+              </span>
+            ))}
+          </div>
+        )}
+        <p className="text-[10px] text-brand-text-tertiary/60 mt-3">
+          Only categories with at least 1 mashup appear as filter pills on the Live Mashup page. Run <span className="font-mono bg-white/10 px-1 rounded">Auto-Categorize</span> above to tag existing mashups.
+        </p>
       </div>
 
       {/* ── Upload New Mashup ── */}
@@ -915,8 +847,9 @@ export default function AdminMashups() {
                       onChange={(e) => setUploadForm({ ...uploadForm, category: e.target.value })}
                       className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs"
                     >
-                      {(settings.categories || DEFAULT_MASHUP_CATEGORIES).map((category) => (
-                        <option key={category} value={category} className="bg-dark-bg text-white">{category}</option>
+                      <option value="Others" className="bg-dark-bg text-white">Others (auto-detect)</option>
+                      {poolCategories.map((cat) => (
+                        <option key={cat._id} value={cat.name} className="bg-dark-bg text-white">{cat.name}</option>
                       ))}
                     </select>
                   </div>
@@ -1013,10 +946,19 @@ export default function AdminMashups() {
 
       {/* ── Mashup List ── */}
       <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
-        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <Music className="w-4 h-4 text-accent" />
-          All Mashups ({mashups.length})
-        </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+            <Music className="w-4 h-4 text-accent" />
+            All Mashups ({mashups.length})
+          </h3>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Search title or artist…"
+            className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs w-full sm:w-56"
+          />
+        </div>
 
         {loading ? (
           <div className="space-y-2">
@@ -1037,7 +979,11 @@ export default function AdminMashups() {
           </div>
         ) : (
           <div className="space-y-1.5">
-            {mashups.map((mashup) => (
+            {mashups.filter(m => {
+              if (!searchQuery.trim()) return true;
+              const q = searchQuery.toLowerCase();
+              return m.title?.toLowerCase().includes(q) || m.artist?.toLowerCase().includes(q);
+            }).map((mashup) => (
               <div
                 key={mashup._id}
                 className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors"
@@ -1083,8 +1029,9 @@ export default function AdminMashups() {
                       onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
                       className="px-2 py-1.5 bg-white/5 border border-white/10 rounded text-xs text-white"
                     >
-                      {(settings.categories || DEFAULT_MASHUP_CATEGORIES).map((category) => (
-                        <option key={category} value={category} className="bg-dark-bg text-white">{category}</option>
+                      <option value="Others" className="bg-dark-bg text-white">Others</option>
+                      {poolCategories.map((cat) => (
+                        <option key={cat._id} value={cat.name} className="bg-dark-bg text-white">{cat.name}</option>
                       ))}
                     </select>
                     <input
