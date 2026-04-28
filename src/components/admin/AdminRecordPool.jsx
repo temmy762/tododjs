@@ -1,15 +1,16 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star, Maximize2, Minimize2, Camera, Download } from 'lucide-react';
 import ManageAlbumModal from './ManageAlbumModal';
-import BulkUploadModal from './BulkUploadModal';
 import CollectionCard from './CollectionCard';
 import API_URL from '../../config/api';
+import { useUpload } from '../../context/UploadContext';
 
 const API = API_URL;
 const getToken = () => localStorage.getItem('token');
 const authHeaders = () => ({ 'Authorization': `Bearer ${getToken()}` });
 
 export default function AdminRecordPool() {
+  const upload = useUpload();
   const [view, setView] = useState('list'); // list | dateCards | albums
   const [collections, setCollections] = useState([]);
   const [sources, setSources] = useState([]);
@@ -21,6 +22,20 @@ export default function AdminRecordPool() {
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState(null);
+
+  const openBulkUpload = () => {
+    upload.openBulkUpload(() => fetchCollections());
+  };
+
+  const openAlbumUpload = () => {
+    if (!selectedDateCard || (!selectedSource && !selectedCollection)) return;
+    upload.openAlbumUpload({
+      sourceId: selectedSource?._id ?? selectedCollection?._id,
+      datePackId: selectedDateCard._id,
+      sourceName: selectedSource?.name ?? selectedCollection?.name,
+      dateCardName: selectedDateCard.name,
+    }, () => fetchAlbums(selectedDateCard._id));
+  };
   const [editItem, setEditItem] = useState(null);
 
   // Derived: which parent type is currently active when drilling down
@@ -222,7 +237,7 @@ export default function AdminRecordPool() {
             <div>
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold">Record Pool</h2>
-                <button onClick={() => setModal('bulkUpload')} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors">
+                <button onClick={openBulkUpload} className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 rounded-lg font-medium transition-colors">
                   <Upload size={18} /> Bulk Upload ZIP
                 </button>
               </div>
@@ -298,7 +313,7 @@ export default function AdminRecordPool() {
               )}
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold">Albums — {selectedDateCard.name}</h2>
-                <button onClick={() => setModal('uploadAlbum')} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
+                <button onClick={openAlbumUpload} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
                   <Upload size={18} /> Upload Album
                 </button>
               </div>
@@ -319,24 +334,7 @@ export default function AdminRecordPool() {
           );
         })()}
 
-        {/* Modals */}
-        {modal === 'bulkUpload' && (
-          <BulkUploadModal
-            onClose={() => setModal(null)}
-            onSuccess={() => { setModal(null); fetchCollections(); }}
-          />
-        )}
-
-        {modal === 'uploadAlbum' && selectedDateCard && (selectedSource || selectedCollection) && (
-          <AlbumUploadModal
-            sourceId={selectedSource?._id ?? selectedCollection?._id}
-            datePackId={selectedDateCard._id}
-            sourceName={selectedSource?.name ?? selectedCollection?.name}
-            dateCardName={selectedDateCard.name}
-            onClose={() => setModal(null)}
-            onSuccess={() => { setModal(null); fetchAlbums(selectedDateCard._id); }}
-          />
-        )}
+        {/* Modals — rendered at App root via UploadContext to persist across navigation */}
 
         {modal === 'createDateCard' && selectedSource && (
           <DateCardModal
@@ -943,7 +941,8 @@ function DateCardModal({ sourceId, dateCard, onClose, onSuccess }) {
 }
 
 // Album Upload Modal — supports batch uploading multiple ZIPs with minimize
-function AlbumUploadModal({ sourceId, datePackId, sourceName, dateCardName, onClose, onSuccess }) {
+export function AlbumUploadModal({ sourceId, datePackId, sourceName, dateCardName, onClose, onSuccess }) {
+  const { trackProcessing } = useUpload();
   const [queue, setQueue] = useState([]);
   const [globalGenre, setGlobalGenre] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -1048,6 +1047,7 @@ function AlbumUploadModal({ sourceId, datePackId, sourceName, dateCardName, onCl
             const aId = data.data.album._id;
             updateItem(item.id, { stage: 'processing', uploadProgress: 100, albumId: aId, totalTracks: data.data.album.trackCount });
             startPolling(item.id, aId);
+            trackProcessing({ type: 'album', resourceId: aId, name: item.name });
           } else {
             updateItem(item.id, { stage: 'failed', error: data.message || 'Upload failed' });
           }

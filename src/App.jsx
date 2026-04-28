@@ -7,6 +7,9 @@ import SearchOverlay from './components/SearchOverlay';
 import AuthModal from './components/auth/AuthModal';
 import { authService } from './services/authService';
 import ErrorBoundary from './components/ErrorBoundary';
+import { useUpload } from './context/UploadContext';
+import BulkUploadModal from './components/admin/BulkUploadModal';
+import { AlbumUploadModal } from './components/admin/AdminRecordPool';
 import { startTokenRefreshScheduler, stopTokenRefreshScheduler } from './services/apiFetch';
 import ArtistAlbumView from './components/ArtistAlbumView';
 import TonalityFilter from './components/TonalityFilter';
@@ -57,7 +60,39 @@ const PAGE_TO_PATH = Object.entries(PATH_TO_PAGE).reduce((acc, [path, page]) => 
   return acc;
 }, {});
 
+function ResumedUploadWidget({ upload }) {
+  const { resumed, dismissResumed } = upload;
+  if (!resumed.length) return null;
+  return (
+    <>
+      {resumed.map(r => (
+        <div key={r.id} className="fixed bottom-4 left-4 z-50 w-72 bg-dark-elevated border border-white/10 rounded-xl shadow-2xl shadow-black/50 p-3">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-xs font-semibold text-white truncate flex-1">{r.name || 'Upload'}</span>
+            {(r.status === 'completed' || r.status === 'failed') && (
+              <button onClick={() => dismissResumed(r.id)} className="p-1 text-brand-text-tertiary hover:text-white ml-2">✕</button>
+            )}
+          </div>
+          {r.status === 'processing' && (
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px] text-brand-text-tertiary">
+                <span>Processing…</span><span>{r.progress}%</span>
+              </div>
+              <div className="w-full bg-white/10 rounded-full h-1.5">
+                <div className="bg-yellow-400 h-1.5 rounded-full transition-all duration-500" style={{ width: `${r.progress}%` }} />
+              </div>
+            </div>
+          )}
+          {r.status === 'completed' && <p className="text-[10px] text-green-400">✓ Upload completed!</p>}
+          {r.status === 'failed' && <p className="text-[10px] text-red-400">✗ Processing failed</p>}
+        </div>
+      ))}
+    </>
+  );
+}
+
 function App() {
+  const upload = useUpload();
   const { i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
@@ -890,6 +925,22 @@ function App() {
           onSuccess={handleAuthSuccess}
         />
       )}
+
+      {/* ── Persistent upload modals — stay mounted across page navigation ── */}
+      {upload.bulkOpen && (
+        <BulkUploadModal
+          onClose={upload.closeBulkUpload}
+          onSuccess={() => { upload.bulkSuccessRef.current?.(); }}
+        />
+      )}
+      {upload.albumMeta && (
+        <AlbumUploadModal
+          {...upload.albumMeta}
+          onClose={upload.closeAlbumUpload}
+          onSuccess={() => { upload.albumSuccessRef.current?.(); }}
+        />
+      )}
+      <ResumedUploadWidget upload={upload} />
     </div>
     </PlayerContext.Provider>
   );

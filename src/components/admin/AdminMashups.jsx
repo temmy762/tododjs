@@ -573,7 +573,7 @@ export default function AdminMashups() {
               className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium text-white transition-colors disabled:opacity-50 flex items-center gap-2"
             >
               {autoRunning ? <Loader size={12} className="animate-spin" /> : <Wand2 size={12} />}
-              Preview
+              Scan Changes
             </button>
             {autoPreview && (
               <button
@@ -1145,10 +1145,10 @@ export default function AdminMashups() {
               onChange={e => { setCategoryFilter(e.target.value); setSelectedMashups(new Set()); }}
               className="px-3 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs"
             >
-              <option value="all">All categories</option>
-              <option value="Others">Others / Uncategorized</option>
+              <option value="all" className="bg-white text-gray-900">All categories</option>
+              <option value="Others" className="bg-white text-gray-900">Others / Uncategorized</option>
               {poolCategories.map(cat => (
-                <option key={cat._id} value={cat.name}>{cat.name} ({cat.mashupCount})</option>
+                <option key={cat._id} value={cat.name} className="bg-white text-gray-900">{cat.name} ({cat.mashupCount})</option>
               ))}
             </select>
             <input
@@ -1169,9 +1169,9 @@ export default function AdminMashups() {
               onChange={e => setBulkCategory(e.target.value)}
               className="flex-1 px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-white text-xs"
             >
-              <option value="">— Pick category to assign —</option>
+              <option value="" className="bg-white text-gray-900">— Pick category to assign —</option>
               {poolCategories.map(cat => (
-                <option key={cat._id} value={cat.name}>{cat.name}</option>
+                <option key={cat._id} value={cat.name} className="bg-white text-gray-900">{cat.name}</option>
               ))}
             </select>
             <button

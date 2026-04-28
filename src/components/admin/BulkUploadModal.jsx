@@ -1,8 +1,10 @@
 import { useState, useCallback, useEffect, useRef, Fragment } from 'react';
 import { X, Upload, Archive, AlertCircle, CheckCircle, Loader, FolderTree, Music, ChevronDown, ChevronUp, ChevronRight, RotateCcw, Ban, FolderOpen, Check, Minimize2, Maximize2 } from 'lucide-react';
 import { API_URL } from '../../config/api';
+import { useUpload } from '../../context/UploadContext';
 
 export default function BulkUploadModal({ onClose, onSuccess }) {
+  const { trackProcessing } = useUpload();
   const [uploadItems, setUploadItems] = useState([]);
   const [activeItemIndex, setActiveItemIndex] = useState(0);
   const [uploading, setUploading] = useState(false);
@@ -602,7 +604,10 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
       try {
         const response = await uploadSingleItem(item, idx);
         const newCollectionId = response.data?.collection?._id;
-        if (newCollectionId) setCollectionId(newCollectionId);
+        if (newCollectionId) {
+          setCollectionId(newCollectionId);
+          trackProcessing({ type: 'bulk', resourceId: newCollectionId, name: item.overrides?.collectionName || item.file?.name || 'Upload' });
+        }
 
         updateItem(idx, {
           uploadStatus: 'processing',
