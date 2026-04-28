@@ -60,7 +60,7 @@ async function run() {
   console.log(`║  Mashup Auto-Categorizer  [${APPLY ? 'APPLY' : 'DRY-RUN'}${FORCE ? ' + FORCE' : ''}]${' '.repeat(APPLY ? 12 : 13 - (FORCE ? 8 : 0))}║`);
   console.log('╚══════════════════════════════════════════════╝\n');
 
-  await mongoose.connect(process.env.MONGO_URI);
+  await mongoose.connect(process.env.MONGODB_URI);
   console.log('✓ MongoDB connected\n');
 
   const filter = FORCE
