@@ -215,7 +215,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
             >
               {t('common.all')}
             </button>
-            {poolCategories.map((cat) => {
+            {poolCategories.filter(cat => cat.mashupCount > 0).map((cat) => {
               const isActive = filterCategory === cat.name;
               return (
                 <button
@@ -231,13 +231,11 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
                     : null
                   }
                   <span className="whitespace-nowrap">{cat.name}</span>
-                  {cat.trackCount > 0 && (
-                    <span className={`text-[10px] px-1 py-0.5 rounded-full ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/50'
-                    }`}>
-                      {cat.trackCount > 999 ? `${Math.floor(cat.trackCount / 1000)}k` : cat.trackCount}
-                    </span>
-                  )}
+                  <span className={`text-[10px] px-1 py-0.5 rounded-full ${
+                    isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/50'
+                  }`}>
+                    {cat.mashupCount > 999 ? `${Math.floor(cat.mashupCount / 1000)}k` : cat.mashupCount}
+                  </span>
                 </button>
               );
             })}

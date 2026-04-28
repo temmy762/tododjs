@@ -29,7 +29,8 @@ export const getCategories = async (req, res) => {
 
     const data = categories.map(c => ({
       ...c,
-      trackCount: (countMap[c.name] || 0) + (mashupCountMap[c.name] || 0)
+      trackCount: countMap[c.name] || 0,
+      mashupCount: mashupCountMap[c.name] || 0
     }));
 
     res.json({ success: true, data });
