@@ -88,6 +88,67 @@ If you don't know the key, return: {"key": null, "scale": null, "camelot": null,
 }
 
 /**
+ * OpenAI web-search tonality detection.
+ * Uses gpt-4o-search-preview to look up the track's key on live music
+ * databases (Tunebat, Beatport, KeyFinder sites, etc.) — much more accurate
+ * than relying on model training data alone.
+ * Requires OPENAI_API_KEY in .env (same key, no extra setup).
+ */
+export async function detectTonalityWithWebSearch(trackTitle, artist, album = null) {
+  if (!process.env.OPENAI_API_KEY) return null;
+
+  const query = album
+    ? `"${trackTitle}" "${artist}" "${album}" musical key BPM Camelot`
+    : `"${trackTitle}" "${artist}" musical key BPM Camelot`;
+
+  const prompt = `Search music databases (Tunebat.com, Beatport, KeyFinder.io, Camelot Wheel sites) for the musical key and BPM of this track:
+
+Title: ${trackTitle}
+Artist: ${artist}
+${album ? `Album: ${album}` : ''}
+Search query: ${query}
+
+Return ONLY valid JSON, no markdown:
+{"key": "C", "scale": "minor", "camelot": "5A", "bpm": 128, "confidence": "high"}
+
+Confidence: "high" if found on a database, "medium" if inferred, "low" if uncertain.
+If not found: {"key": null, "scale": null, "camelot": null, "bpm": null, "confidence": "unknown"}`;
+
+  try {
+    const response = await openai.chat.completions.create({
+      model: 'gpt-4o-search-preview',
+      web_search_options: {},
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a DJ music data specialist. Search the web for exact musical key and BPM data. Always respond with valid JSON only.',
+        },
+        { role: 'user', content: prompt },
+      ],
+    }, { timeout: 30000 });
+
+    const raw = (response.choices[0].message.content || '').trim()
+      .replace(/^```json\s*/i, '').replace(/^```\s*/i, '').replace(/```$/i, '').trim();
+
+    const parsed = JSON.parse(raw);
+    if (!parsed.camelot || parsed.confidence === 'unknown' || parsed.camelot === null) return null;
+
+    const confidenceMap = { high: 0.95, medium: 0.72, low: 0.5, unknown: 0 };
+    return {
+      key:        parsed.key   || null,
+      scale:      parsed.scale || null,
+      camelot:    parsed.camelot,
+      bpm:        parsed.bpm   || null,
+      source:     'openai-websearch',
+      confidence: confidenceMap[parsed.confidence] ?? 0.72,
+    };
+  } catch (err) {
+    console.error('OpenAI web-search tonality error:', err.message);
+    return null;
+  }
+}
+
+/**
  * Google Gemini fallback for tonality detection.
  * Uses Gemini's broad music knowledge to infer the Camelot key when
  * audio analysis and external lookups all fail.

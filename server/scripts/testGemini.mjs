@@ -1,40 +1,49 @@
 /**
- * Quick smoke-test for the Google Gemini tonality detection.
+ * Smoke-test for tonality AI fallbacks (OpenAI web-search + Google Gemini).
  * Run from server/ directory: node scripts/testGemini.mjs
  */
 import 'dotenv/config';
-import { detectTonalityWithGemini } from '../services/openai.js';
+import { detectTonalityWithWebSearch, detectTonalityWithGemini } from '../services/openai.js';
 
-const TEST_TRACKS = [
-  { title: 'Gasolina',        artist: 'Daddy Yankee' },
-  { title: 'Blinding Lights', artist: 'The Weeknd' },
-  { title: 'Despacito',       artist: 'Luis Fonsi ft. Daddy Yankee' },
-  { title: 'Some Random Track That Probably Doesnt Exist XYZ123', artist: 'Nobody' },
-];
+const TEST_TRACK = { title: 'Gasolina', artist: 'Daddy Yankee' };
 
-if (!process.env.GOOGLE_AI_API_KEY) {
-  console.error('\n❌  GOOGLE_AI_API_KEY is not set in .env — add it and retry.\n');
-  process.exit(1);
-}
+console.log('\n══════════════════════════════════════════');
+console.log('  Tonality AI Fallback — Smoke Test');
+console.log('══════════════════════════════════════════\n');
 
-// Override model for this test to ensure we use a supported current model
-process.env.GOOGLE_AI_MODEL = 'gemini-2.0-flash-lite';
-
-console.log(`\n🔑  API key found: ${process.env.GOOGLE_AI_API_KEY.slice(0, 8)}…`);
-console.log(`🤖  Model: ${process.env.GOOGLE_AI_MODEL}\n`);
-
-for (const track of TEST_TRACKS) {
-  process.stdout.write(`  Testing: "${track.title}" by ${track.artist}  →  `);
+// ── OpenAI Web Search ──────────────────────────
+if (process.env.OPENAI_API_KEY) {
+  process.stdout.write(`🌐  OpenAI web-search  →  `);
   try {
-    const result = await detectTonalityWithGemini(track.title, track.artist);
-    if (result?.camelot) {
-      console.log(`✅  ${result.camelot} (${result.key} ${result.scale}) | confidence: ${result.confidence} | source: ${result.source}`);
+    const r = await detectTonalityWithWebSearch(TEST_TRACK.title, TEST_TRACK.artist);
+    if (r?.camelot) {
+      console.log(`✅  ${r.camelot} (${r.key} ${r.scale}) | BPM: ${r.bpm ?? '—'} | confidence: ${r.confidence} | source: ${r.source}`);
     } else {
-      console.log(`⚠️   No key detected (expected for unknown track)`);
+      console.log(`⚠️   No key returned`);
     }
   } catch (err) {
-    console.log(`❌  Error: ${err.message}`);
+    console.log(`❌  ${err.message}`);
   }
+} else {
+  console.log('🌐  OpenAI web-search  →  ⏭  OPENAI_API_KEY not set, skipped');
 }
 
-console.log('\n✓ Test complete\n');
+// ── Google Gemini ──────────────────────────────
+if (process.env.GOOGLE_AI_API_KEY) {
+  process.env.GOOGLE_AI_MODEL = 'gemini-2.0-flash-lite';
+  process.stdout.write(`🤖  Google Gemini     →  `);
+  try {
+    const r = await detectTonalityWithGemini(TEST_TRACK.title, TEST_TRACK.artist);
+    if (r?.camelot) {
+      console.log(`✅  ${r.camelot} (${r.key} ${r.scale}) | confidence: ${r.confidence} | source: ${r.source}`);
+    } else {
+      console.log(`⚠️   No key returned`);
+    }
+  } catch (err) {
+    console.log(`❌  ${err.message}`);
+  }
+} else {
+  console.log('🤖  Google Gemini     →  ⏭  GOOGLE_AI_API_KEY not set, skipped');
+}
+
+console.log('\n✓ Done\n');
