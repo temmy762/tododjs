@@ -317,22 +317,27 @@ export const createMashup = async (req, res) => {
     // Detect tonality and BPM if not provided
     let detectedTonality = tonality || '';
     let detectedBpm = bpm ? parseInt(bpm) : undefined;
-    
+    let tonalityNeedsReview = false;
+
     if (!tonality || !bpm) {
       try {
         const { tonality: tonalityResult, detectedBpm: bpmResult } = await detectTonality(audioFile.buffer, {
           title: cleanTitle,
           artist: trackArtist
         });
-        
-        if (!tonality && tonalityResult?.camelot) {
-          detectedTonality = tonalityResult.camelot;
+
+        if (!tonality) {
+          if (tonalityResult?.camelot) {
+            detectedTonality = tonalityResult.camelot;
+          }
+          tonalityNeedsReview = tonalityResult?.needsManualReview || !tonalityResult?.camelot;
         }
         if (!bpm && bpmResult) {
           detectedBpm = Math.round(bpmResult);
         }
       } catch (error) {
         console.error('Tonality/BPM detection error for mashup:', error.message);
+        tonalityNeedsReview = true;
       }
     }
 
@@ -344,6 +349,7 @@ export const createMashup = async (req, res) => {
       genre: detectedGenre,
       bpm: detectedBpm,
       tonality: detectedTonality,
+      tonalityNeedsReview,
       audioFile: {
         url: audioUpload.location || audioUpload.Location,
         key: audioKey,
