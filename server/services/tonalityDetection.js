@@ -1,6 +1,6 @@
 import { parseBuffer } from 'music-metadata';
 import { analyzeAudio } from './audioAnalysis.js';
-import { detectTonalityWithAI, detectTonalityWithWebSearch, detectTonalityWithGemini } from './openai.js';
+import { detectTonalityWithAI, detectTonalityWithWebSearch } from './openai.js';
 import { lookupSpotifyFeatures } from './spotifyBpm.js';
 import { lookupAuddFeatures } from './auddBpm.js';
 import { detectKeyWithKeyfinder } from './keyfinderAnalysis.js';
@@ -231,23 +231,6 @@ export async function detectTonality(audioBuffer, metadata) {
     }
   }
 
-  // Step 4.6: Google Gemini fallback — runs whenever key is still missing, no flag required
-  if (!tonality?.camelot && process.env.GOOGLE_AI_API_KEY && metadata.title && metadata.artist) {
-    try {
-      console.log(`   🔍 Trying Google Gemini for: ${metadata.title} - ${metadata.artist}`);
-      const geminiTonality = await detectTonalityWithGemini(metadata.title, metadata.artist, metadata.album);
-
-      if (geminiTonality?.camelot) {
-        tonality = {
-          ...geminiTonality,
-          needsManualReview: geminiTonality.confidence < 0.65,
-        };
-        console.log(`   ✓ Key from Gemini: ${tonality.camelot} (confidence: ${geminiTonality.confidence})`);
-      }
-    } catch (error) {
-      console.log('   ⚠ Gemini tonality detection failed:', error.message);
-    }
-  }
 
   // Step 5: Try to extract BPM from filename as last resort
   if (!detectedBpm && metadata.title) {

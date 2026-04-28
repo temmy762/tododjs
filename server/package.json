@@ -23,7 +23,6 @@
     "@aws-sdk/client-s3": "^3.982.0",
     "@aws-sdk/lib-storage": "^3.982.0",
     "@aws-sdk/s3-request-presigner": "^3.982.0",
-    "@google/generative-ai": "^0.24.1",
     "adm-zip": "^0.5.16",
     "archiver": "^7.0.1",
     "audio-decode": "^2.2.3",
