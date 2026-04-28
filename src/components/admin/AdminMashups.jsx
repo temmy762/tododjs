@@ -93,6 +93,7 @@ export default function AdminMashups() {
     setTonalityRunning(true);
     setTonalityProgress({ current: 0, total: 0, done: false, stats: null });
     setTonalityResults([]);
+    const pendingResults = [];
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API}/mashups/detect-tonality`, {
@@ -116,8 +117,20 @@ export default function AdminMashups() {
             const data = JSON.parse(line.slice(6));
             if (data.type === 'start') setTonalityProgress({ current: 0, total: data.total, done: false, stats: null });
             else if (data.type === 'progress') setTonalityProgress(p => ({ ...p, current: data.current, total: data.total }));
-            else if (data.type === 'result') setTonalityResults(r => [...r, data]);
+            else if (data.type === 'result') {
+              pendingResults.push(data);
+              if (pendingResults.length >= 5) {
+                const batch = [...pendingResults];
+                pendingResults.length = 0;
+                setTonalityResults(r => [...r, ...batch]);
+              }
+            }
             else if (data.type === 'done') {
+              if (pendingResults.length > 0) {
+                const batch = [...pendingResults];
+                pendingResults.length = 0;
+                setTonalityResults(r => [...r, ...batch]);
+              }
               setTonalityProgress(p => ({ ...p, done: true, stats: data.stats }));
               fetchMashups();
               fetchPoolCategories();
@@ -630,7 +643,7 @@ export default function AdminMashups() {
             {tonalityResults.length > 0 && (
               <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
                 {tonalityResults.map((r, i) => (
-                  <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs border ${
+                  <div key={r.mashupId || `result-${i}`} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs border ${
                     r.error ? 'bg-red-500/5 border-red-500/10' : r.needsReview ? 'bg-orange-500/5 border-orange-500/10' : 'bg-green-500/5 border-green-500/10'
                   }`}>
                     <span className={`truncate flex-1 ${r.error ? 'text-red-400' : r.needsReview ? 'text-orange-300' : 'text-white'}`}>{r.title}</span>
