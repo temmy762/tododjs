@@ -643,7 +643,7 @@ export default function AdminMashups() {
             {tonalityResults.length > 0 && (
               <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
                 {tonalityResults.map((r, i) => (
-                  <div key={r.mashupId || `result-${i}`} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs border ${
+                  <div key={r.id || `result-${i}`} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs border ${
                     r.error ? 'bg-red-500/5 border-red-500/10' : r.needsReview ? 'bg-orange-500/5 border-orange-500/10' : 'bg-green-500/5 border-green-500/10'
                   }`}>
                     <span className={`truncate flex-1 ${r.error ? 'text-red-400' : r.needsReview ? 'text-orange-300' : 'text-white'}`}>{r.title}</span>
