@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { List, Grid3x3, ArrowUpDown, X, Loader, Music, SlidersHorizontal } from 'lucide-react';
+import { List, Grid3x3, ArrowUpDown, X, Loader } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import TrackListView from './TrackListView';
 import TrackGridView from './TrackGridView';
@@ -51,10 +51,13 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
 
   // ── data state ──────────────────────────────────────────────
   const [tracks, setTracks] = useState([]);
-  const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Live Mashups', pageDescription: '', categories: ['Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap', 'House', 'EDM', 'Afro House', 'Remember', 'International'] });
+  const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Live Mashups', pageDescription: '' });
   const [loading, setLoading] = useState(true);
   const [totalTracks, setTotalTracks] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
+
+  // ── pool-brand categories (same source as home page) ──────────
+  const [poolCategories, setPoolCategories] = useState([]);
 
   // ── standalone filter state (completely independent) ─────────
   const [filterCategory, setFilterCategory] = useState('all');
@@ -64,11 +67,16 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
   const [tracksPerPage, setTracksPerPage] = useState(30);
   const [viewMode, setViewMode] = useState('list');
 
-  // ── fetch settings once ────────────────────────────────────────
+  // ── fetch settings + pool categories once ─────────────────────
   useEffect(() => {
     fetch(`${API_URL}/mashups/settings`)
       .then(r => r.json())
       .then(d => { if (d.success) setSettings(d.data); })
+      .catch(() => {});
+
+    fetch(`${API_URL}/categories`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setPoolCategories(d.data || []); })
       .catch(() => {});
   }, []);
 
@@ -140,7 +148,6 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
   };
 
   const displayedTracks = tracks;
-  const mashupCategories = settings.categories || [];
   const hasActiveFilters = filterCategory !== 'all' || filterTonality !== 'all';
 
   return (
@@ -195,43 +202,61 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
           </div>
         </div>
 
-        {/* Category + Sort row */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-2 overflow-x-auto scrollbar-hidden pb-1 max-w-full">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-brand-text-tertiary flex-shrink-0" />
+        {/* Pool-brand category filter row */}
+        <div className="overflow-x-auto scrollbar-hidden pb-1">
+          <div className="flex gap-2 min-w-max">
             <button
               onClick={() => handleCategoryChange('all')}
-              className={`px-3 py-1 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
-                filterCategory === 'all' ? 'bg-accent text-white' : 'bg-white/10 text-brand-text-tertiary hover:text-white'
+              className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium text-xs transition-all duration-200 ${
+                filterCategory === 'all'
+                  ? 'bg-accent text-white shadow-lg shadow-accent/30'
+                  : 'bg-white/5 text-brand-text-secondary hover:bg-white/10 hover:text-white'
               }`}
             >
               {t('common.all')}
             </button>
-            {mashupCategories.map((category) => (
-              <button
-                key={category}
-                onClick={() => handleCategoryChange(filterCategory === category ? 'all' : category)}
-                className={`px-3 py-1 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
-                  filterCategory === category ? 'bg-accent text-white' : 'bg-white/10 text-brand-text-tertiary hover:text-white'
-                }`}
-              >
-                {category}
-              </button>
-            ))}
+            {poolCategories.map((cat) => {
+              const isActive = filterCategory === cat.name;
+              return (
+                <button
+                  key={cat._id}
+                  onClick={() => handleCategoryChange(isActive ? 'all' : cat.name)}
+                  className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium text-xs transition-all duration-200 ${
+                    isActive ? 'text-white shadow-lg' : 'bg-white/5 text-brand-text-secondary hover:bg-white/10 hover:text-white'
+                  }`}
+                  style={isActive ? { backgroundColor: cat.color || '#7C3AED', boxShadow: `0 4px 16px ${cat.color || '#7C3AED'}40` } : {}}
+                >
+                  {cat.thumbnail
+                    ? <img src={cat.thumbnail} alt={cat.name} className="w-3.5 h-3.5 rounded-sm object-cover flex-shrink-0" />
+                    : null
+                  }
+                  <span className="whitespace-nowrap">{cat.name}</span>
+                  {cat.trackCount > 0 && (
+                    <span className={`text-[10px] px-1 py-0.5 rounded-full ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/50'
+                    }`}>
+                      {cat.trackCount > 999 ? `${Math.floor(cat.trackCount / 1000)}k` : cat.trackCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
-          <div className="flex items-center gap-2">
-            <ArrowUpDown className="w-3.5 h-3.5 text-brand-text-tertiary" />
-            <select
-              value={sortBy}
-              onChange={e => handleSortChange(e.target.value)}
-              className="bg-dark-elevated text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80"
-            >
-              <option value="dateAdded">{t('sort.dateAddedNewest')}</option>
-              <option value="title">{t('sort.titleAZ')}</option>
-              <option value="artist">{t('sort.artistAZ')}</option>
-              <option value="bpm">{t('sort.bpmHighLow')}</option>
-            </select>
-          </div>
+        </div>
+
+        {/* Sort row */}
+        <div className="flex items-center gap-2 mt-2">
+          <ArrowUpDown className="w-3.5 h-3.5 text-brand-text-tertiary" />
+          <select
+            value={sortBy}
+            onChange={e => handleSortChange(e.target.value)}
+            className="bg-dark-elevated text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80"
+          >
+            <option value="dateAdded">{t('sort.dateAddedNewest')}</option>
+            <option value="title">{t('sort.titleAZ')}</option>
+            <option value="artist">{t('sort.artistAZ')}</option>
+            <option value="bpm">{t('sort.bpmHighLow')}</option>
+          </select>
         </div>
       </div>
 

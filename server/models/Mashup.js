@@ -13,7 +13,11 @@ const mashupSchema = new mongoose.Schema({
   },
   category: {
     type: String,
-    default: 'Reggaeton'
+    default: 'Others'
+  },
+  categoryRaw: {
+    type: String,
+    default: null
   },
   genre: {
     type: String,

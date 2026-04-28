@@ -1,6 +1,7 @@
 import Category from '../models/Category.js';
 import Track from '../models/Track.js';
 import Mashup from '../models/Mashup.js';
+
 import { clearCategoryCache } from '../services/categoryDetection.js';
 
 // @desc    Get all active categories (public)
@@ -12,14 +13,24 @@ export const getCategories = async (req, res) => {
     const filter = includeInactive ? {} : { isActive: true };
     const categories = await Category.find(filter).sort('sortOrder name').lean();
 
-    // Attach live track counts
-    const counts = await Track.aggregate([
-      { $match: { status: 'published', category: { $ne: null } } },
-      { $group: { _id: '$category', count: { $sum: 1 } } }
+    // Attach live track + mashup counts per category
+    const [trackCounts, mashupCounts] = await Promise.all([
+      Track.aggregate([
+        { $match: { status: 'published', category: { $ne: null } } },
+        { $group: { _id: '$category', count: { $sum: 1 } } }
+      ]),
+      Mashup.aggregate([
+        { $match: { isPublished: true, category: { $nin: [null, 'Others', ''] } } },
+        { $group: { _id: '$category', count: { $sum: 1 } } }
+      ])
     ]);
-    const countMap = Object.fromEntries(counts.map(c => [c._id, c.count]));
+    const countMap = Object.fromEntries(trackCounts.map(c => [c._id, c.count]));
+    const mashupCountMap = Object.fromEntries(mashupCounts.map(c => [c._id, c.count]));
 
-    const data = categories.map(c => ({ ...c, trackCount: countMap[c.name] || 0 }));
+    const data = categories.map(c => ({
+      ...c,
+      trackCount: (countMap[c.name] || 0) + (mashupCountMap[c.name] || 0)
+    }));
 
     res.json({ success: true, data });
   } catch (err) {
