@@ -10,6 +10,21 @@ import API_URL from '../../config/api';
 const API = API_URL;
 const DEFAULT_MASHUP_CATEGORIES = ['Reggaeton', 'Old School Reggaeton', 'Dembow', 'Trap', 'House', 'EDM', 'Afro House', 'Remember', 'International'];
 
+function MashupCover({ mashup }) {
+  const [imgError, setImgError] = useState(false);
+  if (!mashup.coverArt || imgError) {
+    return <GenericCoverArt title={mashup.title} artist={mashup.artist} size="md" />;
+  }
+  return (
+    <img
+      src={mashup.coverArt}
+      alt={mashup.title}
+      className="w-full h-full object-cover"
+      onError={() => setImgError(true)}
+    />
+  );
+}
+
 export default function AdminMashups() {
   const [mashups, setMashups] = useState([]);
   const [settings, setSettings] = useState({ bannerImageUrl: '', pageTitle: 'Mash Ups', pageDescription: '', categories: DEFAULT_MASHUP_CATEGORIES });
@@ -1123,25 +1138,7 @@ export default function AdminMashups() {
                 className="flex items-center gap-3 p-3 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.04] transition-colors"
               >
                 <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-dark-elevated">
-                  {mashup.coverArt ? (
-                    <>
-                      <img
-                        src={mashup.coverArt}
-                        alt={mashup.title}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          e.currentTarget.style.display = 'none';
-                          const fallback = e.currentTarget.nextSibling;
-                          if (fallback) fallback.style.display = 'flex';
-                        }}
-                      />
-                      <div className="w-full h-full" style={{ display: 'none' }}>
-                        <GenericCoverArt title={mashup.title} artist={mashup.artist} size="md" />
-                      </div>
-                    </>
-                  ) : (
-                    <GenericCoverArt title={mashup.title} artist={mashup.artist} size="md" />
-                  )}
+                  <MashupCover mashup={mashup} />
                 </div>
 
                 {editingId === mashup._id ? (
