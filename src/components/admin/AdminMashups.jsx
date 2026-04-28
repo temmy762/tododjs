@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  Music, Upload, Trash2, Edit3, Save, X, Eye, EyeOff,
+  Music, Music2, Upload, Trash2, Edit3, Save, X, Eye, EyeOff,
   Loader, CheckCircle, FileAudio,
   Image, Sparkles, RotateCcw, Check, AlertTriangle, Tag, Wand2
 } from 'lucide-react';
@@ -16,6 +16,9 @@ export default function AdminMashups() {
   const [poolCategories, setPoolCategories] = useState([]);
   const [autoRunning, setAutoRunning] = useState(false);
   const [autoPreview, setAutoPreview] = useState(null);
+  const [tonalityRunning, setTonalityRunning] = useState(false);
+  const [tonalityProgress, setTonalityProgress] = useState({ current: 0, total: 0, done: false, stats: null });
+  const [tonalityResults, setTonalityResults] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [uploadState, setUploadState] = useState({
@@ -83,6 +86,49 @@ export default function AdminMashups() {
       if (data.success) setSettings({ ...data.data, categories: data.data.categories || DEFAULT_MASHUP_CATEGORIES });
     } catch (err) {
       console.error('Error fetching mashup settings:', err);
+    }
+  };
+
+  const handleDetectTonality = async (force = false) => {
+    setTonalityRunning(true);
+    setTonalityProgress({ current: 0, total: 0, done: false, stats: null });
+    setTonalityResults([]);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API}/mashups/detect-tonality`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ force }),
+      });
+      if (!res.ok || !res.body) { setTonalityRunning(false); return; }
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.type === 'start') setTonalityProgress({ current: 0, total: data.total, done: false, stats: null });
+            else if (data.type === 'progress') setTonalityProgress(p => ({ ...p, current: data.current, total: data.total }));
+            else if (data.type === 'result') setTonalityResults(r => [...r, data]);
+            else if (data.type === 'done') {
+              setTonalityProgress(p => ({ ...p, done: true, stats: data.stats }));
+              fetchMashups();
+              fetchPoolCategories();
+            }
+          } catch {}
+        }
+      }
+    } catch (err) {
+      console.error('Tonality detection error:', err);
+    } finally {
+      setTonalityRunning(false);
     }
   };
 
@@ -515,6 +561,83 @@ export default function AdminMashups() {
                     {r.title === r.newTitle && r.category !== r.newCategory && (
                       <p className="text-white/60 mt-0.5">{r.title}</p>
                     )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ── Tonality Detection Panel ── */}
+      <div className="p-4 md:p-5 rounded-xl bg-white/[0.03] border border-white/10">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+              <Music2 className="w-4 h-4 text-accent" />
+              Detect Tonality &amp; BPM
+            </h3>
+            <p className="text-xs text-brand-text-tertiary mt-1">
+              Downloads each audio file and runs ID3 → KeyFinder → Essentia.js → AI fallback to fill in missing keys and BPM.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => handleDetectTonality(false)}
+              disabled={tonalityRunning}
+              className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg text-xs font-medium text-white transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {tonalityRunning ? <Loader size={12} className="animate-spin" /> : <Music2 size={12} />}
+              {tonalityRunning ? 'Running…' : 'Detect Missing'}
+            </button>
+            <button
+              onClick={() => handleDetectTonality(true)}
+              disabled={tonalityRunning}
+              className="px-4 py-2 bg-accent/20 hover:bg-accent/30 border border-accent/20 rounded-lg text-xs font-medium text-accent transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              <RotateCcw size={12} />
+              Force All
+            </button>
+          </div>
+        </div>
+
+        {(tonalityRunning || tonalityResults.length > 0 || tonalityProgress.done) && (
+          <div className="mt-4 space-y-3">
+            {tonalityProgress.total > 0 && (
+              <div>
+                <div className="flex items-center justify-between text-xs text-brand-text-tertiary mb-1.5">
+                  <span>
+                    {tonalityProgress.done
+                      ? `Done — ${tonalityProgress.total} processed`
+                      : `Processing ${tonalityProgress.current} / ${tonalityProgress.total}…`}
+                  </span>
+                  {tonalityProgress.done && tonalityProgress.stats && (
+                    <span className="flex items-center gap-2">
+                      <span className="text-green-400">✓ {tonalityProgress.stats.ok} detected</span>
+                      {tonalityProgress.stats.needsReview > 0 && <span className="text-orange-400">⚠ {tonalityProgress.stats.needsReview} flagged</span>}
+                      {tonalityProgress.stats.failed > 0 && <span className="text-red-400">✗ {tonalityProgress.stats.failed} failed</span>}
+                    </span>
+                  )}
+                </div>
+                <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${tonalityProgress.done ? 'bg-green-500' : 'bg-accent animate-pulse'}`}
+                    style={{ width: tonalityProgress.total ? `${(tonalityProgress.current / tonalityProgress.total) * 100}%` : '0%' }}
+                  />
+                </div>
+              </div>
+            )}
+            {tonalityResults.length > 0 && (
+              <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
+                {tonalityResults.map((r, i) => (
+                  <div key={i} className={`flex items-center justify-between px-3 py-2 rounded-lg text-xs border ${
+                    r.error ? 'bg-red-500/5 border-red-500/10' : r.needsReview ? 'bg-orange-500/5 border-orange-500/10' : 'bg-green-500/5 border-green-500/10'
+                  }`}>
+                    <span className={`truncate flex-1 ${r.error ? 'text-red-400' : r.needsReview ? 'text-orange-300' : 'text-white'}`}>{r.title}</span>
+                    <span className="flex-shrink-0 ml-3 font-mono font-bold">
+                      {r.error ? <span className="text-red-400">✗</span> : r.tonality ? <span className="text-accent">{r.tonality}</span> : <span className="text-orange-400">⚠ No key</span>}
+                    </span>
+                    {r.bpm && <span className="flex-shrink-0 ml-2 text-brand-text-tertiary">{r.bpm} BPM</span>}
                   </div>
                 ))}
               </div>

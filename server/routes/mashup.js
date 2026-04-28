@@ -11,7 +11,8 @@ import {
   deleteMashup,
   getMashupPlayback,
   getMashupGenres,
-  autoCategorizeMashups
+  autoCategorizeMashups,
+  detectMashupTonalitySSE
 } from '../controllers/mashupController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -64,5 +65,6 @@ router.put('/:id', protect, authorize('admin'), mashupUpload.fields([
 ]), updateMashup);
 router.delete('/:id', protect, authorize('admin'), deleteMashup);
 router.post('/auto-categorize', protect, authorize('admin'), autoCategorizeMashups);
+router.post('/detect-tonality', protect, authorize('admin'), detectMashupTonalitySSE);
 
 export default router;

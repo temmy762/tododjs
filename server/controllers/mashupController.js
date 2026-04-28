@@ -1,6 +1,8 @@
+import https from 'https';
+import http from 'http';
 import Mashup from '../models/Mashup.js';
 import MashupSettings from '../models/MashupSettings.js';
-import { getSignedDownloadUrl, uploadToWasabi, deleteFromWasabi } from '../config/wasabi.js';
+import { getSignedDownloadUrl, uploadToWasabi, deleteFromWasabi, ensureSignedUrl } from '../config/wasabi.js';
 import { resolveSignedUrls } from '../utils/signedUrls.js';
 import { detectGenreWithAI } from '../services/openai.js';
 import { detectCategoryAsync } from '../services/categoryDetection.js';
@@ -78,6 +80,31 @@ function detectMashupCategoryByKeyword(text) {
   return null;
 }
 
+// Helper: download a remote audio file into a Buffer (follows up to 5 redirects)
+function downloadAudioBuffer(url) {
+  return new Promise((resolve, reject) => {
+    const get = (targetUrl, redirects = 0) => {
+      if (redirects > 5) return reject(new Error('Too many redirects'));
+      const mod = targetUrl.startsWith('https') ? https : http;
+      mod.get(targetUrl, res => {
+        if ([301, 302, 307].includes(res.statusCode)) {
+          res.resume();
+          return get(res.headers.location, redirects + 1);
+        }
+        if (res.statusCode !== 200) {
+          res.resume();
+          return reject(new Error(`HTTP ${res.statusCode}`));
+        }
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => resolve(Buffer.concat(chunks)));
+        res.on('error', reject);
+      }).on('error', reject);
+    };
+    get(url);
+  });
+}
+
 function cleanMashupTitle(raw) {
   const FORCE_UPPER = new Set(['DJ', 'BPM', 'EDM', 'EP', 'LP']);
   const LOWER_WORDS = new Set(['a','an','the','of','in','on','at','to','by','de','del','la','el','y','e']);
@@ -98,6 +125,84 @@ function cleanMashupTitle(raw) {
     return word[0].toUpperCase() + word.slice(1).toLowerCase();
   }).join(' ');
 }
+
+// @desc    Detect tonality + BPM for mashups missing a key, streams SSE progress
+// @route   POST /api/mashups/detect-tonality
+// @access  Private/Admin
+export const detectMashupTonalitySSE = async (req, res) => {
+  const { force = false } = req.body;
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+  try {
+    const query = force
+      ? { 'audioFile.url': { $exists: true, $ne: '' } }
+      : {
+          'audioFile.url': { $exists: true, $ne: '' },
+          $or: [
+            { tonality: '' },
+            { tonality: null },
+            { tonality: { $exists: false } },
+            { tonalityNeedsReview: true },
+          ],
+        };
+
+    const mashups = await Mashup.find(query).lean();
+    send({ type: 'start', total: mashups.length });
+
+    const stats = { ok: 0, needsReview: 0, failed: 0, skipped: 0 };
+
+    for (let i = 0; i < mashups.length; i++) {
+      const m = mashups[i];
+      send({ type: 'progress', current: i + 1, total: mashups.length, title: m.title });
+
+      try {
+        const signedUrl = await ensureSignedUrl(m.audioFile.key || m.audioFile.url, 3600);
+        const audioBuffer = await downloadAudioBuffer(signedUrl);
+
+        const { tonality: tonalityResult, detectedBpm } = await detectTonality(audioBuffer, {
+          title: m.title,
+          artist: m.artist,
+        });
+
+        const newTonality = tonalityResult?.camelot || '';
+        const newBpm = (!m.bpm || m.bpm === 0) && detectedBpm ? Math.round(detectedBpm) : null;
+        const needsReview = !newTonality || tonalityResult?.needsManualReview === true;
+
+        const update = { tonalityNeedsReview: needsReview };
+        if (newTonality) update.tonality = newTonality;
+        if (newBpm) update.bpm = newBpm;
+        await Mashup.updateOne({ _id: m._id }, { $set: update });
+
+        if (needsReview) stats.needsReview++; else stats.ok++;
+        send({
+          type: 'result',
+          id: String(m._id),
+          title: m.title,
+          tonality: newTonality || null,
+          bpm: newBpm || m.bpm || null,
+          needsReview,
+          ok: !needsReview,
+        });
+      } catch (err) {
+        stats.failed++;
+        send({ type: 'result', id: String(m._id), title: m.title, ok: false, error: err.message, needsReview: true });
+      }
+    }
+
+    send({ type: 'done', stats });
+  } catch (err) {
+    send({ type: 'fatal', message: err.message });
+  } finally {
+    res.end();
+  }
+};
 
 // @desc    Auto-categorize and clean titles for all mashups
 // @route   POST /api/mashups/auto-categorize
