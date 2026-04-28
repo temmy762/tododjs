@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { List, Grid3x3, ArrowUpDown, X, Loader } from 'lucide-react';
+import { List, Grid3x3, ArrowUpDown, X, Loader, Music } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import TrackListView from './TrackListView';
 import TrackGridView from './TrackGridView';
