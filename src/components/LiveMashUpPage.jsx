@@ -156,11 +156,11 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
       {settings.bannerImageUrl && (
         <div className="relative w-full py-3 px-3 sm:py-4 sm:px-4 md:px-10 bg-gradient-to-b from-black/50 to-dark-bg">
           <div className="max-w-6xl mx-auto">
-            <div className="relative w-full aspect-[21/9] sm:aspect-[21/8] rounded-lg sm:rounded-xl md:rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-white/10">
+            <div className="rounded-lg sm:rounded-xl md:rounded-2xl overflow-hidden shadow-2xl shadow-black/50 border border-white/10">
               <img
                 src={settings.bannerImageUrl}
                 alt={settings.pageTitle || 'Mashups'}
-                className="w-full h-full object-cover block"
+                className="w-full h-auto block"
                 loading="lazy"
               />
             </div>
