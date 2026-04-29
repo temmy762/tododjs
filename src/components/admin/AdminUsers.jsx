@@ -261,7 +261,12 @@ export default function AdminUsers() {
                         {new Date(user.createdAt).toLocaleDateString(i18n.language, { month: 'short', day: 'numeric', year: 'numeric' })}
                       </td>
                       <td className="px-6 py-4 text-sm text-brand-text-tertiary">{timeAgo(user.lastLogin)}</td>
-                      <td className="px-6 py-4 text-sm text-white">{user.downloads?.total || 0}</td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm font-semibold text-white">{(user.downloads?.total || 0).toLocaleString()}</div>
+                        {(user.downloads?.today || 0) > 0 && (
+                          <div className="text-[10px] text-accent">+{user.downloads.today} today</div>
+                        )}
+                      </td>
                       <td className="px-6 py-4">
                         <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
                           user.isActive !== false
