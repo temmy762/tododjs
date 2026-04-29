@@ -119,10 +119,11 @@ export default function AdminUsers() {
   const isSubActive = (u) => {
     const sub = u.subscription;
     if (!sub) return false;
-    if (sub.status && sub.status !== 'active') return false;
+    if (sub.status !== 'active') return false;          // must be explicitly active
     if (sub.isActive === false) return false;
     if (sub.endDate && new Date(sub.endDate) < new Date()) return false;
-    return !!(sub.plan || sub.planId);
+    const plan = sub.planId || sub.plan;
+    return !!plan && plan !== 'free';                   // 'free' is not a paid plan
   };
 
   const getPlanLabel = (u) => {
@@ -175,11 +176,11 @@ export default function AdminUsers() {
         </div>
         <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
           <div className="text-3xl font-bold text-white mb-1">{(stats?.premiumCount ?? 0).toLocaleString()}</div>
-          <p className="text-sm text-brand-text-tertiary">{t('admin.premiumMembers')}</p>
+          <p className="text-sm text-brand-text-tertiary">{t('admin.individualMembers', 'Individual Plans')}</p>
         </div>
         <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
           <div className="text-3xl font-bold text-white mb-1">{(stats?.proCount ?? 0).toLocaleString()}</div>
-          <p className="text-sm text-brand-text-tertiary">{t('admin.proMembers')}</p>
+          <p className="text-sm text-brand-text-tertiary">{t('admin.sharedMembers', 'Shared Plans')}</p>
         </div>
         <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
           <div className="text-3xl font-bold text-white mb-1">{(stats?.newThisMonth ?? 0).toLocaleString()}</div>
@@ -372,10 +373,11 @@ function EditUserModal({ user, onClose, onSave }) {
   const isSubActive = (() => {
     const sub = user.subscription;
     if (!sub) return false;
-    if (sub.status && sub.status !== 'active') return false;
+    if (sub.status !== 'active') return false;
     if (sub.isActive === false) return false;
     if (sub.endDate && new Date(sub.endDate) < new Date()) return false;
-    return !!(sub.plan || sub.planId);
+    const plan = sub.planId || sub.plan;
+    return !!plan && plan !== 'free';
   })();
   const [plan, setPlan] = useState(
     isSubActive ? normalizePlan(user.subscription?.planId || user.subscription?.plan || 'free') : 'free'

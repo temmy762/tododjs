@@ -43,9 +43,9 @@ export const getAllUsers = async (req, res) => {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // Plan names: admin sets 'premium'/'pro'; Stripe sets planId as plan name
-    const premiumPlans = ['premium', 'individual-monthly', 'individual-quarterly'];
-    const proPlans = ['pro', 'shared-monthly', 'shared-quarterly'];
+    // All variants of individual (premium) and shared (pro) plan IDs
+    const individualPlans = ['premium', 'individual-monthly', 'individual-quarterly', 'individual_monthly', 'individual_quarterly'];
+    const sharedPlans = ['pro', 'shared-monthly', 'shared-quarterly', 'shared_monthly', 'shared_quarterly'];
 
     const [
       totalUsers,
@@ -56,8 +56,8 @@ export const getAllUsers = async (req, res) => {
     ] = await Promise.all([
       User.countDocuments({ role: { $ne: 'admin' } }),
       User.countDocuments({ 'subscription.status': 'active', role: { $ne: 'admin' } }),
-      User.countDocuments({ 'subscription.status': 'active', $or: [{ 'subscription.plan': { $in: premiumPlans } }, { 'subscription.planId': { $in: premiumPlans } }] }),
-      User.countDocuments({ 'subscription.status': 'active', $or: [{ 'subscription.plan': { $in: proPlans } }, { 'subscription.planId': { $in: proPlans } }] }),
+      User.countDocuments({ 'subscription.status': 'active', $or: [{ 'subscription.plan': { $in: individualPlans } }, { 'subscription.planId': { $in: individualPlans } }] }),
+      User.countDocuments({ 'subscription.status': 'active', $or: [{ 'subscription.plan': { $in: sharedPlans } }, { 'subscription.planId': { $in: sharedPlans } }] }),
       User.countDocuments({ createdAt: { $gte: startOfMonth }, role: { $ne: 'admin' } })
     ]);
 
@@ -97,20 +97,22 @@ export const updateUser = async (req, res) => {
 
     if (role) user.role = role;
 
-    if (plan) {
-      user.subscription.plan = plan;
-      if (plan !== 'free') {
+    if (plan !== undefined) {
+      if (plan && plan !== 'free') {
+        user.subscription.plan   = plan;
+        user.subscription.planId = plan; // keep plan and planId in sync for admin grants
         user.subscription.status = 'active';
-        if (!user.subscription.startDate) {
-          user.subscription.startDate = new Date();
-        }
-        user.subscription.endDate = null;
+        if (!user.subscription.startDate) user.subscription.startDate = new Date();
+        user.subscription.endDate      = null;
         user.subscription.grantedByAdmin = true;
       } else {
-        user.subscription.status = 'inactive';
-        user.subscription.startDate = null;
-        user.subscription.endDate = null;
+        user.subscription.plan   = 'free';
+        user.subscription.planId = null; // clear Stripe planId when reverting to free
+        user.subscription.status = 'cancelled';
+        user.subscription.startDate      = null;
+        user.subscription.endDate        = null;
         user.subscription.grantedByAdmin = false;
+        user.subscription.stripeSubscriptionId = user.subscription.stripeSubscriptionId || null;
       }
     }
 
@@ -118,7 +120,24 @@ export const updateUser = async (req, res) => {
 
     await user.save();
 
-    res.status(200).json({ success: true, data: user });
+    res.status(200).json({
+      success: true,
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        isActive: user.isActive,
+        downloads: { total: user.downloads?.total || 0, today: user.downloads?.today || 0 },
+        subscription: {
+          status: user.subscription?.status,
+          plan: user.subscription?.plan,
+          planId: user.subscription?.planId,
+          endDate: user.subscription?.endDate || null,
+          grantedByAdmin: user.subscription?.grantedByAdmin || false
+        }
+      }
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
