@@ -87,12 +87,33 @@ export default function AdminUsers() {
     }
   };
 
-  // Normalize Stripe planIds to human-readable plan names
+  // Map any planId variant to a display label
+  const PLAN_LABELS = {
+    'free':                  'Free',
+    'individual_monthly':    'Individual Monthly',
+    'individual_quarterly':  'Individual Quarterly',
+    'individual-monthly':    'Individual Monthly',
+    'individual-quarterly':  'Individual Quarterly',
+    'shared_monthly':        'Shared Monthly',
+    'shared_quarterly':      'Shared Quarterly',
+    'shared-monthly':        'Shared Monthly',
+    'shared-quarterly':      'Shared Quarterly',
+    'premium':               'Premium (Individual)',
+    'pro':                   'Pro (Shared)',
+  };
+
+  // Normalize any planId/plan value to the canonical underscore form used in the DB seed
   const normalizePlan = (raw) => {
     if (!raw || raw === 'free') return 'free';
-    if (['premium', 'individual-monthly', 'individual-quarterly'].includes(raw)) return 'premium';
-    if (['pro', 'shared-monthly', 'shared-quarterly'].includes(raw)) return 'pro';
-    return raw;
+    const map = {
+      'individual-monthly':   'individual_monthly',
+      'individual-quarterly': 'individual_quarterly',
+      'shared-monthly':       'shared_monthly',
+      'shared-quarterly':     'shared_quarterly',
+      'premium':              'individual_monthly',
+      'pro':                  'shared_monthly',
+    };
+    return map[raw] || raw;
   };
 
   const isSubActive = (u) => {
@@ -106,17 +127,18 @@ export default function AdminUsers() {
 
   const getPlanLabel = (u) => {
     if (u.role === 'admin') return t('admin.adminRole');
-    if (!isSubActive(u)) return t('subscription.free', 'Free');
-    const plan = normalizePlan(u.subscription?.plan || u.subscription?.planId || 'free');
-    return t(`subscription.${plan}`, plan.charAt(0).toUpperCase() + plan.slice(1));
+    if (!isSubActive(u)) return 'Free';
+    const raw = u.subscription?.planId || u.subscription?.plan || 'free';
+    return PLAN_LABELS[raw] || normalizePlan(raw).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   };
 
   const getRoleColor = (u) => {
     if (u.role === 'admin') return 'from-red-500 to-pink-500';
     if (!isSubActive(u)) return 'from-gray-500 to-gray-600';
-    const plan = normalizePlan(u.subscription?.plan || u.subscription?.planId || 'free');
-    if (plan === 'pro') return 'from-orange-500 to-red-500';
-    if (plan === 'premium') return 'from-purple-500 to-pink-500';
+    const raw = u.subscription?.planId || u.subscription?.plan || 'free';
+    const plan = normalizePlan(raw);
+    if (['shared_monthly', 'shared_quarterly'].includes(plan)) return 'from-orange-500 to-red-500';
+    if (['individual_monthly', 'individual_quarterly'].includes(plan)) return 'from-purple-500 to-pink-500';
     return 'from-gray-500 to-gray-600';
   };
 
@@ -329,12 +351,18 @@ function EditUserModal({ user, onClose, onSave }) {
   const { t } = useTranslation();
   const [role, setRole] = useState(user.role || 'user');
 
-  // Normalize Stripe planIds to human-readable plan names for the dropdown
+  // Normalize any legacy/hyphenated planId to the canonical underscore form
   const normalizePlan = (raw) => {
     if (!raw || raw === 'free') return 'free';
-    if (['premium', 'individual-monthly', 'individual-quarterly'].includes(raw)) return 'premium';
-    if (['pro', 'shared-monthly', 'shared-quarterly'].includes(raw)) return 'pro';
-    return raw;
+    const map = {
+      'individual-monthly':   'individual_monthly',
+      'individual-quarterly': 'individual_quarterly',
+      'shared-monthly':       'shared_monthly',
+      'shared-quarterly':     'shared_quarterly',
+      'premium':              'individual_monthly',
+      'pro':                  'shared_monthly',
+    };
+    return map[raw] || raw;
   };
   const isSubActive = (() => {
     const sub = user.subscription;
@@ -344,7 +372,9 @@ function EditUserModal({ user, onClose, onSave }) {
     if (sub.endDate && new Date(sub.endDate) < new Date()) return false;
     return !!(sub.plan || sub.planId);
   })();
-  const [plan, setPlan] = useState(isSubActive ? normalizePlan(user.subscription?.plan || user.subscription?.planId || 'free') : 'free');
+  const [plan, setPlan] = useState(
+    isSubActive ? normalizePlan(user.subscription?.planId || user.subscription?.plan || 'free') : 'free'
+  );
   const [isActive, setIsActive] = useState(user.isActive !== false);
 
   return (
@@ -369,9 +399,15 @@ function EditUserModal({ user, onClose, onSave }) {
           <div>
             <label className="block text-sm font-medium text-brand-text-tertiary mb-1">{t('admin.subscriptionPlan')}</label>
             <select value={plan} onChange={e => setPlan(e.target.value)} className="w-full px-4 py-2.5 bg-dark-elevated border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent">
-              <option value="free">{t('subscription.free')}</option>
-              <option value="premium">{t('subscription.premium')}</option>
-              <option value="pro">{t('subscription.pro')}</option>
+              <option value="free">Free</option>
+              <optgroup label="Individual">
+                <option value="individual_monthly">Individual Monthly — €19.99/mo</option>
+                <option value="individual_quarterly">Individual Quarterly — €54.99/3mo</option>
+              </optgroup>
+              <optgroup label="Shared (2 users)">
+                <option value="shared_monthly">Shared Monthly — €29.99/mo</option>
+                <option value="shared_quarterly">Shared Quarterly — €79.99/3mo</option>
+              </optgroup>
             </select>
           </div>
           <div className="flex items-center gap-3">
