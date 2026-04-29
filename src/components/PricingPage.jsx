@@ -168,7 +168,7 @@ function PlanCard({ plan, features, icon, onSelect, isSelected, t, i18n }) {
         </div>
       )}
 
-      <div className="p-8">
+      <div className="p-5 sm:p-8">
         {/* Icon and Name */}
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center text-accent">

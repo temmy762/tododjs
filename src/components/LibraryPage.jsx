@@ -337,14 +337,14 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
 
       {!loading && tracks.length > 0 && (
         <div className="px-4 md:px-10 py-6 md:py-8">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-6 max-w-6xl mx-auto">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 max-w-6xl mx-auto">
             {/* Songs per page selector */}
-            <div className="flex items-center gap-3 bg-white/[0.02] backdrop-blur-sm border border-white/10 rounded-xl px-4 py-2.5 shadow-lg">
-              <span className="text-sm font-medium text-brand-text-secondary whitespace-nowrap">{t('libraryPage.perPage')}</span>
+            <div className="flex items-center gap-3 bg-white/[0.02] backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2 shadow-lg">
+              <span className="text-xs sm:text-sm font-medium text-brand-text-secondary whitespace-nowrap">{t('libraryPage.perPage')}</span>
               <select
                 value={tracksPerPage}
                 onChange={(e) => handleTracksPerPageChange(e.target.value)}
-                className="bg-dark-elevated text-white text-sm font-semibold px-3 py-1.5 rounded-lg border border-white/20 focus:border-accent focus:ring-2 focus:ring-accent/30 focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80 hover:border-white/30"
+                className="bg-dark-elevated text-white text-xs sm:text-sm font-semibold px-2 py-1.5 rounded-lg border border-white/20 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer"
               >
                 <option value="15">15</option>
                 <option value="30">30</option>
@@ -353,20 +353,21 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
             </div>
 
             {/* Pagination controls */}
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 ${
+                className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all duration-200 ${
                   currentPage === 1
                     ? 'bg-dark-elevated/20 text-brand-text-tertiary/40 cursor-not-allowed'
-                    : 'bg-white/[0.05] text-white hover:bg-white/[0.08] hover:scale-105 border border-white/10 shadow-lg'
+                    : 'bg-white/[0.05] text-white hover:bg-white/[0.08] border border-white/10 shadow-lg'
                 }`}
               >
                 {t('pagination.previous')}
               </button>
 
-              <div className="flex items-center gap-2 bg-white/[0.02] backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2 shadow-lg">
+              {/* Page numbers — hidden on small screens */}
+              <div className="hidden sm:flex items-center gap-2 bg-white/[0.02] backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2 shadow-lg">
                 {renderPageNumbers().map((pageNum, index) => {
                   if (pageNum === '...') {
                     return (
@@ -395,13 +396,16 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
                 })}
               </div>
 
+              {/* Mobile: current / total page indicator */}
+              <span className="sm:hidden text-xs text-brand-text-tertiary px-2">{currentPage}/{totalPages}</span>
+
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === totalPages}
-                className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all duration-200 ${
+                className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-xl font-semibold text-xs sm:text-sm transition-all duration-200 ${
                   currentPage === totalPages
                     ? 'bg-dark-elevated/20 text-brand-text-tertiary/40 cursor-not-allowed'
-                    : 'bg-white/[0.05] text-white hover:bg-white/[0.08] hover:scale-105 border border-white/10 shadow-lg'
+                    : 'bg-white/[0.05] text-white hover:bg-white/[0.08] border border-white/10 shadow-lg'
                 }`}
               >
                 {t('pagination.next')}

@@ -325,12 +325,12 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 mb-5 md:mb-6 bg-dark-elevated/50 p-1 rounded-xl border border-white/5">
+          <div className="flex gap-1 mb-5 md:mb-6 bg-dark-elevated/50 p-1 rounded-xl border border-white/5 overflow-x-auto scrollbar-hidden">
             {tabs.map((tab) => (
               <button
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id); clearMessage(); }}
-                className={`flex-1 py-2 md:py-2.5 px-2 md:px-4 rounded-lg text-xs md:text-sm font-medium transition-all duration-200 ${
+                className={`flex-shrink-0 py-2 md:py-2.5 px-2.5 md:px-4 rounded-lg text-[10px] md:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
                   activeTab === tab.id
                     ? 'bg-accent text-white shadow-lg shadow-accent/20'
                     : 'text-brand-text-tertiary hover:text-white hover:bg-white/5'

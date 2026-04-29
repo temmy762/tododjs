@@ -669,7 +669,7 @@ function App() {
 
   return (
     <PlayerContext.Provider value={playerContextValue}>
-    <div className="min-h-screen bg-dark-bg relative">
+    <div className="min-h-screen bg-dark-bg relative overflow-x-hidden">
       <BackgroundGradients />
       
       <TopBar 

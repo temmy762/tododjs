@@ -96,53 +96,55 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
     <div className="min-h-screen bg-dark-bg pt-20 pb-10">
       <div className="max-w-7xl mx-auto px-4 md:px-10">
         {/* Header Banner */}
-        <div className="relative mb-10">
-          <div className="h-48 bg-gradient-to-br from-accent/20 via-accent/10 to-transparent rounded-2xl border border-white/10 shadow-xl shadow-black/20" />
-          
-          <div className="absolute -bottom-16 left-8 flex items-end gap-6">
-            <div className="relative w-32 h-32 rounded-2xl bg-gradient-to-br from-accent to-accent-hover shadow-2xl shadow-accent/30 flex items-center justify-center border-4 border-dark-bg">
-              {user.avatar ? (
-                <img src={user.avatar} alt={user.name} className="w-full h-full object-cover rounded-xl" />
-              ) : (
-                <User className="w-16 h-16 text-white" strokeWidth={1.5} />
-              )}
-            </div>
-            
-            <div className="pb-2">
-              <h1 className="text-3xl font-bold text-white mb-1">{user.name}</h1>
-              <p className="text-sm text-brand-text-tertiary">{user.email}</p>
-              {user.phoneNumber && (
-                <p className="text-sm text-brand-text-tertiary flex items-center gap-1 mt-0.5">
-                  <Phone className="w-3 h-3" /> {user.phoneNumber}
-                </p>
-              )}
-              <div className="inline-flex items-center gap-2 mt-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20">
-                <TrendingUp className="w-3 h-3 text-accent" strokeWidth={2} />
-                <span className="text-xs font-bold text-accent uppercase tracking-wider">{planLabel} {t('admin.member')}</span>
+        <div className="mb-6">
+          <div className="h-28 sm:h-40 bg-gradient-to-br from-accent/20 via-accent/10 to-transparent rounded-2xl border border-white/10 shadow-xl shadow-black/20" />
+
+          {/* Avatar row — overlaps banner with negative margin */}
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between px-3 sm:px-6 -mt-10 sm:-mt-14 gap-3 sm:gap-0">
+            <div className="flex flex-col sm:flex-row items-start sm:items-end gap-3 sm:gap-5">
+              <div className="relative w-20 h-20 sm:w-28 sm:h-28 rounded-2xl bg-gradient-to-br from-accent to-accent-hover shadow-2xl shadow-accent/30 flex items-center justify-center border-4 border-dark-bg flex-shrink-0">
+                {user.avatar ? (
+                  <img src={user.avatar} alt={user.name} className="w-full h-full object-cover rounded-xl" />
+                ) : (
+                  <User className="w-10 h-10 sm:w-14 sm:h-14 text-white" strokeWidth={1.5} />
+                )}
+              </div>
+              <div className="pb-1 sm:pb-2">
+                <h1 className="text-xl sm:text-3xl font-bold text-white mb-0.5">{user.name}</h1>
+                <p className="text-xs sm:text-sm text-brand-text-tertiary">{user.email}</p>
+                {user.phoneNumber && (
+                  <p className="text-xs sm:text-sm text-brand-text-tertiary flex items-center gap-1 mt-0.5">
+                    <Phone className="w-3 h-3" /> {user.phoneNumber}
+                  </p>
+                )}
+                <div className="inline-flex items-center gap-2 mt-2 px-3 py-1 rounded-full bg-accent/10 border border-accent/20">
+                  <TrendingUp className="w-3 h-3 text-accent" strokeWidth={2} />
+                  <span className="text-xs font-bold text-accent uppercase tracking-wider">{planLabel} {t('admin.member')}</span>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="absolute top-6 right-6 flex gap-2">
-            <button
-              onClick={handleEdit}
-              className="px-4 py-2 rounded-lg bg-white hover:bg-brand-text-secondary border border-brand-black/10 hover:border-brand-black/20 text-black text-sm font-semibold transition-all duration-150 flex items-center gap-2"
-            >
-              <Settings className="w-4 h-4" strokeWidth={2} />
-              {t('settingsPage.title')}
-            </button>
-            <button
-              onClick={onLogout}
-              className="px-4 py-2 rounded-lg bg-white hover:bg-brand-text-secondary border border-brand-black/10 hover:border-brand-black/20 text-black text-sm font-semibold transition-all duration-150 flex items-center gap-2"
-            >
-              <LogOut className="w-4 h-4" strokeWidth={2} />
-              {t('auth.logout')}
-            </button>
+            <div className="flex gap-2 sm:mb-2 flex-wrap">
+              <button
+                onClick={handleEdit}
+                className="px-3 py-2 rounded-lg bg-white hover:bg-brand-text-secondary border border-brand-black/10 text-black text-xs sm:text-sm font-semibold transition-all duration-150 flex items-center gap-2"
+              >
+                <Settings className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={2} />
+                {t('settingsPage.title')}
+              </button>
+              <button
+                onClick={onLogout}
+                className="px-3 py-2 rounded-lg bg-white hover:bg-brand-text-secondary border border-brand-black/10 text-black text-xs sm:text-sm font-semibold transition-all duration-150 flex items-center gap-2"
+              >
+                <LogOut className="w-3.5 h-3.5 sm:w-4 sm:h-4" strokeWidth={2} />
+                {t('auth.logout')}
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-10 mt-20">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8 mt-4">
           {userStats.map((stat) => (
             <div 
               key={stat.label}
