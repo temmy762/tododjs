@@ -877,25 +877,29 @@ function App() {
       )}
 
       {showAdminDashboard && (
-        <Suspense fallback={null}>
-          <AdminDashboard 
-            onClose={() => setShowAdminDashboard(false)} 
-            user={user}
-            onUserUpdate={setUser}
-          />
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <AdminDashboard 
+              onClose={() => setShowAdminDashboard(false)} 
+              user={user}
+              onUserUpdate={setUser}
+            />
+          </Suspense>
+        </ErrorBoundary>
       )}
 
       {showUserDashboard && user && (
-        <Suspense fallback={null}>
-          <UserDashboard
-            user={user}
-            onClose={() => setShowUserDashboard(false)}
-            onUserUpdate={setUser}
-            onLogout={handleLogout}
-            onTrackInteraction={handleTrackInteraction}
-          />
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <UserDashboard
+              user={user}
+              onClose={() => setShowUserDashboard(false)}
+              onUserUpdate={setUser}
+              onLogout={handleLogout}
+              onTrackInteraction={handleTrackInteraction}
+            />
+          </Suspense>
+        </ErrorBoundary>
       )}
 
       {showCheckoutModal && selectedSubscriptionPlan && (
@@ -911,12 +915,14 @@ function App() {
       )}
 
       {showCheckout && (
-        <Suspense fallback={null}>
-          <CheckoutPage 
-            selectedPlan={selectedPlan}
-            onClose={() => setShowCheckout(false)}
-          />
-        </Suspense>
+        <ErrorBoundary>
+          <Suspense fallback={null}>
+            <CheckoutPage 
+              selectedPlan={selectedPlan}
+              onClose={() => setShowCheckout(false)}
+            />
+          </Suspense>
+        </ErrorBoundary>
       )}
 
       {authModalOpen && (
@@ -927,20 +933,20 @@ function App() {
       )}
 
       {/* ── Persistent upload modals — stay mounted across page navigation ── */}
-      {upload.bulkOpen && (
+      {upload?.bulkOpen && (
         <BulkUploadModal
           onClose={upload.closeBulkUpload}
           onSuccess={() => { upload.bulkSuccessRef.current?.(); }}
         />
       )}
-      {upload.albumMeta && (
+      {upload?.albumMeta && (
         <AlbumUploadModal
           {...upload.albumMeta}
           onClose={upload.closeAlbumUpload}
           onSuccess={() => { upload.albumSuccessRef.current?.(); }}
         />
       )}
-      <ResumedUploadWidget upload={upload} />
+      {upload && <ResumedUploadWidget upload={upload} />}
     </div>
     </PlayerContext.Provider>
   );
