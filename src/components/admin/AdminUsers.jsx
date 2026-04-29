@@ -95,14 +95,25 @@ export default function AdminUsers() {
     return raw;
   };
 
+  const isSubActive = (u) => {
+    const sub = u.subscription;
+    if (!sub) return false;
+    if (sub.status && sub.status !== 'active') return false;
+    if (sub.isActive === false) return false;
+    if (sub.endDate && new Date(sub.endDate) < new Date()) return false;
+    return !!(sub.plan || sub.planId);
+  };
+
   const getPlanLabel = (u) => {
     if (u.role === 'admin') return t('admin.adminRole');
+    if (!isSubActive(u)) return t('subscription.free', 'Free');
     const plan = normalizePlan(u.subscription?.plan || u.subscription?.planId || 'free');
     return t(`subscription.${plan}`, plan.charAt(0).toUpperCase() + plan.slice(1));
   };
 
   const getRoleColor = (u) => {
     if (u.role === 'admin') return 'from-red-500 to-pink-500';
+    if (!isSubActive(u)) return 'from-gray-500 to-gray-600';
     const plan = normalizePlan(u.subscription?.plan || u.subscription?.planId || 'free');
     if (plan === 'pro') return 'from-orange-500 to-red-500';
     if (plan === 'premium') return 'from-purple-500 to-pink-500';
@@ -214,7 +225,14 @@ export default function AdminUsers() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <RoleIcon className="w-4 h-4 text-accent" />
-                          <span className="text-sm font-medium text-white">{getPlanLabel(user)}</span>
+                          <div>
+                            <span className="text-sm font-medium text-white">{getPlanLabel(user)}</span>
+                            {user.role !== 'admin' && user.subscription?.plan && user.subscription?.plan !== 'free' && !isSubActive(user) && (
+                              <div className="text-[10px] text-yellow-500/80 font-medium">
+                                {user.subscription?.status === 'cancelled' ? 'Cancelled' : 'Inactive'}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-brand-text-tertiary">
@@ -318,7 +336,15 @@ function EditUserModal({ user, onClose, onSave }) {
     if (['pro', 'shared-monthly', 'shared-quarterly'].includes(raw)) return 'pro';
     return raw;
   };
-  const [plan, setPlan] = useState(normalizePlan(user.subscription?.plan || user.subscription?.planId || 'free'));
+  const isSubActive = (() => {
+    const sub = user.subscription;
+    if (!sub) return false;
+    if (sub.status && sub.status !== 'active') return false;
+    if (sub.isActive === false) return false;
+    if (sub.endDate && new Date(sub.endDate) < new Date()) return false;
+    return !!(sub.plan || sub.planId);
+  })();
+  const [plan, setPlan] = useState(isSubActive ? normalizePlan(user.subscription?.plan || user.subscription?.planId || 'free') : 'free');
   const [isActive, setIsActive] = useState(user.isActive !== false);
 
   return (
