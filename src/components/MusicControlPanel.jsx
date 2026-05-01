@@ -143,11 +143,17 @@ export default function MusicControlPanel({
     if (!audio || !audioUrl) return;
 
     if (isPlaying) {
+      if (previewLimitHit) {
+        // Preview already ended — block resume and re-show the prompt
+        setShowPrompt(true);
+        onPlayPause?.(); // flip parent back to paused
+        return;
+      }
       audio.play().catch(err => console.warn('Playback blocked:', err.message));
     } else {
       audio.pause();
     }
-  }, [isPlaying, audioUrl]);
+  }, [isPlaying, audioUrl, previewLimitHit]);
 
   // Sync volume
   useEffect(() => {
@@ -166,8 +172,8 @@ export default function MusicControlPanel({
     // Enforce preview limit for non-premium users
     if (!isPremium) {
       if (audio.currentTime >= PREVIEW_LIMIT_SECONDS) {
+        audio.pause(); // always enforce — stops re-play after limit
         if (!previewLimitHit) {
-          audio.pause();
           setPreviewLimitHit(true);
           setShowPrompt(true);
           onPlayPause?.(); // sync parent isPlaying state
