@@ -59,6 +59,7 @@ export default function MusicControlPanel({
   user,
   onNext,
   onPrev,
+  hidden,
 }) {
   const [isScrubbing, setIsScrubbing] = useState(false);
   const [isInfoOpen, setIsInfoOpen] = useState(false);
@@ -378,23 +379,24 @@ export default function MusicControlPanel({
   };
 
   return (
-    <div className="fixed bottom-[60px] md:bottom-0 left-0 right-0 z-[45]">
+    <>
+      {/* Audio always stays mounted so music keeps playing even when panel is hidden */}
+      {audioUrl && (
+        <audio
+          ref={audioRef}
+          src={audioUrl}
+          preload="auto"
+          muted={muted}
+          onTimeUpdate={handleTimeUpdate}
+          onLoadedMetadata={handleLoadedMetadata}
+          onEnded={handleAudioEnded}
+        />
+      )}
+      {!hidden && (
+      <div className="fixed bottom-[60px] md:bottom-0 left-0 right-0 z-[45]">
       {/* Gradient top edge */}
       <div className="h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent" />
       <div className="bg-dark-surface/[0.97] backdrop-blur-2xl shadow-2xl shadow-black/50">
-        {/* Hidden audio element */}
-        {audioUrl && (
-          <audio
-            ref={audioRef}
-            src={audioUrl}
-            preload="auto"
-            muted={muted}
-            onTimeUpdate={handleTimeUpdate}
-            onLoadedMetadata={handleLoadedMetadata}
-            onEnded={handleAudioEnded}
-          />
-        )}
-
         <div className="w-full px-3 sm:px-6">
           <div className="mx-auto w-full max-w-[1400px] py-2.5">
 
@@ -606,31 +608,25 @@ export default function MusicControlPanel({
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-[9px] font-mono text-brand-text-tertiary w-7 text-right tabular-nums">{formatTime(audioCurrentTime)}</span>
-                {renderWaveform(waveform, 80, progress)}
-                <span className="text-[9px] font-mono text-brand-text-tertiary w-7 tabular-nums">{formatTime(totalSeconds)}</span>
-              </div>
-              <div className="flex items-center justify-center gap-6 pb-0.5">
+              <div className="flex items-center gap-1.5 pb-1">
                 <button
                   type="button"
                   onClick={() => setIsShuffle(s => !s)}
-                  className={`flex items-center gap-1 transition-colors ${
-                    isShuffle ? 'text-accent' : 'text-white/40'
-                  }`}
+                  className={`flex-shrink-0 transition-colors ${isShuffle ? 'text-accent' : 'text-white/30'}`}
+                  title={t('player.shuffle', 'Shuffle')}
                 >
-                  <Shuffle className="w-3 h-3" />
-                  <span className="text-[10px] font-medium">{t('player.shuffle', 'Shuffle')}</span>
+                  <Shuffle className="w-3.5 h-3.5" />
                 </button>
+                <span className="text-[9px] font-mono text-brand-text-tertiary w-7 text-right tabular-nums flex-shrink-0">{formatTime(audioCurrentTime)}</span>
+                <div className="flex-1 min-w-0">{renderWaveform(waveform, 80, progress)}</div>
+                <span className="text-[9px] font-mono text-brand-text-tertiary w-7 tabular-nums flex-shrink-0">{formatTime(totalSeconds)}</span>
                 <button
                   type="button"
                   onClick={() => setIsRepeat(r => !r)}
-                  className={`flex items-center gap-1 transition-colors ${
-                    isRepeat ? 'text-accent' : 'text-white/40'
-                  }`}
+                  className={`flex-shrink-0 transition-colors ${isRepeat ? 'text-accent' : 'text-white/30'}`}
+                  title={t('player.repeat', 'Repeat')}
                 >
-                  <Repeat2 className="w-3 h-3" />
-                  <span className="text-[10px] font-medium">{t('player.repeat', 'Repeat')}</span>
+                  <Repeat2 className="w-3.5 h-3.5" />
                 </button>
               </div>
             </div>
@@ -664,5 +660,7 @@ export default function MusicControlPanel({
         />
       )}
     </div>
+      )}
+    </>
   );
 }

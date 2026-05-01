@@ -110,6 +110,7 @@ function App() {
   const [authLoading, setAuthLoading] = useState(true);
   const [panelTrack, setPanelTrack] = useState(null);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [panelHidden, setPanelHidden] = useState(false);
   const [panelIsPlaying, setPanelIsPlaying] = useState(false);
   const [panelProgress, setPanelProgress] = useState(0);
   const [panelQueue, setPanelQueue] = useState([]);
@@ -346,6 +347,7 @@ function App() {
         : liveTracks.length ? liveTracks : [track];
       setPanelQueue(contextQueue);
       setPanelOpen(true);
+      setPanelHidden(false);
       setPanelTrack((prev) => {
         const isSame = prev?.id === track?.id;
         if (!isSame) {
@@ -706,7 +708,7 @@ function App() {
       />
 
       <div className="md:ml-20">
-        <main className={`pt-16 md:pt-20 ${panelOpen ? 'pb-36 md:pb-24' : 'pb-20 md:pb-10'} relative`}>
+        <main className={`pt-16 md:pt-20 ${panelOpen && !panelHidden ? 'pb-36 md:pb-24' : 'pb-20 md:pb-10'} relative`}>
         <ErrorBoundary>
         <Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
         {selectedAlbumDetail ? (
@@ -832,10 +834,8 @@ function App() {
         progress={panelProgress}
         onPlayPause={() => setPanelIsPlaying((p) => !p)}
         onProgressChange={(pct) => setPanelProgress(pct)}
-        onClose={() => {
-          setPanelOpen(false);
-          setPanelIsPlaying(false);
-        }}
+        onClose={() => setPanelHidden(true)}
+        hidden={panelHidden}
         user={user}
         onAuthRequired={handleOpenAuth}
         onSubscribe={() => {
