@@ -863,5 +863,12 @@
     "about": "Acerca de",
     "labelDescription": "{{name}} es un sello discográfico líder conocido por descubrir y promover talento excepcional en múltiples géneros.",
     "artistDescription": "{{name}} es un talentoso artista que empuja los límites de la música moderna. Conocido por su sonido único y actuaciones cautivadoras."
+  },
+  "libraryPage": {
+    "allGenres": "Todos los Géneros",
+    "chooseTonality": "Elige tonalidad:",
+    "perPage": "Pistas por página:",
+    "noTracksFound": "No se encontraron pistas",
+    "adjustFilters": "Intenta ajustar los filtros o vuelve más tarde"
   }
 }

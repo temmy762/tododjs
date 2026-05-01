@@ -220,10 +220,12 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
             {filterTonality !== 'all' && (
               <button
                 onClick={() => { setFilterTonality('all'); setCurrentPage(1); }}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30 hover:border-accent/50 transition-all duration-200 shadow-lg shadow-accent/10"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-accent/20 text-accent border border-accent/30 hover:bg-accent/30 hover:border-accent/50 transition-all duration-200 shadow-lg shadow-accent/10 whitespace-nowrap"
+                title={`${t('actions.reset')} ${t('tracks.tonality')}`}
               >
-                <X className="w-4 h-4" />
-                <span className="text-xs font-semibold">{t('actions.reset') || 'Reset'} {t('tracks.tonality')}</span>
+                <X className="w-3.5 h-3.5 flex-shrink-0" />
+                <span className="text-[10px] font-semibold hidden sm:inline">{t('actions.reset')} {t('tracks.tonality')}</span>
+                <span className="text-[10px] font-semibold sm:hidden">{filterTonality}</span>
               </button>
             )}
             <button
@@ -249,36 +251,38 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
           </div>
         </div>
         
-        {/* Filter and Sort Controls */}
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Genre Filter */}
-          <div className="flex items-center gap-2">
-            <SlidersHorizontal className="w-3.5 h-3.5 text-brand-text-tertiary" />
-            <select
-              value={filterGenre}
-              onChange={(e) => handleFilterChange(e.target.value)}
-              className="bg-dark-elevated text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80"
-            >
-              <option value="all">{t('libraryPage.allGenres')}</option>
-              {GENRE_OPTIONS.map(({ value, label }) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-          </div>
-          
-          {/* Sort Options */}
-          <div className="flex items-center gap-2">
-            <ArrowUpDown className="w-3.5 h-3.5 text-brand-text-tertiary" />
-            <select
-              value={sortBy}
-              onChange={(e) => handleSortChange(e.target.value)}
-              className="bg-dark-elevated text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80"
-            >
-              <option value="dateAdded">{t('sort.dateAdded') || 'Date Added'}</option>
-              <option value="title">{t('sort.title') || 'Title (A–Z)'}</option>
-              <option value="artist">{t('sort.artist') || 'Artist (A–Z)'}</option>
-              <option value="bpm">{t('sort.bpm') || 'BPM (High–Low)'}</option>
-            </select>
+        {/* Filter and Sort Controls — scrollable on mobile */}
+        <div className="overflow-x-auto scrollbar-hidden -mx-1 px-1">
+          <div className="flex items-center gap-3 min-w-max">
+            {/* Genre Filter */}
+            <div className="flex items-center gap-2">
+              <SlidersHorizontal className="w-3.5 h-3.5 text-brand-text-tertiary flex-shrink-0" />
+              <select
+                value={filterGenre}
+                onChange={(e) => handleFilterChange(e.target.value)}
+                className="bg-dark-elevated text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80"
+              >
+                <option value="all">{t('libraryPage.allGenres')}</option>
+                {GENRE_OPTIONS.map(({ value, label }) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+            
+            {/* Sort Options */}
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="w-3.5 h-3.5 text-brand-text-tertiary flex-shrink-0" />
+              <select
+                value={sortBy}
+                onChange={(e) => handleSortChange(e.target.value)}
+                className="bg-dark-elevated text-white text-xs px-3 py-1.5 rounded-lg border border-white/10 focus:border-accent focus:outline-none transition-all duration-200 cursor-pointer hover:bg-dark-elevated/80"
+              >
+                <option value="dateAdded">{t('sort.recentlyAdded')}</option>
+                <option value="title">{t('sort.titleAZ')}</option>
+                <option value="artist">{t('sort.artistAZ')}</option>
+                <option value="bpm">{t('sort.bpmHighLow')}</option>
+              </select>
+            </div>
           </div>
         </div>
       </div>

@@ -191,12 +191,12 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
     <div className="space-y-6">
       {/* Current Plan */}
       <div className="bg-dark-surface/95 backdrop-blur-xl rounded-2xl border border-white/10 p-6">
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
           <div>
-            <h2 className="text-2xl font-bold text-white mb-2">{t('subscription.currentPlan')}</h2>
-            <p className="text-brand-text-tertiary">{t('subscription.subscriptionDetails')}</p>
+            <h2 className="text-xl sm:text-2xl font-bold text-white mb-1">{t('subscription.currentPlan')}</h2>
+            <p className="text-sm text-brand-text-tertiary">{t('subscription.subscriptionDetails')}</p>
           </div>
-          <div className={`px-4 py-2 rounded-full border ${
+          <div className={`self-start px-4 py-2 rounded-full border whitespace-nowrap ${
             subscription.status === 'active' ? 'bg-green-500/10 border-green-500/20' :
             subscription.status === 'cancelled' ? 'bg-yellow-500/10 border-yellow-500/20' :
             'bg-red-500/10 border-red-500/20'

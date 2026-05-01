@@ -123,7 +123,7 @@ export default function Sidebar({ onAdminClick, user, onLoginClick, onLogout, on
 
       {/* ── Mobile Bottom Navigation ── */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-dark-surface/95 backdrop-blur-xl border-t border-white/10 safe-area-bottom">
-        <div className="flex items-center justify-around px-2 py-1.5">
+        <div className="flex items-center justify-around px-1 py-1.5">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activePage === item.path;
@@ -132,7 +132,7 @@ export default function Sidebar({ onAdminClick, user, onLoginClick, onLogout, on
               <button
                 key={item.path}
                 onClick={() => navigate(item.path)}
-                className="flex flex-col items-center gap-0.5 py-1 px-3 min-w-[60px]"
+                className="flex flex-col items-center gap-0.5 py-1 px-1 flex-1 min-w-0 max-w-[72px]"
               >
                 <div className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all duration-200 ${
                   isActive 
@@ -146,7 +146,7 @@ export default function Sidebar({ onAdminClick, user, onLoginClick, onLogout, on
                     strokeWidth={2}
                   />
                 </div>
-                <span className={`text-[9px] font-medium transition-colors duration-200 ${
+                <span className={`text-[9px] font-medium transition-colors duration-200 w-full text-center truncate ${
                   isActive ? 'text-white' : 'text-brand-text-tertiary'
                 }`}>
                   {item.label}
@@ -159,12 +159,12 @@ export default function Sidebar({ onAdminClick, user, onLoginClick, onLogout, on
           {user && user.role === 'admin' && (
             <button
               onClick={() => onAdminClick?.()}
-              className="flex flex-col items-center gap-0.5 py-1 px-3 min-w-[60px]"
+              className="flex flex-col items-center gap-0.5 py-1 px-1 flex-1 min-w-0 max-w-[72px]"
             >
               <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-gradient-to-br from-red-500 to-pink-500">
                 <Shield className="w-5 h-5 text-white" strokeWidth={2} />
               </div>
-              <span className="text-[9px] font-medium text-brand-text-tertiary">{t('nav.admin')}</span>
+              <span className="text-[9px] font-medium text-brand-text-tertiary w-full text-center truncate">{t('nav.admin')}</span>
             </button>
           )}
 
@@ -172,7 +172,7 @@ export default function Sidebar({ onAdminClick, user, onLoginClick, onLogout, on
           {user ? (
             <button
               onClick={() => onProfileClick?.()}
-              className="flex flex-col items-center gap-0.5 py-1 px-3 min-w-[60px]"
+              className="flex flex-col items-center gap-0.5 py-1 px-1 flex-1 min-w-0 max-w-[72px]"
             >
               <div className="w-9 h-9 rounded-full bg-gradient-to-br from-accent to-accent-hover overflow-hidden border border-white/10 flex items-center justify-center">
                 {user.avatar ? (
@@ -181,17 +181,17 @@ export default function Sidebar({ onAdminClick, user, onLoginClick, onLogout, on
                   <span className="text-white font-bold text-[10px]">{user.name?.charAt(0).toUpperCase()}</span>
                 )}
               </div>
-              <span className="text-[9px] font-medium text-brand-text-tertiary">{t('nav.profile')}</span>
+              <span className="text-[9px] font-medium text-brand-text-tertiary w-full text-center truncate">{t('nav.profile')}</span>
             </button>
           ) : (
             <button
               onClick={onLoginClick}
-              className="flex flex-col items-center gap-0.5 py-1 px-3 min-w-[60px]"
+              className="flex flex-col items-center gap-0.5 py-1 px-1 flex-1 min-w-0 max-w-[72px]"
             >
               <div className="w-9 h-9 rounded-xl flex items-center justify-center">
                 <LogIn className="w-5 h-5 text-brand-text-tertiary" strokeWidth={2} />
               </div>
-              <span className="text-[9px] font-medium text-brand-text-tertiary">{t('nav.login')}</span>
+              <span className="text-[9px] font-medium text-brand-text-tertiary w-full text-center truncate">{t('nav.login')}</span>
             </button>
           )}
         </div>

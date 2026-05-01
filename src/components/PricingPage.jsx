@@ -163,12 +163,12 @@ function PlanCard({ plan, features, icon, onSelect, isSelected, t, i18n }) {
     >
       {/* Badge */}
       {badge && (
-        <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-gradient-to-r from-accent to-accent-hover rounded-full text-white text-sm font-bold shadow-lg">
+        <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1.5 bg-gradient-to-r from-accent to-accent-hover rounded-full text-white text-sm font-bold shadow-lg whitespace-nowrap">
           {badge}
         </div>
       )}
 
-      <div className="p-5 sm:p-8">
+      <div className={`p-5 sm:p-8 ${badge ? 'pt-7 sm:pt-10' : ''}`}>
         {/* Icon and Name */}
         <div className="flex items-center gap-3 mb-4">
           <div className="w-12 h-12 rounded-full bg-accent/10 border border-accent/20 flex items-center justify-center text-accent">
@@ -184,9 +184,9 @@ function PlanCard({ plan, features, icon, onSelect, isSelected, t, i18n }) {
 
         {/* Price */}
         <div className="mb-6">
-          <div className="flex items-baseline gap-1">
+          <div className="flex items-baseline gap-1 flex-wrap">
             <span className="text-4xl font-bold text-white">€{plan.price}</span>
-            <span className="text-brand-text-tertiary">{periodText}</span>
+            <span className="text-brand-text-tertiary whitespace-nowrap">{periodText}</span>
           </div>
           {plan.duration === 'quarterly' && (
             <p className="text-sm text-green-400 mt-1">
