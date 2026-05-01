@@ -40,7 +40,7 @@ const trackSchema = new mongoose.Schema({
     openKey: String,
     source: {
       type: String,
-      enum: ['audio-analysis', 'openai', 'id3-tag', 'manual', 'unknown'],
+      enum: ['audio-analysis', 'openai', 'id3-tag', 'manual', 'unknown', 'keyfinder', 'spotify', 'audd'],
       default: 'unknown'
     },
     confidence: {
