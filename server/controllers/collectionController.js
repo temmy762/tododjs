@@ -1615,11 +1615,44 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
   const existingAlbums = await Album.find({ datePackId: datePack._id });
   console.log(`      Found ${existingAlbums.length} existing album cards`);
   
-  // Build map of album name to album ID
+  // Build map of album name to album ID (case-insensitive keys too)
   const albumMap = new Map();
   for (const album of existingAlbums) {
     albumMap.set(album.name, album._id.toString());
+    albumMap.set(album.name.toLowerCase().trim(), album._id.toString());
+    if (album.sourceFolderName) {
+      albumMap.set(album.sourceFolderName, album._id.toString());
+      albumMap.set(album.sourceFolderName.toLowerCase().trim(), album._id.toString());
+    }
   }
+
+  // Resolve album by name with case-insensitive fallback, or create on-the-fly
+  const getOrCreateAlbum = async (albumName) => {
+    const albumId = albumMap.get(albumName)
+      || albumMap.get(albumName.toLowerCase().trim());
+    if (albumId) {
+      return Album.findById(albumId);
+    }
+    // Not found — create it now so tracks are never silently dropped
+    console.log(`      Album "${albumName}" not in existing cards — creating on-the-fly`);
+    const genreMatch = albumName.match(/\((.*)\)/);
+    const detectedGenre = genreMatch ? mapToFixedGenre(genreMatch[1]) : null;
+    const newAlbum = await Album.create({
+      collectionId: collection._id,
+      datePackId: datePack._id,
+      name: albumName,
+      genre: detectedGenre,
+      year: collection.year,
+      coverArt: collection.thumbnail || '',
+      trackCount: 0,
+      uploadedBy: collection.uploadedBy,
+      status: 'pending',
+      sourceFolderName: albumName
+    });
+    albumMap.set(albumName, newAlbum._id.toString());
+    albumMap.set(albumName.toLowerCase().trim(), newAlbum._id.toString());
+    return newAlbum;
+  };
   
   // Group MP3 files by album name
   const mp3sByAlbum = new Map();
@@ -1642,13 +1675,11 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
 
   // Process each album
   for (const [albumName, albumMp3s] of mp3sByAlbum) {
-    const albumId = albumMap.get(albumName);
-    if (!albumId) {
-      console.log(`      Album "${albumName}" not found in existing cards, skipping ${albumMp3s.length} tracks`);
+    const album = await getOrCreateAlbum(albumName);
+    if (!album) {
+      console.log(`      Could not find or create album "${albumName}", skipping ${albumMp3s.length} tracks`);
       continue;
     }
-    
-    const album = await Album.findById(albumId);
     console.log(`      Processing album: ${albumName} (${albumMp3s.length} tracks)`);
     
     // Update album status
