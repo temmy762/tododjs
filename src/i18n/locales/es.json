@@ -808,7 +808,10 @@
     "invalidPhone": "Por favor ingresa un número de teléfono válido (ej. +1234567890)",
     "fillAllFields": "Por favor completa todos los campos de contraseña",
     "passwordTooShort": "La nueva contraseña debe tener al menos 6 caracteres",
-    "passwordsNoMatch": "Las nuevas contraseñas no coinciden"
+    "passwordsNoMatch": "Las nuevas contraseñas no coinciden",
+    "active": "Activo",
+    "free": "Gratis",
+    "inactive": "Inactivo"
   },
   "mashupPage": {
     "notFound": "No se encontraron mashups",
@@ -863,12 +866,5 @@
     "about": "Acerca de",
     "labelDescription": "{{name}} es un sello discográfico líder conocido por descubrir y promover talento excepcional en múltiples géneros.",
     "artistDescription": "{{name}} es un talentoso artista que empuja los límites de la música moderna. Conocido por su sonido único y actuaciones cautivadoras."
-  },
-  "libraryPage": {
-    "allGenres": "Todos los Géneros",
-    "chooseTonality": "Elige tonalidad:",
-    "perPage": "Pistas por página:",
-    "noTracksFound": "No se encontraron pistas",
-    "adjustFilters": "Intenta ajustar los filtros o vuelve más tarde"
   }
 }
