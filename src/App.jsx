@@ -107,7 +107,7 @@ function ResumedUploadWidget({ upload }) {
 
 function App() {
   const upload = useUpload();
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();
 
