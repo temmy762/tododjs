@@ -138,6 +138,16 @@ function App() {
   const [albumDetailTracks, setAlbumDetailTracks] = useState([]);
   const [albumDetailLoading, setAlbumDetailLoading] = useState(false);
   const [albumAutoPlay, setAlbumAutoPlay] = useState(false);
+
+  // Clear album detail when navigating away from the record-pool page
+  useEffect(() => {
+    if (activePage !== 'album') {
+      setSelectedAlbumDetail(null);
+      setAlbumDetailTracks([]);
+      setAlbumAutoPlay(false);
+    }
+  }, [activePage]);
+
   const [showTonalityButton, setShowTonalityButton] = useState(false);
   const [showAdminDashboard, setShowAdminDashboard] = useState(false);
   const [showCheckout, setShowCheckout] = useState(false);
