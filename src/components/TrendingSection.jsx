@@ -4,8 +4,6 @@ import { useTranslation } from 'react-i18next';
 import GenericCoverArt from './GenericCoverArt';
 import API_URL from '../config/api';
 
-const PERIOD_VALUES = ['24h', '7d', '30d'];
-
 export default function TrendingSection({ onTrackInteraction, activeGenre = 'all' }) {
   const { t } = useTranslation();
   const PERIOD_OPTIONS = [
@@ -18,6 +16,7 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
   const [activeTab, setActiveTab] = useState('trending');
   const [period, setPeriod] = useState('7d');
   const [loading, setLoading] = useState(false);
+  const [recentLoading, setRecentLoading] = useState(true);
 
   useEffect(() => {
     fetchTrendingTracks();
@@ -46,13 +45,15 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
 
   const fetchRecentTracks = async () => {
     try {
-      // Use browse API for recently added tracks (reliable even with 0 downloads)
+      setRecentLoading(true);
       const response = await fetch(`${API_URL}/tracks/browse?limit=10&sort=-dateAdded`);
       if (!response.ok) return;
       const data = await response.json();
       if (data.success) setRecentTracks(data.data || []);
     } catch (error) {
       console.error('Error fetching recent tracks:', error.message || error);
+    } finally {
+      setRecentLoading(false);
     }
   };
 
@@ -118,7 +119,7 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
       </div>
 
       {/* Loading Skeleton */}
-      {loading ? (
+      {(activeTab === 'trending' ? loading : recentLoading) ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2.5 md:gap-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="animate-pulse">
@@ -141,7 +142,7 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
         </div>
       )}
 
-      {displayTracks.length === 0 && !loading && (
+      {displayTracks.length === 0 && !(activeTab === 'trending' ? loading : recentLoading) && (
         <div className="text-center py-16 md:py-12">
           <div className="w-14 h-14 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mx-auto mb-4">
             {activeTab === 'trending' ? (

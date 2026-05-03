@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader, Music, ChevronLeft, ChevronRight, List, Grid3x3 } from 'lucide-react';
 import TrackListView from './TrackListView';
@@ -33,10 +33,15 @@ export default function CategoryTrackSection({
   const [totalPages, setTotalPages] = useState(1);
   const [totalTracks, setTotalTracks] = useState(0);
   const [viewMode, setViewMode] = useState('list');
+  const resettingPage = useRef(false);
   const LIMIT = 30;
 
   const fetchTracks = useCallback(async () => {
     if (!categoryName) return;
+    if (resettingPage.current) {
+      resettingPage.current = false;
+      return;
+    }
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -60,6 +65,7 @@ export default function CategoryTrackSection({
   }, [categoryName, page]);
 
   useEffect(() => {
+    resettingPage.current = true;
     setPage(1);
   }, [categoryName]);
 

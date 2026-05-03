@@ -210,7 +210,7 @@ function App() {
             trackCount: a.trackCount || 0,
             year: a.year || new Date(a.createdAt).getFullYear(),
             releaseDate: a.releaseDate || a.createdAt,
-            isNew: a.isNew ?? true,
+            isNew: a.isNew || false,
           }));
           setLiveAlbums(mapped);
         }
@@ -373,7 +373,9 @@ function App() {
       setPanelOpen(true);
       setPanelHidden(false);
       setPanelTrack((prev) => {
-        const isSame = prev?.id === track?.id;
+        const prevId = prev?.id || prev?._id;
+        const nextId = track?.id || track?._id;
+        const isSame = prevId && nextId && prevId === nextId;
         if (!isSame) {
           setPanelProgress(0);
           setPanelIsPlaying(true);
@@ -456,7 +458,12 @@ function App() {
             throw new Error(data?.message || 'Download failed. Please try again.');
           }
           if (data?.downloadUrl) {
-            window.location.href = data.downloadUrl;
+            const a = document.createElement('a');
+            a.href = data.downloadUrl;
+            a.download = '';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
           }
         })
         .catch(err => alert(err.message || 'Download failed. Please try again.'));
@@ -659,24 +666,20 @@ function App() {
   };
 
   const allTracks = useMemo(() => {
-    const mashupKeywords = ['mashup', 'remix', 'transition', 'edit', 'bootleg', 'blend', 'flip'];
-    let filtered = liveTracks.filter(track => {
-      const t = (track.title || '').toLowerCase();
-      return mashupKeywords.some(kw => t.includes(kw));
-    });
-    
+    let filtered = [...liveTracks];
+
     if (activeGenre !== 'all') {
-      filtered = filtered.filter(track => 
+      filtered = filtered.filter(track =>
         (track.collection || '').toLowerCase().includes(activeGenre.toLowerCase()) ||
         (track.genre || '').toLowerCase().includes(activeGenre.toLowerCase()) ||
         (track.title || '').toLowerCase().includes(activeGenre.toLowerCase())
       );
     }
-    
+
     if (activeTonality !== 'all') {
       filtered = filtered.filter(track => track.tonality === activeTonality);
     }
-    
+
     return filtered;
   }, [activeGenre, activeTonality, liveTracks]);
 
@@ -824,11 +827,21 @@ function App() {
                 </div>
 
                 <div className="mb-8">
-                  <TrackListView
-                    tracks={allTracks}
-                    onTrackInteraction={handleTrackInteraction}
-                    userFavorites={userFavorites}
-                  />
+                  <div className="px-4 md:px-10 mb-4">
+                    <h2 className="text-lg md:text-xl font-bold text-white">{t('home.latestUploadsTitle')}</h2>
+                  </div>
+                  {allTracks.length > 0 ? (
+                    <TrackListView
+                      tracks={allTracks}
+                      onTrackInteraction={handleTrackInteraction}
+                      userFavorites={userFavorites}
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-16 text-center">
+                      <p className="text-sm text-brand-text-tertiary font-medium">{t('home.noRecentUploads')}</p>
+                      <p className="text-xs text-brand-text-tertiary/50 mt-1">{t('home.checkBackSoon')}</p>
+                    </div>
+                  )}
                 </div>
 
                 <AlbumsSection albums={albums} onAlbumClick={handleAlbumPageClick} activeGenre={activeGenre} />
