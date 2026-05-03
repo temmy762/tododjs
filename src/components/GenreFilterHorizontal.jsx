@@ -72,11 +72,15 @@ export default function GenreFilterHorizontal({ activeCategory, onCategoryChange
                     <Layers size={16} className="flex-shrink-0" />
                   )}
                   <span className="whitespace-nowrap">{cat.name}</span>
-                  {cat.trackCount > 0 && (
-                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/50'}`}>
-                      {cat.trackCount > 999 ? `${Math.floor(cat.trackCount / 1000)}k` : cat.trackCount}
-                    </span>
-                  )}
+                  {(() => {
+                    const total = (cat.trackCount || 0) + (cat.mashupCount || 0);
+                    if (!total) return null;
+                    return (
+                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/50'}`}>
+                        {total > 999 ? `${Math.floor(total / 1000)}k` : total}
+                      </span>
+                    );
+                  })()}
                 </button>
               );
             })}
