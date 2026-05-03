@@ -35,7 +35,6 @@ export default function TrendingSection({ onTrackInteraction, activeGenre = 'all
         const data = await response.json();
         if (data.success) {
           setTrendingTracks(data.data || []);
-          setIsFallback(false);
         }
       }
     } catch (error) {
