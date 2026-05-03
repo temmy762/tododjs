@@ -60,32 +60,46 @@ const PAGE_TO_PATH = Object.entries(PATH_TO_PAGE).reduce((acc, [path, page]) => 
   return acc;
 }, {});
 
+function ResumedUploadItem({ r, dismissResumed }) {
+  useEffect(() => {
+    if (r.status === 'completed' || r.status === 'failed') {
+      const timer = setTimeout(() => dismissResumed(r.id), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [r.status, r.id, dismissResumed]);
+
+  return (
+    <div className="fixed bottom-4 left-4 z-50 w-72 bg-dark-elevated border border-white/10 rounded-xl shadow-2xl shadow-black/50 p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-xs font-semibold text-white truncate flex-1 min-w-0">{r.name || 'Upload'}</span>
+        <button
+          onClick={() => dismissResumed(r.id)}
+          className="flex-shrink-0 w-5 h-5 flex items-center justify-center rounded text-brand-text-tertiary hover:text-white hover:bg-white/10 transition-colors"
+        >✕</button>
+      </div>
+      {r.status === 'processing' && (
+        <div className="space-y-1">
+          <div className="flex justify-between text-[10px] text-brand-text-tertiary">
+            <span>Processing…</span><span>{r.progress}%</span>
+          </div>
+          <div className="w-full bg-white/10 rounded-full h-1.5">
+            <div className="bg-yellow-400 h-1.5 rounded-full transition-all duration-500" style={{ width: `${r.progress}%` }} />
+          </div>
+        </div>
+      )}
+      {r.status === 'completed' && <p className="text-[10px] text-green-400">✓ Upload completed! Closing in 5s…</p>}
+      {r.status === 'failed' && <p className="text-[10px] text-red-400">✗ Processing failed. Closing in 5s…</p>}
+    </div>
+  );
+}
+
 function ResumedUploadWidget({ upload }) {
   const { resumed, dismissResumed } = upload;
   if (!resumed.length) return null;
   return (
     <>
       {resumed.map(r => (
-        <div key={r.id} className="fixed bottom-4 left-4 z-50 w-72 bg-dark-elevated border border-white/10 rounded-xl shadow-2xl shadow-black/50 p-3">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-semibold text-white truncate flex-1">{r.name || 'Upload'}</span>
-            {(r.status === 'completed' || r.status === 'failed') && (
-              <button onClick={() => dismissResumed(r.id)} className="p-1 text-brand-text-tertiary hover:text-white ml-2">✕</button>
-            )}
-          </div>
-          {r.status === 'processing' && (
-            <div className="space-y-1">
-              <div className="flex justify-between text-[10px] text-brand-text-tertiary">
-                <span>Processing…</span><span>{r.progress}%</span>
-              </div>
-              <div className="w-full bg-white/10 rounded-full h-1.5">
-                <div className="bg-yellow-400 h-1.5 rounded-full transition-all duration-500" style={{ width: `${r.progress}%` }} />
-              </div>
-            </div>
-          )}
-          {r.status === 'completed' && <p className="text-[10px] text-green-400">✓ Upload completed!</p>}
-          {r.status === 'failed' && <p className="text-[10px] text-red-400">✗ Processing failed</p>}
-        </div>
+        <ResumedUploadItem key={r.id} r={r} dismissResumed={dismissResumed} />
       ))}
     </>
   );
