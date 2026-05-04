@@ -63,6 +63,14 @@ const userSchema = new mongoose.Schema({
       type: Boolean,
       default: false
     },
+    cancelAtPeriodEnd: {
+      type: Boolean,
+      default: false
+    },
+    currentPeriodEnd: {
+      type: Date,
+      default: null
+    },
     grantedByAdmin: {
       type: Boolean,
       default: false

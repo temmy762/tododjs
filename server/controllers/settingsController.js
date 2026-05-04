@@ -79,14 +79,14 @@ export const getSecurityData = async (req, res) => {
 
     // Recent logins (users who logged in recently)
     const recentLogins = await User.find({ lastLogin: { $gte: sevenDaysAgo } })
-      .select('name email role lastLogin subscription.plan')
+      .select('name email role lastLogin subscription.plan subscription.planId')
       .sort('-lastLogin')
       .limit(20)
       .lean();
 
     // New accounts in last 7 days
     const recentSignups = await User.find({ createdAt: { $gte: sevenDaysAgo } })
-      .select('name email role createdAt subscription.plan')
+      .select('name email role createdAt subscription.plan subscription.planId')
       .sort('-createdAt')
       .limit(20)
       .lean();
@@ -97,9 +97,11 @@ export const getSecurityData = async (req, res) => {
       .sort('-lastLogin')
       .lean();
 
-    // Inactive users (haven't logged in for 30 days)
+    // Inactive users: accounts older than 30 days that haven't logged in during that period.
+    // Exclude new signups (createdAt < 30 days ago) so they don't inflate the inactive count.
     const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const inactiveCount = await User.countDocuments({
+      createdAt: { $lt: thirtyDaysAgo },
       $or: [
         { lastLogin: { $lt: thirtyDaysAgo } },
         { lastLogin: null }
@@ -137,7 +139,8 @@ export const getSecurityData = async (req, res) => {
           count: 1,
           name: '$user.name',
           email: '$user.email',
-          plan: '$user.subscription.plan'
+          plan: '$user.subscription.plan',
+          planId: '$user.subscription.planId'
         }
       }
     ]);

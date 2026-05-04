@@ -1,6 +1,5 @@
 import express from 'express';
 import {
-  createCheckoutSession,
   verifyPayment,
   handleWebhook,
   getStripeConfig,
@@ -17,7 +16,6 @@ router.get('/config', getStripeConfig);
 router.post('/webhook', express.raw({ type: 'application/json' }), handleWebhook);
 
 // Protected routes
-router.post('/create-checkout-session', protect, createCheckoutSession);
 router.post('/create-payment-intent', protect, createPaymentIntent);
 router.post('/verify-payment', protect, verifyPayment);
 

@@ -1,5 +1,6 @@
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import User from '../models/User.js';
+import stripe from '../config/stripe.js';
 
 // @desc    Get all subscription plans
 // @route   GET /api/subscriptions/plans
@@ -77,7 +78,13 @@ export const getSubscriptionStatus = async (req, res) => {
 
     // Check if subscription expired (past endDate)
     if (user.subscription.endDate && new Date() > user.subscription.endDate) {
-      if (user.subscription.status !== 'expired') {
+      const hoursSinceExpiry = (Date.now() - new Date(user.subscription.endDate).getTime()) / (1000 * 60 * 60);
+      // For Stripe-managed subscriptions give a 48h grace window for webhook delivery
+      // before marking expired locally — avoids locking out users due to webhook delays
+      const hasStripeSubscription = !!user.subscription.stripeSubscriptionId;
+      const shouldExpireLocally = !hasStripeSubscription || hoursSinceExpiry > 48;
+
+      if (shouldExpireLocally && user.subscription.status !== 'expired') {
         user.subscription.status = 'expired';
         await user.save();
       }
@@ -113,6 +120,17 @@ export const getSubscriptionStatus = async (req, res) => {
 // @access  Private
 export const activateSubscription = async (req, res) => {
   try {
+    // Block non-admin users — real activation is handled exclusively by the Stripe webhook
+    if (req.user.role !== 'admin') {
+      console.warn(
+        `[SECURITY] Unauthorized activation attempt — userId=${req.user.id}, ip=${req.ip}, body=${JSON.stringify(req.body)}`
+      );
+      return res.status(403).json({
+        success: false,
+        message: 'Forbidden. Subscription activation is handled automatically after payment.'
+      });
+    }
+
     const { planId, paymentIntentId, paymentMethod } = req.body;
     
     const plan = await SubscriptionPlan.findOne({ planId });
@@ -182,11 +200,30 @@ export const cancelSubscription = async (req, res) => {
       });
     }
     
-    user.subscription.status = 'cancelled';
+    // Cancel on Stripe if this is a recurring subscription
+    const stripeSubscriptionId = user.subscription.stripeSubscriptionId;
+    if (stripeSubscriptionId) {
+      try {
+        await stripe.subscriptions.update(stripeSubscriptionId, {
+          cancel_at_period_end: true
+        });
+        user.subscription.cancelAtPeriodEnd = true;
+      } catch (err) {
+        console.error('[cancelSubscription] Stripe cancel failed:', err.message);
+        // Proceed with local update even if Stripe call fails
+      }
+    }
+
+    // For Stripe subscriptions: keep status 'active' — access continues until period end.
+    // The customer.subscription.deleted webhook will set status='cancelled' at the right time.
+    // For non-Stripe (admin-granted) subscriptions: cancel immediately in DB.
+    if (!stripeSubscriptionId) {
+      user.subscription.status = 'cancelled';
+    }
     user.subscription.autoRenew = false;
-    
+
     await user.save();
-    
+
     res.status(200).json({
       success: true,
       message: 'Subscription cancelled. Access will continue until end date.',

@@ -1,39 +1,36 @@
-import Stripe from 'stripe';
+import stripe from '../config/stripe.js';
 import User from '../models/User.js';
 import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentReceiptEmail, sendSubscriptionCancelledEmail, sendPaymentFailedEmail } from '../services/emailService.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
-
-// Subscription plans configuration
-const PLANS = {
-  premium: {
-    name: 'Premium',
-    priceMonthly: 999, // $9.99 in cents
-    priceYearly: 9999, // $99.99 in cents
-    stripePriceIdMonthly: process.env.STRIPE_PREMIUM_MONTHLY_PRICE_ID,
-    stripePriceIdYearly: process.env.STRIPE_PREMIUM_YEARLY_PRICE_ID
-  },
-  pro: {
-    name: 'Pro',
-    priceMonthly: 1999, // $19.99 in cents
-    priceYearly: 19999, // $199.99 in cents
-    stripePriceIdMonthly: process.env.STRIPE_PRO_MONTHLY_PRICE_ID,
-    stripePriceIdYearly: process.env.STRIPE_PRO_YEARLY_PRICE_ID
-  }
-};
 
 // @desc    Create checkout session
 // @route   POST /api/payment/create-checkout-session
 // @access  Private
 export const createCheckoutSession = async (req, res) => {
   try {
-    const { plan, billingPeriod } = req.body; // plan: 'premium' or 'pro', billingPeriod: 'monthly' or 'yearly'
+    const { planId } = req.body;
 
-    if (!PLANS[plan]) {
+    if (!planId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Plan ID is required'
+      });
+    }
+
+    const planDoc = await SubscriptionPlan.findOne({ planId, isActive: true });
+
+    if (!planDoc) {
       return res.status(400).json({
         success: false,
         message: 'Invalid subscription plan'
+      });
+    }
+
+    if (!planDoc.stripePriceId) {
+      return res.status(400).json({
+        success: false,
+        message: 'This plan is not configured for online payment. Please contact support.'
       });
     }
 
@@ -55,18 +52,13 @@ export const createCheckoutSession = async (req, res) => {
       await req.user.save();
     }
 
-    // Get the correct price ID
-    const priceId = billingPeriod === 'yearly' 
-      ? PLANS[plan].stripePriceIdYearly 
-      : PLANS[plan].stripePriceIdMonthly;
-
-    // Create checkout session
+    // Create recurring subscription checkout session
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       payment_method_types: ['card'],
       line_items: [
         {
-          price: priceId,
+          price: planDoc.stripePriceId,
           quantity: 1
         }
       ],
@@ -75,8 +67,8 @@ export const createCheckoutSession = async (req, res) => {
       cancel_url: `${process.env.FRONTEND_URL}/subscription/cancel`,
       metadata: {
         userId: req.user._id.toString(),
-        plan,
-        billingPeriod
+        planId: planDoc.planId,
+        plan: planDoc.planId
       }
     });
 
@@ -93,190 +85,6 @@ export const createCheckoutSession = async (req, res) => {
     });
   }
 };
-
-// @desc    Handle Stripe webhook
-// @route   POST /api/payment/webhook
-// @access  Public (Stripe)
-export const handleWebhook = async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(
-      req.body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET
-    );
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-
-  // Handle the event
-  try {
-    console.log(`[stripe/payment webhook] event=${event.type} id=${event.id}`);
-    switch (event.type) {
-      case 'checkout.session.completed':
-        await handleCheckoutSessionCompleted(event.data.object);
-        break;
-
-      case 'customer.subscription.updated':
-        await handleSubscriptionUpdated(event.data.object);
-        break;
-
-      case 'customer.subscription.deleted':
-        await handleSubscriptionDeleted(event.data.object);
-        break;
-
-      case 'invoice.payment_failed':
-        await handlePaymentFailed(event.data.object);
-        break;
-
-      default:
-        console.log(`Unhandled event type ${event.type}`);
-    }
-
-    res.json({ received: true });
-  } catch (error) {
-    console.error('Webhook handler error:', error);
-    res.status(500).json({ error: 'Webhook handler failed' });
-  }
-};
-
-// Handle successful checkout
-async function handleCheckoutSessionCompleted(session) {
-  const userId = session.metadata.userId;
-  const plan = session.metadata.plan;
-
-  const subscription = await stripe.subscriptions.retrieve(session.subscription);
-
-  const user = await User.findById(userId);
-  if (user) {
-    let planId = null;
-    try {
-      const mappedPlan = await SubscriptionPlan.findOne({
-        $or: [
-          { planId: plan },
-          { name: plan },
-          { nameEs: plan }
-        ]
-      }).lean();
-      planId = mappedPlan?.planId || null;
-    } catch (e) {
-      console.error('[stripe/payment webhook] plan lookup failed:', e.message);
-    }
-
-    const startDate = new Date();
-    const endDate = subscription.current_period_end
-      ? new Date(subscription.current_period_end * 1000)
-      : null;
-
-    // Standard fields used across the app
-    user.subscription.planId = planId;
-    user.subscription.plan = planId || plan; // legacy compatibility
-    user.subscription.status = 'active';
-    user.subscription.startDate = startDate;
-    user.subscription.endDate = endDate;
-    user.subscription.stripeCustomerId = subscription.customer || user.subscription.stripeCustomerId;
-    user.subscription.stripeSubscriptionId = subscription.id;
-    user.subscription.stripePaymentIntentId = subscription.latest_invoice?.payment_intent || user.subscription.stripePaymentIntentId;
-    user.subscription.paymentMethod = 'card';
-    user.subscription.autoRenew = true;
-    user.subscription.cancelAtPeriodEnd = false;
-    // Keep legacy field for older UI code
-    user.subscription.currentPeriodEnd = endDate;
-
-    // Set maxDevices based on plan type/features when possible
-    if (planId) {
-      const planDoc = await SubscriptionPlan.findOne({ planId }).lean();
-      if (planDoc) {
-        user.maxDevices = planDoc.features?.maxDevices || (planDoc.type === 'shared' ? 2 : 1);
-      }
-    }
-
-    await user.save();
-
-    console.log(`[stripe/payment webhook] Subscription activated user=${userId} plan=${plan} planId=${planId} sub=${subscription.id}`);
-
-    // Notify user of payment receipt (non-blocking)
-    const amount = subscription.items?.data?.[0]?.price?.unit_amount
-      ? (subscription.items.data[0].price.unit_amount / 100).toFixed(2)
-      : 'N/A';
-    const currency = subscription.currency?.toUpperCase() || 'EUR';
-    const periodEnd = subscription.current_period_end
-      ? new Date(subscription.current_period_end * 1000)
-      : null;
-    sendPaymentReceiptEmail(user, plan, amount, currency, periodEnd)
-      .catch(err => console.error('User payment receipt email failed:', err));
-
-    // Notify admin of new payment (non-blocking)
-    notifyAdminNewPayment(user, plan, amount, currency)
-      .catch(err => console.error('Admin payment notification failed:', err));
-  }
-}
-
-// Handle subscription update
-async function handleSubscriptionUpdated(subscription) {
-  const customer = await stripe.customers.retrieve(subscription.customer);
-  const userId = customer.metadata.userId;
-
-  await User.findByIdAndUpdate(userId, {
-    'subscription.status': subscription.status,
-    'subscription.currentPeriodEnd': new Date(subscription.current_period_end * 1000),
-    'subscription.cancelAtPeriodEnd': subscription.cancel_at_period_end
-  });
-
-  console.log(`Subscription updated for user ${userId}`);
-}
-
-// Handle subscription cancellation
-async function handleSubscriptionDeleted(subscription) {
-  const customer = await stripe.customers.retrieve(subscription.customer);
-  const userId = customer.metadata.userId;
-
-  const user = await User.findById(userId);
-  if (user) {
-    const oldPlan = user.subscription.planId || user.subscription.plan;
-    user.subscription.planId = null;
-    user.subscription.plan = 'free';
-    user.subscription.status = 'cancelled';
-    user.subscription.stripeSubscriptionId = null;
-    user.subscription.stripePaymentIntentId = null;
-    user.subscription.startDate = null;
-    user.subscription.endDate = null;
-    user.subscription.currentPeriodEnd = null;
-    user.subscription.cancelAtPeriodEnd = false;
-    await user.save();
-
-    console.log(`[stripe/payment webhook] Subscription cancelled user=${userId}`);
-
-    // Notify user of cancellation (non-blocking)
-    sendSubscriptionCancelledEmail(user, oldPlan, null)
-      .catch(err => console.error('User cancellation email failed:', err));
-
-    // Notify admin of cancellation (non-blocking)
-    notifyAdminCancelledSubscription(user, oldPlan)
-      .catch(err => console.error('Admin cancellation notification failed:', err));
-  }
-}
-
-// Handle payment failure
-async function handlePaymentFailed(invoice) {
-  const customer = await stripe.customers.retrieve(invoice.customer);
-  const userId = customer.metadata.userId;
-
-  const user = await User.findByIdAndUpdate(userId, {
-    'subscription.status': 'past_due'
-  }, { new: true });
-
-  console.log(`Payment failed for user ${userId}`);
-
-  // Notify user of payment failure (non-blocking)
-  if (user) {
-    sendPaymentFailedEmail(user)
-      .catch(err => console.error('User payment failed email failed:', err));
-  }
-}
 
 // @desc    Cancel subscription
 // @route   POST /api/payment/cancel-subscription
@@ -372,7 +180,7 @@ export const getSubscription = async (req, res) => {
         success: true,
         data: {
           plan: 'free',
-          status: 'active'
+          status: 'inactive'
         }
       });
     }

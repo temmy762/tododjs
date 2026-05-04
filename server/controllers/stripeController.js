@@ -5,86 +5,6 @@ import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentRec
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
-// @desc    Create Stripe checkout session
-// @route   POST /api/stripe/create-checkout-session
-// @access  Private
-export const createCheckoutSession = async (req, res) => {
-  try {
-    const { planId } = req.body;
-    const user = await User.findById(req.user.id);
-
-    const plan = await SubscriptionPlan.findOne({ planId });
-
-    if (!plan) {
-      return res.status(404).json({
-        success: false,
-        message: 'Plan not found'
-      });
-    }
-
-    // Create or retrieve Stripe customer
-    let customerId = user.subscription.stripeCustomerId;
-
-    if (!customerId) {
-      const customer = await stripe.customers.create({
-        email: user.email,
-        name: user.name,
-        metadata: {
-          userId: user._id.toString()
-        }
-      });
-      customerId = customer.id;
-      user.subscription.stripeCustomerId = customerId;
-      await user.save();
-    }
-
-    // Create checkout session
-    const session = await stripe.checkout.sessions.create({
-      customer: customerId,
-      payment_method_types: ['card'],
-      line_items: [
-        {
-          price_data: {
-            currency: plan.currency.toLowerCase(),
-            product_data: {
-              name: plan.name,
-              description: `${plan.features.unlimitedDownloads ? 'Unlimited Downloads • ' : ''}${plan.features.whatsappSupport ? 'WhatsApp Support • ' : ''}${plan.durationDays} days access`,
-              metadata: {
-                planId: plan.planId,
-                type: plan.type,
-                duration: plan.duration
-              }
-            },
-            unit_amount: Math.round(plan.price * 100) // Convert to cents
-          },
-          quantity: 1
-        }
-      ],
-      mode: 'payment',
-      success_url: `${FRONTEND_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${FRONTEND_URL}/subscription/cancel`,
-      metadata: {
-        userId: user._id.toString(),
-        planId: plan.planId,
-        planName: plan.name,
-        durationDays: plan.durationDays.toString()
-      }
-    });
-
-    res.status(200).json({
-      success: true,
-      sessionId: session.id,
-      url: session.url
-    });
-  } catch (error) {
-    console.error('Stripe checkout error:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-};
-
 // @desc    Verify payment and activate subscription
 // @route   POST /api/stripe/verify-payment
 // @access  Private
@@ -92,78 +12,32 @@ export const verifyPayment = async (req, res) => {
   try {
     const { sessionId } = req.body;
 
-    // Retrieve the session from Stripe
+    // Retrieve the session from Stripe — webhook is the sole source of truth for activation
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-    if (session.payment_status !== 'paid') {
+    // Validate the session belongs to the requesting user
+    const sessionUserId = session.metadata?.userId;
+    if (sessionUserId && sessionUserId !== req.user.id.toString()) {
+      console.warn(`[SECURITY] verifyPayment session mismatch: sessionUser=${sessionUserId}, reqUser=${req.user.id}`);
+      return res.status(403).json({
+        success: false,
+        message: 'Session does not belong to this user'
+      });
+    }
+
+    // Accept 'paid' and 'no_payment_required' (free trials / 100% coupons)
+    const validStatuses = ['paid', 'no_payment_required'];
+    if (!validStatuses.includes(session.payment_status)) {
       return res.status(400).json({
         success: false,
         message: 'Payment not completed'
       });
     }
 
-    const userId = session.metadata.userId;
-    const planId = session.metadata.planId;
-    const durationDays = parseInt(session.metadata.durationDays);
-
-    const user = await User.findById(userId);
-    const plan = await SubscriptionPlan.findOne({ planId });
-
-    if (!user || !plan) {
-      return res.status(404).json({
-        success: false,
-        message: 'User or plan not found'
-      });
-    }
-
-    // Calculate subscription dates
-    const startDate = new Date();
-    const endDate = new Date();
-    endDate.setDate(endDate.getDate() + durationDays);
-
-    // Update user subscription
-    user.subscription.planId = planId;
-    user.subscription.plan = planId;
-    user.subscription.status = 'active';
-    user.subscription.startDate = startDate;
-    user.subscription.endDate = endDate;
-    user.subscription.stripePaymentIntentId = session.payment_intent;
-    user.subscription.paymentMethod = 'card';
-    user.subscription.autoRenew = false; // One-time payments don't auto-renew
-
-    // Add to subscription history only if not already recorded by webhook
-    const alreadyRecorded = user.subscriptionHistory?.some(
-      h => h.stripePaymentIntentId === session.payment_intent
-    );
-    if (!alreadyRecorded) {
-      user.subscriptionHistory.push({
-        planId: planId,
-        startDate: startDate,
-        endDate: endDate,
-        amount: plan.price,
-        currency: plan.currency,
-        status: 'completed',
-        stripePaymentIntentId: session.payment_intent
-      });
-    }
-
-    await user.save();
-
-    // Notify user of payment receipt (non-blocking)
-    sendPaymentReceiptEmail(user, plan.name, plan.price, plan.currency, endDate)
-      .catch(err => console.error('User payment receipt email failed:', err));
-
-    // Notify admin of new payment (non-blocking)
-    notifyAdminNewPayment(user, plan.name, plan.price, plan.currency)
-      .catch(err => console.error('Admin payment notification failed:', err));
-
+    // Payment confirmed — no DB writes here; webhook handles full activation
     res.status(200).json({
       success: true,
-      message: 'Subscription activated successfully',
-      data: {
-        subscription: user.subscription,
-        plan: plan
-      }
+      message: 'Payment confirmed. Subscription will be activated shortly.'
     });
   } catch (error) {
     console.error('Payment verification error:', error);
@@ -207,6 +81,14 @@ export const handleWebhook = async (req, res) => {
         const failedPayment = event.data.object;
         console.warn('Payment failed:', failedPayment.id);
         await handlePaymentFailed(failedPayment);
+        break;
+
+      case 'invoice.paid':
+        await handleInvoicePaid(event.data.object);
+        break;
+
+      case 'invoice.payment_failed':
+        await handleInvoicePaymentFailed(event.data.object);
         break;
 
       case 'charge.refunded':
@@ -265,7 +147,8 @@ async function handleCheckoutCompleted(session) {
         email: customerEmail,
         password: tempPassword, // Temporary password, user will reset via email
         phoneNumber: session.customer_details?.phone || undefined,
-        preferredLanguage: 'en'
+        preferredLanguage: 'en',
+        isEmailVerified: true // Email confirmed via Stripe payment flow
       });
       
       console.log(`New user account created via subscription: ${customerEmail}`);
@@ -278,29 +161,65 @@ async function handleCheckoutCompleted(session) {
   }
 
   const startDate = new Date();
-  const endDate = new Date();
-  endDate.setDate(endDate.getDate() + durationDays);
+  let endDate = null;
+  let stripeSubscriptionId = null;
+
+  // For subscription mode, get endDate from Stripe subscription's current_period_end
+  if (session.subscription) {
+    try {
+      const stripeSubscription = await stripe.subscriptions.retrieve(session.subscription);
+      endDate = stripeSubscription.current_period_end
+        ? new Date(stripeSubscription.current_period_end * 1000)
+        : null;
+      stripeSubscriptionId = stripeSubscription.id;
+    } catch (e) {
+      console.error('Failed to retrieve Stripe subscription:', e.message);
+    }
+  }
+
+  // Fallback: calculate from durationDays metadata (legacy one-time mode)
+  if (!endDate && !isNaN(durationDays)) {
+    endDate = new Date();
+    endDate.setDate(endDate.getDate() + durationDays);
+  }
+
+  // Safety: null endDate would be treated as no-expiry — default to 30 days
+  if (!endDate) {
+    console.error('[webhook] Could not determine endDate — defaulting to 30 days to prevent indefinite access');
+    endDate = new Date();
+    endDate.setDate(endDate.getDate() + 30);
+  }
 
   user.subscription.planId = planId;
   user.subscription.plan = planId; // Add legacy plan field for compatibility
   user.subscription.status = 'active';
   user.subscription.startDate = startDate;
   user.subscription.endDate = endDate;
-  user.subscription.stripePaymentIntentId = session.payment_intent;
+  user.subscription.stripeCustomerId = session.customer || user.subscription.stripeCustomerId;
+  user.subscription.stripeSubscriptionId = stripeSubscriptionId || user.subscription.stripeSubscriptionId;
+  user.subscription.stripePaymentIntentId = session.payment_intent || user.subscription.stripePaymentIntentId;
   user.subscription.paymentMethod = 'card';
-  
+  user.subscription.autoRenew = !!stripeSubscriptionId;
+
   // Set maxDevices based on plan type
   user.maxDevices = plan.features.maxDevices || (plan.type === 'shared' ? 2 : 1);
 
-  user.subscriptionHistory.push({
-    planId: planId,
-    startDate: startDate,
-    endDate: endDate,
-    amount: plan.price,
-    currency: plan.currency,
-    status: 'completed',
-    stripePaymentIntentId: session.payment_intent
-  });
+  // Dedup: use session.id as the canonical key (payment_intent is null in subscription mode)
+  const historyKey = session.id;
+  const alreadyRecorded = user.subscriptionHistory?.some(
+    h => h.stripePaymentIntentId === historyKey
+  );
+  if (!alreadyRecorded) {
+    user.subscriptionHistory.push({
+      planId: planId,
+      startDate: startDate,
+      endDate: endDate,
+      amount: plan.price,
+      currency: plan.currency,
+      status: 'completed',
+      stripePaymentIntentId: historyKey
+    });
+  }
 
   const isNewUser = !session.metadata.userId;
   
@@ -352,6 +271,83 @@ async function handlePaymentFailed(paymentIntent) {
   }
 }
 
+// Helper: handle invoice.paid — extends subscription on renewal
+async function handleInvoicePaid(invoice) {
+  // Skip the initial creation invoice — checkout.session.completed already handles it
+  if (invoice.billing_reason === 'subscription_create') {
+    console.log('invoice.paid skipped: initial invoice handled by checkout.session.completed');
+    return;
+  }
+
+  const subscriptionId = invoice.subscription;
+  const customerId = invoice.customer;
+
+  const user = await User.findOne({
+    $or: [
+      { 'subscription.stripeSubscriptionId': subscriptionId },
+      { 'subscription.stripeCustomerId': customerId }
+    ]
+  });
+
+  if (!user) {
+    console.warn(`invoice.paid: no user found for subscription ${subscriptionId} / customer ${customerId}`);
+    return;
+  }
+
+  // Derive new endDate from invoice line item period, then fall back to subscription object
+  let newEndDate = null;
+  const lineItem = invoice.lines?.data?.[0];
+  if (lineItem?.period?.end) {
+    newEndDate = new Date(lineItem.period.end * 1000);
+  }
+
+  if (!newEndDate && subscriptionId) {
+    try {
+      const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId);
+      if (stripeSubscription.current_period_end) {
+        newEndDate = new Date(stripeSubscription.current_period_end * 1000);
+      }
+    } catch (e) {
+      console.error('Failed to retrieve subscription for invoice.paid:', e.message);
+    }
+  }
+
+  user.subscription.status = 'active';
+  user.subscription.autoRenew = true;
+  if (newEndDate) {
+    user.subscription.endDate = newEndDate;
+  }
+
+  await user.save();
+  console.log(`Subscription renewed for user ${user._id}, new endDate: ${newEndDate}`);
+}
+
+// Helper: handle invoice.payment_failed — marks subscription as past_due
+async function handleInvoicePaymentFailed(invoice) {
+  const subscriptionId = invoice.subscription;
+  const customerId = invoice.customer;
+
+  const user = await User.findOne({
+    $or: [
+      { 'subscription.stripeSubscriptionId': subscriptionId },
+      { 'subscription.stripeCustomerId': customerId }
+    ]
+  });
+
+  if (!user) {
+    console.warn(`invoice.payment_failed: no user found for subscription ${subscriptionId} / customer ${customerId}`);
+    return;
+  }
+
+  // Mark past_due — do NOT cancel; Stripe will retry automatically
+  user.subscription.status = 'past_due';
+  await user.save();
+  console.log(`Subscription marked past_due for user ${user._id}`);
+
+  sendPaymentFailedEmail(user)
+    .catch(err => console.error('Payment failed email error:', err));
+}
+
 // Helper: handle Stripe charge refunded (one-time payment model cancellation)
 async function handleChargeRefunded(charge) {
   const user = await User.findOne({
@@ -388,6 +384,9 @@ async function handleSubscriptionDeleted(subscription) {
     const planId = user.subscription.planId;
     user.subscription.status = 'cancelled';
     user.subscription.autoRenew = false;
+    user.subscription.stripeSubscriptionId = null;
+    user.subscription.stripePaymentIntentId = null;
+    user.subscription.cancelAtPeriodEnd = false;
     await user.save();
     console.log(`Subscription deleted for user ${user._id}`);
 
@@ -409,7 +408,6 @@ async function handleSubscriptionUpdated(subscription) {
 
   if (!user) return;
 
-  const stripeStatus = subscription.status;
   // Map Stripe statuses to internal statuses
   const statusMap = {
     active: 'active',
@@ -420,11 +418,27 @@ async function handleSubscriptionUpdated(subscription) {
     trialing: 'active',
   };
 
-  const newStatus = statusMap[stripeStatus];
+  let changed = false;
+
+  const newStatus = statusMap[subscription.status];
   if (newStatus && user.subscription.status !== newStatus) {
     user.subscription.status = newStatus;
+    changed = true;
+  }
+
+  if (subscription.current_period_end) {
+    user.subscription.endDate = new Date(subscription.current_period_end * 1000);
+    changed = true;
+  }
+
+  if (typeof subscription.cancel_at_period_end === 'boolean') {
+    user.subscription.cancelAtPeriodEnd = subscription.cancel_at_period_end;
+    changed = true;
+  }
+
+  if (changed) {
     await user.save();
-    console.log(`Subscription status updated to ${newStatus} for user ${user._id}`);
+    console.log(`Subscription updated for user ${user._id}: status=${newStatus}, endDate=${user.subscription.endDate}`);
   }
 }
 
@@ -500,7 +514,6 @@ export const createPaymentIntent = async (req, res) => {
 };
 
 export default {
-  createCheckoutSession,
   verifyPayment,
   handleWebhook,
   getStripeConfig,

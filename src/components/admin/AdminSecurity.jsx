@@ -14,6 +14,18 @@ const authHeaders = () => {
   return h;
 };
 
+const PLAN_LABELS = {
+  individual_monthly:   'Individual Monthly',
+  individual_quarterly: 'Individual Quarterly',
+  shared_monthly:       'Shared Monthly',
+  shared_quarterly:     'Shared Quarterly',
+  free:                 'Free',
+};
+const planLabel = (u) => {
+  const id = u.subscription?.planId || u.subscription?.plan;
+  return PLAN_LABELS[id] || id || 'Free';
+};
+
 const timeAgo = (date) => {
   if (!date) return 'Never';
   const diff = Date.now() - new Date(date).getTime();
@@ -129,7 +141,7 @@ export default function AdminSecurity() {
                 <div key={i}>
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-white font-medium capitalize">{r._id || 'Unknown'}</span>
-                    <span className="text-sm text-brand-text-tertiary">{r.count.toLocaleString()} ({pct}%)</span>
+                    <span className="text-sm text-brand-text-tertiary">{(r.count ?? 0).toLocaleString()} ({pct}%)</span>
                   </div>
                   <div className="w-full h-3 bg-dark-surface rounded-full overflow-hidden">
                     <div className={`h-full rounded-full ${colors[r._id] || 'bg-gray-500'} transition-all`} style={{ width: `${pct}%` }} />
@@ -152,7 +164,7 @@ export default function AdminSecurity() {
                     <div className="flex items-center gap-2 min-w-0">
                       <span className="text-xs font-bold text-accent w-5">{i + 1}</span>
                       <span className="text-sm text-white truncate">{d.name}</span>
-                      <span className="text-xs text-brand-text-tertiary capitalize">({d.plan})</span>
+                      <span className="text-xs text-brand-text-tertiary">({PLAN_LABELS[d.planId] || PLAN_LABELS[d.plan] || d.plan || 'Free'})</span>
                     </div>
                     <span className="text-sm font-bold text-white flex-shrink-0">{d.count}</span>
                   </div>
@@ -182,7 +194,7 @@ export default function AdminSecurity() {
                     <p className="text-xs text-brand-text-tertiary truncate">{u.email}</p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <span className="text-xs font-medium text-accent capitalize">{u.subscription?.plan || 'free'}</span>
+                    <span className="text-xs font-medium text-accent">{planLabel(u)}</span>
                     <p className="text-xs text-brand-text-tertiary">{timeAgo(u.createdAt)}</p>
                   </div>
                 </div>
@@ -232,7 +244,7 @@ export default function AdminSecurity() {
                         {u.role}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-white capitalize">{u.subscription?.plan || 'free'}</td>
+                    <td className="px-4 py-3 text-sm text-white">{planLabel(u)}</td>
                     <td className="px-4 py-3 text-sm text-brand-text-tertiary">{timeAgo(u.lastLogin)}</td>
                   </tr>
                 ))}
@@ -251,7 +263,7 @@ function StatCard({ icon: Icon, label, value, color }) {
   return (
     <div className="bg-dark-elevated rounded-xl p-4 border border-white/10">
       <Icon className={`w-5 h-5 ${color} mb-2`} />
-      <div className="text-xl font-bold text-white">{value.toLocaleString()}</div>
+      <div className="text-xl font-bold text-white">{(value ?? 0).toLocaleString()}</div>
       <p className="text-xs text-brand-text-tertiary">{label}</p>
     </div>
   );
