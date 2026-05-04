@@ -259,22 +259,25 @@ function App() {
   const syncUserFromServer = useCallback(async () => {
     try {
       const fresh = await authService.getCurrentUser();
+      console.debug('[sync] fresh:', fresh?.role, fresh?.subscription?.status, fresh?.subscription?.planId);
       if (fresh) {
         setUser(prev => {
-          if (
-            prev?.role !== fresh.role ||
-            prev?.subscription?.planId !== fresh.subscription?.planId ||
-            prev?.subscription?.plan !== fresh.subscription?.plan ||
-            prev?.subscription?.status !== fresh.subscription?.status ||
-            prev?.isActive !== fresh.isActive
-          ) {
+          const roleChanged = prev?.role !== fresh.role;
+          const planIdChanged = prev?.subscription?.planId !== fresh.subscription?.planId;
+          const planChanged = prev?.subscription?.plan !== fresh.subscription?.plan;
+          const statusChanged = prev?.subscription?.status !== fresh.subscription?.status;
+          const activeChanged = prev?.isActive !== fresh.isActive;
+          console.debug('[sync] prev role:', prev?.role, '| changed:', { roleChanged, planIdChanged, planChanged, statusChanged, activeChanged });
+          if (roleChanged || planIdChanged || planChanged || statusChanged || activeChanged) {
             return fresh;
           }
           return prev;
         });
+      } else {
+        console.debug('[sync] getCurrentUser returned null');
       }
-    } catch {
-      // ignore transient errors
+    } catch (err) {
+      console.debug('[sync] error:', err.message);
     }
   }, []);
 
