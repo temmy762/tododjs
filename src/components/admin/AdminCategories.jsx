@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Plus, Pencil, Trash2, Save, X, Tag,
   Loader, AlertCircle, CheckCircle, RefreshCw, Hash,
-  Inbox, Music, ChevronDown
+  Inbox, Music, ChevronDown, ListMusic
 } from 'lucide-react';
 import API_URL from '../../config/api';
 
@@ -353,6 +353,11 @@ export default function AdminCategories() {
                   <span className="text-brand-text-tertiary text-xs">
                     {(cat.trackCount || 0).toLocaleString()} {t('admin.tracks')}
                   </span>
+                  {cat.mashupCount > 0 && (
+                    <span className="text-brand-text-tertiary text-xs flex items-center gap-1">
+                      <ListMusic size={10} /> {cat.mashupCount.toLocaleString()} mashups
+                    </span>
+                  )}
                   {cat.description && (
                     <span className="text-brand-text-tertiary/60 text-xs truncate max-w-xs">{cat.description}</span>
                   )}

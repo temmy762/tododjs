@@ -14,7 +14,7 @@ export const getCategories = async (req, res) => {
     const categories = await Category.find(filter).sort('sortOrder name').lean();
 
     // Attach live track + mashup counts per category
-    const [trackCounts, mashupCounts] = await Promise.all([
+    const [trackCounts, mashupCounts, totalMashups] = await Promise.all([
       Track.aggregate([
         { $match: { status: 'published', category: { $ne: null } } },
         { $group: { _id: '$category', count: { $sum: 1 } } }
@@ -22,7 +22,8 @@ export const getCategories = async (req, res) => {
       Mashup.aggregate([
         { $match: { isPublished: true, category: { $nin: [null, 'Others', ''] } } },
         { $group: { _id: '$category', count: { $sum: 1 } } }
-      ])
+      ]),
+      Mashup.countDocuments({ isPublished: true })
     ]);
     const countMap = Object.fromEntries(trackCounts.map(c => [c._id, c.count]));
     const mashupCountMap = Object.fromEntries(mashupCounts.map(c => [c._id, c.count]));
@@ -30,7 +31,8 @@ export const getCategories = async (req, res) => {
     const data = categories.map(c => ({
       ...c,
       trackCount: countMap[c.name] || 0,
-      mashupCount: mashupCountMap[c.name] || 0
+      // live-mashups is a navigation hub: show total published mashup count
+      mashupCount: c.slug === 'live-mashups' ? totalMashups : (mashupCountMap[c.name] || 0)
     }));
 
     res.json({ success: true, data });
