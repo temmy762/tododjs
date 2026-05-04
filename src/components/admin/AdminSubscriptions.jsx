@@ -44,14 +44,38 @@ const StatusBadge = ({ status }) => {
   );
 };
 
-const PlanBadge = ({ plan }) => {
-  const map = {
-    premium: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
-    pro:     'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  };
+const PLAN_LABELS = {
+  individual_monthly:   'Indiv. Monthly',
+  individual_quarterly: 'Indiv. Quarterly',
+  shared_monthly:       'Shared Monthly',
+  shared_quarterly:     'Shared Quarterly',
+  'individual-monthly':   'Indiv. Monthly',
+  'individual-quarterly': 'Indiv. Quarterly',
+  'shared-monthly':       'Shared Monthly',
+  'shared-quarterly':     'Shared Quarterly',
+  premium: 'Premium',
+  pro:     'Pro',
+};
+const PLAN_COLORS = {
+  individual_monthly:   'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  individual_quarterly: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  shared_monthly:       'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  shared_quarterly:     'bg-pink-500/20 text-pink-400 border-pink-500/30',
+  'individual-monthly':   'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  'individual-quarterly': 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
+  'shared-monthly':       'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  'shared-quarterly':     'bg-pink-500/20 text-pink-400 border-pink-500/30',
+  premium: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+  pro:     'bg-orange-500/20 text-orange-400 border-orange-500/30',
+};
+
+const PlanBadge = ({ plan, planId }) => {
+  const key = plan || planId;
+  const cls = PLAN_COLORS[key] || 'bg-white/5 text-brand-text-tertiary border-white/10';
+  const label = PLAN_LABELS[key] || key || 'Free';
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${map[plan] || 'bg-white/5 text-brand-text-tertiary border-white/10'}`}>
-      {plan || 'Free'}
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold border ${cls}`}>
+      {label}
     </span>
   );
 };
@@ -91,8 +115,8 @@ export default function AdminSubscriptions() {
   const [expandedRow, setExpandedRow] = useState(null);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 400);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setDebouncedSearch(search), 400);
+    return () => clearTimeout(timer);
   }, [search]);
 
   useEffect(() => { fetchData(); }, []);
@@ -136,7 +160,7 @@ export default function AdminSubscriptions() {
     const headers = ['Name','Email','Phone','Plan','Status','Start Date','End Date','Auto Renew','Devices','Stripe Customer ID','Stripe Subscription ID','Last Login','Member Since'];
     const rows = customers.map(u => [
       u.name, u.email, u.phoneNumber || '',
-      u.subscription?.plan || 'free',
+      PLAN_LABELS[u.subscription?.plan || u.subscription?.planId] || u.subscription?.plan || u.subscription?.planId || 'Free',
       u.subscription?.status || 'inactive',
       fmt(u.subscription?.startDate),
       fmt(u.subscription?.endDate),
@@ -348,7 +372,7 @@ export default function AdminSubscriptions() {
                           </div>
                         </td>
                         {/* Plan */}
-                        <td className="px-4 py-3"><PlanBadge plan={u.subscription?.plan} /></td>
+                        <td className="px-4 py-3"><PlanBadge plan={u.subscription?.plan} planId={u.subscription?.planId} /></td>
                         {/* Status */}
                         <td className="px-4 py-3"><StatusBadge status={u.subscription?.status} /></td>
                         {/* Start */}
