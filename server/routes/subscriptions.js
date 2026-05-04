@@ -2,6 +2,7 @@ import express from 'express';
 import {
   getPlans,
   getPlan,
+  updatePlan,
   getSubscriptionStatus,
   activateSubscription,
   cancelSubscription,
@@ -13,13 +14,16 @@ import {
   getSubscriptionHistory,
   checkWhatsAppEligibility
 } from '../controllers/subscriptionController.js';
-import { protect } from '../middleware/auth.js';
+import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Public routes
 router.get('/plans', getPlans);
 router.get('/plans/:planId', getPlan);
+
+// Admin routes
+router.put('/plans/:planId', protect, authorize('admin'), updatePlan);
 
 // Protected routes
 router.get('/status', protect, getSubscriptionStatus);

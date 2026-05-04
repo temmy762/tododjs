@@ -10,10 +10,11 @@ import API_URL from '../../config/api';
 
 const API = API_URL;
 const getToken = () => localStorage.getItem('token');
-const authHeaders = () => {
+const authHeaders = (json = false) => {
   const h = {};
   const token = getToken();
   if (token) h['Authorization'] = `Bearer ${token}`;
+  if (json) h['Content-Type'] = 'application/json';
   return h;
 };
 
@@ -73,6 +74,9 @@ export default function AdminSubscriptions() {
   const [customersLoading, setCustomersLoading] = useState(false);
   const [stats, setStats] = useState({ totalUsers: 0, activeCount: 0, freeCount: 0, individualMonthlyCount: 0, individualQuarterlyCount: 0, sharedMonthlyCount: 0, sharedQuarterlyCount: 0, newThisMonth: 0, estimatedRevenue: 0 });
   const [editingPlan, setEditingPlan] = useState(null);
+  const [editForm, setEditForm] = useState({});
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [plans, setPlans] = useState([]);
 
   // Customers table state
@@ -148,6 +152,43 @@ export default function AdminSubscriptions() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'customers.csv'; a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const openEditModal = (plan) => {
+    setEditForm({
+      price: plan.price,
+      durationDays: plan.durationDays,
+      type: plan.type,
+      duration: plan.duration,
+      features: {
+        unlimitedDownloads: !!plan.features?.unlimitedDownloads,
+        fullWebAccess:       !!plan.features?.fullWebAccess,
+        whatsappSupport:     !!plan.features?.whatsappSupport,
+        noCommitment:        !!plan.features?.noCommitment,
+      },
+    });
+    setSaveError('');
+    setEditingPlan(plan);
+  };
+
+  const handleSavePlan = async () => {
+    setSaving(true);
+    setSaveError('');
+    try {
+      const res = await fetch(`${API}/subscriptions/plans/${editingPlan.planId}`, {
+        method: 'PUT',
+        headers: authHeaders(true),
+        body: JSON.stringify(editForm),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message || 'Failed to save');
+      setPlans(prev => prev.map(p => p.planId === editingPlan.planId ? data.data : p));
+      setEditingPlan(null);
+    } catch (err) {
+      setSaveError(err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const fetchData = async () => {
@@ -576,7 +617,7 @@ export default function AdminSubscriptions() {
                     </div>
 
                     <button
-                      onClick={() => setEditingPlan(plan)}
+                      onClick={() => openEditModal(plan)}
                       className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-dark-surface hover:bg-dark-elevated border border-white/10 text-white font-medium transition-all duration-200"
                     >
                       <Edit className="w-4 h-4" />
@@ -605,7 +646,8 @@ export default function AdminSubscriptions() {
                   <input
                     type="number"
                     step="0.01"
-                    defaultValue={editingPlan.price}
+                    value={editForm.price ?? ''}
+                    onChange={e => setEditForm(f => ({ ...f, price: e.target.value }))}
                     className="w-full px-4 py-2.5 bg-dark-surface border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent"
                   />
                 </div>
@@ -613,7 +655,8 @@ export default function AdminSubscriptions() {
                   <label className="block text-sm font-medium text-white mb-2">{t('admin.durationDays')}</label>
                   <input
                     type="number"
-                    defaultValue={editingPlan.durationDays}
+                    value={editForm.durationDays ?? ''}
+                    onChange={e => setEditForm(f => ({ ...f, durationDays: e.target.value }))}
                     className="w-full px-4 py-2.5 bg-dark-surface border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent"
                   />
                 </div>
@@ -622,7 +665,8 @@ export default function AdminSubscriptions() {
                 <div>
                   <label className="block text-sm font-medium text-white mb-2">{t('admin.planType')}</label>
                   <select
-                    defaultValue={editingPlan.type}
+                    value={editForm.type ?? ''}
+                    onChange={e => setEditForm(f => ({ ...f, type: e.target.value }))}
                     className="w-full px-4 py-2.5 bg-dark-surface border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent"
                   >
                     <option value="individual">{t('subscription.individual')}</option>
@@ -632,7 +676,8 @@ export default function AdminSubscriptions() {
                 <div>
                   <label className="block text-sm font-medium text-white mb-2">{t('admin.durationType')}</label>
                   <select
-                    defaultValue={editingPlan.duration}
+                    value={editForm.duration ?? ''}
+                    onChange={e => setEditForm(f => ({ ...f, duration: e.target.value }))}
                     className="w-full px-4 py-2.5 bg-dark-surface border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent"
                   >
                     <option value="monthly">{t('subscription.monthly')}</option>
@@ -643,54 +688,46 @@ export default function AdminSubscriptions() {
               <div>
                 <label className="block text-sm font-medium text-white mb-3">{t('admin.features')}</label>
                 <div className="space-y-3">
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      defaultChecked={editingPlan.features?.unlimitedDownloads}
-                      className="w-4 h-4 rounded border-white/20 bg-dark-surface"
-                    />
-                    <span className="text-sm text-white">{t('subscription.unlimitedDownloads')}</span>
-                  </label>
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      defaultChecked={editingPlan.features?.fullWebAccess}
-                      className="w-4 h-4 rounded border-white/20 bg-dark-surface"
-                    />
-                    <span className="text-sm text-white">{t('subscription.fullWebAccess')}</span>
-                  </label>
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      defaultChecked={editingPlan.features?.whatsappSupport}
-                      className="w-4 h-4 rounded border-white/20 bg-dark-surface"
-                    />
-                    <span className="text-sm text-white">{t('subscription.whatsappSupport')}</span>
-                  </label>
-                  <label className="flex items-center gap-3">
-                    <input
-                      type="checkbox"
-                      defaultChecked={editingPlan.features?.noCommitment}
-                      className="w-4 h-4 rounded border-white/20 bg-dark-surface"
-                    />
-                    <span className="text-sm text-white">{t('subscription.noCommitment')}</span>
-                  </label>
+                  {[
+                    { key: 'unlimitedDownloads', label: t('subscription.unlimitedDownloads') },
+                    { key: 'fullWebAccess',       label: t('subscription.fullWebAccess') },
+                    { key: 'whatsappSupport',     label: t('subscription.whatsappSupport') },
+                    { key: 'noCommitment',        label: t('subscription.noCommitment') },
+                  ].map(({ key, label }) => (
+                    <label key={key} className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={!!editForm.features?.[key]}
+                        onChange={e => setEditForm(f => ({ ...f, features: { ...f.features, [key]: e.target.checked } }))}
+                        className="w-4 h-4 rounded border-white/20 bg-dark-surface"
+                      />
+                      <span className="text-sm text-white">{label}</span>
+                    </label>
+                  ))}
                 </div>
               </div>
             </div>
-            <div className="p-6 border-t border-white/10 flex items-center justify-end gap-3">
-              <button
-                onClick={() => setEditingPlan(null)}
-                className="px-4 py-2.5 rounded-lg bg-dark-surface hover:bg-dark-elevated border border-white/10 text-white font-medium transition-all duration-200"
-              >
-                {t('common.cancel')}
-              </button>
-              <button
-                onClick={() => setEditingPlan(null)}
-                className="px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-all duration-200"
-              >
-                {t('admin.saveChanges')}
-              </button>
+            <div className="p-6 border-t border-white/10 space-y-3">
+              {saveError && (
+                <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-4 py-2">{saveError}</p>
+              )}
+              <div className="flex items-center justify-end gap-3">
+                <button
+                  onClick={() => setEditingPlan(null)}
+                  disabled={saving}
+                  className="px-4 py-2.5 rounded-lg bg-dark-surface hover:bg-dark-elevated border border-white/10 text-white font-medium transition-all duration-200 disabled:opacity-50"
+                >
+                  {t('common.cancel')}
+                </button>
+                <button
+                  onClick={handleSavePlan}
+                  disabled={saving}
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-all duration-200 disabled:opacity-60"
+                >
+                  {saving && <RefreshCw className="w-4 h-4 animate-spin" />}
+                  {saving ? t('common.saving') || 'Saving…' : t('admin.saveChanges')}
+                </button>
+              </div>
             </div>
           </div>
         </div>

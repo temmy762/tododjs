@@ -466,6 +466,40 @@ export const checkWhatsAppEligibility = async (req, res) => {
   }
 };
 
+// @desc    Update a subscription plan (price, features, etc.)
+// @route   PUT /api/subscriptions/plans/:planId
+// @access  Private/Admin
+export const updatePlan = async (req, res) => {
+  try {
+    const plan = await SubscriptionPlan.findOne({ planId: req.params.planId });
+    if (!plan) {
+      return res.status(404).json({ success: false, message: 'Plan not found' });
+    }
+
+    const { price, durationDays, type, duration, name, nameEs, badge, badgeEs, isActive, isBestOption, features } = req.body;
+
+    if (price !== undefined)         plan.price        = parseFloat(price);
+    if (durationDays !== undefined)  plan.durationDays = parseInt(durationDays);
+    if (type !== undefined)          plan.type         = type;
+    if (duration !== undefined)      plan.duration     = duration;
+    if (name !== undefined)          plan.name         = name;
+    if (nameEs !== undefined)        plan.nameEs       = nameEs;
+    if (badge !== undefined)         plan.badge        = badge;
+    if (badgeEs !== undefined)       plan.badgeEs      = badgeEs;
+    if (isActive !== undefined)      plan.isActive     = isActive;
+    if (isBestOption !== undefined)  plan.isBestOption = isBestOption;
+
+    if (features && typeof features === 'object') {
+      Object.assign(plan.features, features);
+    }
+
+    await plan.save();
+    res.status(200).json({ success: true, data: plan });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get subscription history
 // @route   GET /api/subscriptions/history
 // @access  Private
