@@ -76,8 +76,13 @@ export default function AdminUsers() {
       if (data.success) {
         setEditingUser(null);
         fetchUsers(pagination.page);
+      } else {
+        alert(data.message || 'Failed to update user');
       }
-    } catch (err) { console.error('Update failed:', err); }
+    } catch (err) {
+      console.error('Update failed:', err);
+      alert('Network error — could not save changes');
+    }
   };
 
   const getRoleIcon = (role) => {
@@ -252,7 +257,7 @@ export default function AdminUsers() {
                             <span className="text-sm font-medium text-white">{getPlanLabel(user)}</span>
                             {user.role !== 'admin' && !isSubActive(user) && (user.subscription?.planId || (user.subscription?.plan && user.subscription?.plan !== 'free')) && (
                               <div className="text-[10px] text-yellow-500/80 font-medium">
-                                {user.subscription?.status === 'cancelled' ? 'Cancelled' : user.subscription?.status === 'expired' ? 'Expired' : 'Inactive'}
+                                {user.subscription?.status === 'cancelled' ? 'Sub: Cancelled' : user.subscription?.status === 'expired' ? 'Sub: Expired' : 'Sub: Inactive'}
                               </div>
                             )}
                           </div>
@@ -380,7 +385,7 @@ function EditUserModal({ user, onClose, onSave }) {
     return !!plan && plan !== 'free';
   })();
   const [plan, setPlan] = useState(
-    isSubActive ? normalizePlan(user.subscription?.planId || user.subscription?.plan || 'free') : 'free'
+    normalizePlan(user.subscription?.planId || user.subscription?.plan || 'free')
   );
   const [isActive, setIsActive] = useState(user.isActive !== false);
 
