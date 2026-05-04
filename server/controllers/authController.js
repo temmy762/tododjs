@@ -253,6 +253,7 @@ export const getMe = async (req, res) => {
     const avatar = await signAvatarUrl(user);
     const userData = user.toObject();
     userData.avatar = avatar;
+    userData.id = user._id.toString();
 
     // Re-sync the httpOnly cookie with the current Bearer token
     // This prevents stale cookies (e.g. from a previous admin session)

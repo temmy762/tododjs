@@ -263,6 +263,7 @@ function App() {
         setUser(prev => {
           if (
             prev?.role !== fresh.role ||
+            prev?.subscription?.planId !== fresh.subscription?.planId ||
             prev?.subscription?.plan !== fresh.subscription?.plan ||
             prev?.subscription?.status !== fresh.subscription?.status ||
             prev?.isActive !== fresh.isActive
@@ -277,23 +278,27 @@ function App() {
     }
   }, []);
 
-  // Re-fetch user data every 15 s and immediately on page focus/tab-switch
+  // Re-fetch user data every 10 s and immediately on page focus/tab-switch
   // so admin-applied role/plan changes take effect without re-login.
   useEffect(() => {
     if (!user) return;
 
-    const interval = setInterval(syncUserFromServer, 15 * 1000);
+    const interval = setInterval(syncUserFromServer, 10 * 1000);
 
     const handleVisibility = () => {
       if (document.visibilityState === 'visible') syncUserFromServer();
     };
+    const handleFocus = () => syncUserFromServer();
+
     document.addEventListener('visibilitychange', handleVisibility);
+    window.addEventListener('focus', handleFocus);
 
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('focus', handleFocus);
     };
-  }, [user?._id, syncUserFromServer]);
+  }, [user?.id, syncUserFromServer]);
 
   useEffect(() => {
     if (!searchQuery.trim()) {
