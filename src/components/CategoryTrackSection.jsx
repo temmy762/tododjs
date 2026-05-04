@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Loader, Music, ChevronLeft, ChevronRight, List, Grid3x3 } from 'lucide-react';
 import TrackListView from './TrackListView';
@@ -33,45 +33,39 @@ export default function CategoryTrackSection({
   const [totalPages, setTotalPages] = useState(1);
   const [totalTracks, setTotalTracks] = useState(0);
   const [viewMode, setViewMode] = useState('list');
-  const resettingPage = useRef(false);
   const LIMIT = 30;
 
-  const fetchTracks = useCallback(async () => {
-    if (!categoryName) return;
-    if (resettingPage.current) {
-      resettingPage.current = false;
-      return;
-    }
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        category: categoryName,
-        page,
-        limit: LIMIT,
-        sort: '-dateAdded',
-      });
-      const res = await fetch(`${API_URL}/tracks/library?${params}`);
-      const json = await res.json();
-      if (json.success) {
-        setTracks(json.data.map(mapTrack));
-        setTotalPages(json.pagination?.pages || 1);
-        setTotalTracks(json.pagination?.total || 0);
-      }
-    } catch (err) {
-      console.error('CategoryTrackSection fetch error:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [categoryName, page]);
-
   useEffect(() => {
-    resettingPage.current = true;
     setPage(1);
   }, [categoryName]);
 
   useEffect(() => {
-    fetchTracks();
-  }, [fetchTracks]);
+    if (!categoryName) return;
+    let cancelled = false;
+    setLoading(true);
+    (async () => {
+      try {
+        const params = new URLSearchParams({
+          category: categoryName,
+          page,
+          limit: LIMIT,
+          sort: '-dateAdded',
+        });
+        const res = await fetch(`${API_URL}/tracks/library?${params}`);
+        const json = await res.json();
+        if (!cancelled && json.success) {
+          setTracks(json.data.map(mapTrack));
+          setTotalPages(json.pagination?.pages || 1);
+          setTotalTracks(json.pagination?.total || 0);
+        }
+      } catch (err) {
+        console.error('CategoryTrackSection fetch error:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [categoryName, page]);
 
   const handlePageChange = (p) => {
     setPage(p);
