@@ -11,7 +11,8 @@ import {
   reanalyzeAlbumTracks,
   uploadTrackThumbnail,
   uploadTracks,
-  fixMissingBpm
+  fixMissingBpm,
+  analyzeTrackMetadata
 } from '../controllers/trackController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -49,6 +50,8 @@ router.get('/library', libraryTracks);
 router.post('/upload', protect, authorize('admin'), trackFileUpload.single('file'), uploadTracks);
 router.post('/reanalyze/:albumId', protect, authorize('admin'), reanalyzeAlbumTracks);
 router.patch('/fix-bpm', protect, authorize('admin'), fixMissingBpm);
+
+router.post('/:id/analyze', protect, authorize('admin'), analyzeTrackMetadata);
 
 router.route('/:id')
   .get(getTrack)

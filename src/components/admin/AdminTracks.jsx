@@ -814,10 +814,43 @@ function EditTrackModal({ track, onClose, onSave, saveError }) {
   const [artist, setArtist] = useState(track.artist || '');
   const [bpm, setBpm] = useState(track.bpm || '');
   const [genre, setGenre] = useState(track.genre || '');
+  const [tonality, setTonality] = useState(track.tonality || {});
+  const [camelotInput, setCamelotInput] = useState(track.tonality?.camelot || '');
   const [coverPreview, setCoverPreview] = useState(track.coverArt || '');
   const [thumbnailUploading, setThumbnailUploading] = useState(false);
   const [thumbnailMsg, setThumbnailMsg] = useState('');
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analyzeMsg, setAnalyzeMsg] = useState('');
   const thumbInputRef = useRef(null);
+
+  const handleAnalyze = async () => {
+    setAnalyzing(true);
+    setAnalyzeMsg('');
+    try {
+      const res = await fetch(`${API}/tracks/${track._id}/analyze`, {
+        method: 'POST',
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      if (data.success) {
+        if (data.data.bpm) setBpm(String(data.data.bpm));
+        if (data.data.tonality) {
+          setTonality(data.data.tonality);
+          setCamelotInput(data.data.tonality.camelot || '');
+        }
+        const src = data.data.tonality?.source || 'unknown';
+        const key = data.data.tonality?.camelot || '—';
+        const detectedBpm = data.data.bpm || '—';
+        setAnalyzeMsg(`✓ ${key} | ${detectedBpm} BPM  (source: ${src})`);
+      } else {
+        setAnalyzeMsg(`✗ ${data.message || 'Detection failed'}`);
+      }
+    } catch (err) {
+      setAnalyzeMsg(`✗ Network error: ${err.message}`);
+    } finally {
+      setAnalyzing(false);
+    }
+  };
 
   const handleThumbnailUpload = async (file) => {
     if (!file || !file.type.startsWith('image/')) return;
@@ -919,6 +952,57 @@ function EditTrackModal({ track, onClose, onSave, saveError }) {
               <input value={genre} onChange={e => setGenre(e.target.value)} className="w-full px-4 py-2.5 bg-dark-elevated border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent" />
             </div>
           </div>
+
+          <div>
+            <label className="block text-sm font-medium text-brand-text-tertiary mb-1">{t('tracks.tonality')} / Camelot Key</label>
+            <div className="flex gap-2">
+              <div className="flex-1 px-4 py-2.5 bg-dark-elevated border border-white/10 rounded-lg flex items-center justify-between">
+                <span className={`font-mono font-bold text-lg ${tonality.camelot ? 'text-white' : 'text-brand-text-tertiary'}`}>
+                  {tonality.camelot || '—'}
+                </span>
+                {tonality.source && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                    tonality.source === 'audio-analysis' ? 'bg-green-600/40 text-green-300' :
+                    tonality.source === 'id3-tag' ? 'bg-blue-600/40 text-blue-300' :
+                    tonality.source === 'openai' || tonality.source === 'openai-websearch' ? 'bg-yellow-600/40 text-yellow-300' :
+                    tonality.source === 'spotify' || tonality.source === 'audd' ? 'bg-purple-600/40 text-purple-300' :
+                    tonality.source === 'manual' ? 'bg-accent/40 text-white' :
+                    'bg-white/10 text-brand-text-tertiary'
+                  }`}>
+                    {tonality.source}
+                  </span>
+                )}
+              </div>
+              <input
+                value={camelotInput}
+                onChange={e => {
+                  const val = e.target.value.toUpperCase();
+                  setCamelotInput(val);
+                  setTonality(prev => ({ ...prev, camelot: val, source: 'manual', confidence: 1.0, needsManualReview: false }));
+                }}
+                placeholder="e.g. 8A"
+                maxLength={3}
+                className="w-24 px-3 py-2.5 bg-dark-elevated border border-white/10 rounded-lg text-white font-mono text-sm focus:outline-none focus:border-accent placeholder-brand-text-tertiary"
+              />
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleAnalyze}
+            disabled={analyzing}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-dark-elevated border border-accent/30 hover:border-accent/60 hover:bg-accent/5 text-white font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {analyzing
+              ? <Loader className="w-4 h-4 animate-spin text-accent" />
+              : <Sparkles className="w-4 h-4 text-accent" />}
+            <span className="text-sm">{analyzing ? 'Detecting...' : 'Detect BPM & Key (AI + Web Search)'}</span>
+          </button>
+          {analyzeMsg && (
+            <p className={`text-xs px-1 ${
+              analyzeMsg.startsWith('✓') ? 'text-green-400' : 'text-red-400'
+            }`}>{analyzeMsg}</p>
+          )}
         </div>
         {saveError && (
           <div className="mt-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
@@ -927,7 +1011,7 @@ function EditTrackModal({ track, onClose, onSave, saveError }) {
         )}
         <div className="flex gap-3 mt-6">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white font-medium transition-colors">{t('common.cancel')}</button>
-          <button onClick={() => onSave(track._id, { title, artist, bpm: parseInt(bpm) || undefined, genre })} className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-colors">{t('common.save')}</button>
+          <button onClick={() => onSave(track._id, { title, artist, bpm: parseInt(bpm) || undefined, genre, tonality: Object.keys(tonality).length ? tonality : undefined })} className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-colors">{t('common.save')}</button>
         </div>
       </div>
     </div>

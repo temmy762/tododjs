@@ -342,7 +342,7 @@ export const getTrack = async (req, res) => {
 // @access  Private/Admin
 export const updateTrack = async (req, res) => {
   try {
-    const { title, artist, featuredArtist, bpm, genre } = req.body;
+    const { title, artist, featuredArtist, bpm, genre, tonality } = req.body;
 
     const track = await Track.findById(req.params.id);
 
@@ -359,6 +359,7 @@ export const updateTrack = async (req, res) => {
     if (featuredArtist !== undefined) track.featuredArtist = featuredArtist;
     if (bpm !== undefined) track.bpm = bpm;
     if (genre) track.genre = genre;
+    if (tonality !== undefined) track.tonality = tonality;
 
     await track.save();
 
@@ -421,9 +422,28 @@ export const getTrackPlaybackUrl = async (req, res) => {
   }
 };
 
-// @desc    Delete track
-// @route   DELETE /api/tracks/:id
+// @desc    Analyze a single track using metadata-only detection (Spotify/AudD + OpenAI web-search)
+// @route   POST /api/tracks/:id/analyze
 // @access  Private/Admin
+export const analyzeTrackMetadata = async (req, res) => {
+  try {
+    const track = await Track.findById(req.params.id).select('title artist');
+    if (!track) {
+      return res.status(404).json({ success: false, message: 'Track not found' });
+    }
+    const metadata = { title: track.title, artist: track.artist };
+    // Empty buffer — audio analysis steps fail gracefully;
+    // Spotify/AudD and OpenAI web-search steps run normally (metadata-only)
+    const { tonality, detectedBpm } = await detectTonality(Buffer.alloc(0), metadata);
+    res.status(200).json({
+      success: true,
+      data: { tonality, bpm: detectedBpm }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Re-analyze all tracks in an album with Essentia.js audio analysis
 // @route   POST /api/tracks/reanalyze/:albumId
 // @access  Private/Admin

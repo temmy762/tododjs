@@ -84,14 +84,14 @@ export default function AdminDownloadStats() {
   const totalDownloads = stats.totalDownloads ?? 0;
 
   return (
-    <div className="p-8">
+    <div className="p-4 md:p-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-bold mb-2">Download Statistics</h1>
           <p className="text-brand-text-tertiary">Track and analyze download activity</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {['24h', '7d', '30d', '90d'].map((p) => (
             <button
               key={p}
@@ -166,17 +166,25 @@ export default function AdminDownloadStats() {
       {/* Downloads Over Time Chart */}
       <div className="bg-white/5 rounded-lg p-6 border border-white/10">
         <h2 className="text-xl font-bold mb-4">Downloads Over Time</h2>
-        <div className="h-64 flex items-end gap-2">
+
+        {/* Mobile: SVG area line chart */}
+        <div className="md:hidden">
+          <MobileLineChart data={stats.downloadsOverTime} />
+        </div>
+
+        {/* Desktop: bar chart */}
+        <div className="hidden md:block overflow-x-auto">
+        <div className="h-64 flex items-end gap-1" style={{ minWidth: `${Math.max(300, (stats.downloadsOverTime?.length || 0) * 14)}px` }}>
           {stats.downloadsOverTime?.map((day, index) => {
             const maxCount = Math.max(...stats.downloadsOverTime.map(d => d.count));
-            const height = (day.count / maxCount) * 100;
-            
+            const heightPx = Math.max(4, (day.count / maxCount) * 220);
+
             return (
               <div key={index} className="flex-1 flex flex-col items-center gap-2">
                 <div className="relative w-full group">
                   <div
                     className="w-full bg-accent rounded-t transition-all hover:bg-accent-hover cursor-pointer"
-                    style={{ height: `${height}%`, minHeight: '4px' }}
+                    style={{ height: `${heightPx}px` }}
                   />
                   <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 bg-dark-elevated px-3 py-2 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none">
                     <div className="font-bold">{day.count}</div>
@@ -193,8 +201,59 @@ export default function AdminDownloadStats() {
             <p className="text-center text-brand-text-tertiary w-full py-12">No data available</p>
           )}
         </div>
+        </div>
       </div>
     </div>
+  );
+}
+
+function MobileLineChart({ data }) {
+  if (!data || data.length === 0) {
+    return <p className="text-center text-brand-text-tertiary py-12">No data available</p>;
+  }
+
+  const n = data.length;
+  const maxCount = Math.max(...data.map(d => d.count));
+  const L = 8, R = 392, T = 20, B = 130;
+  const W = R - L, H = B - T;
+  const px = (i) => L + (i / Math.max(n - 1, 1)) * W;
+  const py = (c) => T + (1 - c / maxCount) * H;
+  const pts = data.map((d, i) => ({ x: px(i), y: py(d.count), count: d.count }));
+  const linePoints = pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ');
+  const areaPath = `M${L},${B} L${pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L')} L${R},${B} Z`;
+  const peakIdx = pts.reduce((mi, p, i, arr) => p.count > arr[mi].count ? i : mi, 0);
+  const labelIdxs = [...new Set([0, Math.floor((n - 1) / 2), n - 1])];
+
+  return (
+    <svg viewBox="0 0 400 160" className="w-full h-auto" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#e50914" stopOpacity="0.45" />
+          <stop offset="100%" stopColor="#e50914" stopOpacity="0.02" />
+        </linearGradient>
+      </defs>
+      {[0.25, 0.5, 0.75, 1].map(v => (
+        <line key={v} x1={L} y1={(T + (1 - v) * H).toFixed(1)} x2={R} y2={(T + (1 - v) * H).toFixed(1)} stroke="rgba(255,255,255,0.07)" strokeWidth="0.5" />
+      ))}
+      <path d={areaPath} fill="url(#areaGrad)" />
+      <polyline points={linePoints} fill="none" stroke="#e50914" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={pts[peakIdx].x.toFixed(1)} cy={pts[peakIdx].y.toFixed(1)} r="3" fill="#e50914" />
+      <text x={pts[peakIdx].x.toFixed(1)} y={(pts[peakIdx].y - 6).toFixed(1)} textAnchor="middle" fontSize="8" fill="white" fontWeight="bold">{pts[peakIdx].count}</text>
+      <circle cx={pts[0].x.toFixed(1)} cy={pts[0].y.toFixed(1)} r="2" fill="#e50914" />
+      {n > 1 && <circle cx={pts[n - 1].x.toFixed(1)} cy={pts[n - 1].y.toFixed(1)} r="2" fill="#e50914" />}
+      {labelIdxs.map((idx, i) => (
+        <text
+          key={idx}
+          x={pts[idx].x.toFixed(1)}
+          y="152"
+          textAnchor={i === 0 ? 'start' : i === labelIdxs.length - 1 ? 'end' : 'middle'}
+          fontSize="7"
+          fill="rgba(207,207,207,0.8)"
+        >
+          {new Date(data[idx]._id).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+        </text>
+      ))}
+    </svg>
   );
 }
 
