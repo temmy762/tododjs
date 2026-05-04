@@ -27,6 +27,7 @@ export default function TopBar({ onSearchFocus, onSearchChange, searchQuery, onS
   };
 
   useEffect(() => {
+    setSubscriptionStatus(null); // Clear stale data immediately before fetching
     if (user) {
       fetchSubscriptionStatus();
     }
