@@ -14,6 +14,7 @@ const mapTrack = (t) => ({
   bpm: t.bpm || 0,
   genre: t.genre || '',
   tonality: t.tonality?.camelot || '',
+  tonalityData: t.tonality || null,
   dateAdded: t.dateAdded || t.createdAt,
   collection: t.collection || t.genre || '',
   coverArt: t.coverArt || t.albumId?.coverArt || '',
@@ -42,6 +43,7 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
   useEffect(() => {
     setFilterCategory(initialCategory);
     setFilterCategoryName(initialCategoryName);
+    setFilterTonality('all');
     setCurrentPage(1);
   }, [initialCategory, initialCategoryName]);
 
@@ -110,7 +112,9 @@ export default function LibraryPage({ onTrackInteraction, userFavorites = new Se
       if (filterTonality !== 'all') params.set('tonality', filterTonality);
       if (filterCategory) params.set('category', filterCategory);
 
-      const res = await fetch(`${API_URL}/tracks/library?${params}`);
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(`${API_URL}/tracks/library?${params}`, { headers });
       if (!res.ok) { console.error('Library fetch error:', res.status); return; }
       const json = await res.json();
       if (json.success) {

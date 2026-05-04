@@ -295,20 +295,6 @@ export const logout = async (req, res) => {
     token = req.cookies.token;
   }
 
-  if (token && req.user) {
-    try {
-      const user = await User.findById(req.user.id);
-      if (user) {
-        const device = user.registeredDevices.find(d => d.activeToken === token);
-        if (device) {
-          device.activeToken = null;
-          await user.save();
-        }
-      }
-    } catch (err) {
-      console.warn('Failed to clear device session on logout:', err.message);
-    }
-  }
 
   res.cookie('token', 'none', {
     expires: new Date(Date.now() + 10 * 1000),

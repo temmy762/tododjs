@@ -128,8 +128,8 @@ export default function AdminUsers() {
 
   const getPlanLabel = (u) => {
     if (u.role === 'admin') return t('admin.adminRole');
-    if (!isSubActive(u)) return 'Free';
-    const raw = u.subscription?.planId || u.subscription?.plan || 'free';
+    const raw = u.subscription?.planId || u.subscription?.plan || null;
+    if (!raw || raw === 'free') return 'Free';
     return PLAN_LABELS[raw] || normalizePlan(raw).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   };
 
@@ -250,9 +250,9 @@ export default function AdminUsers() {
                           <RoleIcon className="w-4 h-4 text-accent" />
                           <div>
                             <span className="text-sm font-medium text-white">{getPlanLabel(user)}</span>
-                            {user.role !== 'admin' && user.subscription?.plan && user.subscription?.plan !== 'free' && !isSubActive(user) && (
+                            {user.role !== 'admin' && !isSubActive(user) && (user.subscription?.planId || (user.subscription?.plan && user.subscription?.plan !== 'free')) && (
                               <div className="text-[10px] text-yellow-500/80 font-medium">
-                                {user.subscription?.status === 'cancelled' ? 'Cancelled' : 'Inactive'}
+                                {user.subscription?.status === 'cancelled' ? 'Cancelled' : user.subscription?.status === 'expired' ? 'Expired' : 'Inactive'}
                               </div>
                             )}
                           </div>

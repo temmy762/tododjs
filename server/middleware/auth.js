@@ -107,6 +107,14 @@ export const authorize = (...roles) => {
 // Check subscription plan
 export const checkSubscription = (...plans) => {
   return (req, res, next) => {
+    if (req.user.role === 'admin') return next();
+    if (req.user.subscription?.status !== 'active') {
+      return res.status(403).json({
+        success: false,
+        message: 'Active subscription required',
+        subscriptionStatus: req.user.subscription?.status
+      });
+    }
     if (!plans.includes(req.user.subscription.plan)) {
       return res.status(403).json({
         success: false,

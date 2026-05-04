@@ -123,6 +123,7 @@ export const verifyPayment = async (req, res) => {
 
     // Update user subscription
     user.subscription.planId = planId;
+    user.subscription.plan = planId;
     user.subscription.status = 'active';
     user.subscription.startDate = startDate;
     user.subscription.endDate = endDate;
@@ -130,16 +131,21 @@ export const verifyPayment = async (req, res) => {
     user.subscription.paymentMethod = 'card';
     user.subscription.autoRenew = false; // One-time payments don't auto-renew
 
-    // Add to subscription history
-    user.subscriptionHistory.push({
-      planId: planId,
-      startDate: startDate,
-      endDate: endDate,
-      amount: plan.price,
-      currency: plan.currency,
-      status: 'completed',
-      stripePaymentIntentId: session.payment_intent
-    });
+    // Add to subscription history only if not already recorded by webhook
+    const alreadyRecorded = user.subscriptionHistory?.some(
+      h => h.stripePaymentIntentId === session.payment_intent
+    );
+    if (!alreadyRecorded) {
+      user.subscriptionHistory.push({
+        planId: planId,
+        startDate: startDate,
+        endDate: endDate,
+        amount: plan.price,
+        currency: plan.currency,
+        status: 'completed',
+        stripePaymentIntentId: session.payment_intent
+      });
+    }
 
     await user.save();
 
