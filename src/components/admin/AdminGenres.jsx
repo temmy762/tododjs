@@ -39,17 +39,16 @@ const CAMELOT_WHEEL = [
 ];
 
 const genreColors = {
-  'House': 'from-blue-500 to-cyan-500',
-  'Tech House': 'from-purple-500 to-blue-500',
-  'Afro House': 'from-orange-500 to-yellow-500',
-  'Amapiano': 'from-green-500 to-emerald-500',
-  'Techno': 'from-gray-500 to-gray-700',
-  'Hip-Hop': 'from-red-500 to-pink-500',
-  'Jazz': 'from-amber-500 to-orange-500',
-  'Ambient': 'from-teal-500 to-cyan-500',
-  'Dubstep': 'from-violet-500 to-purple-500',
-  'Trance': 'from-indigo-500 to-blue-500',
-  'EDM': 'from-pink-500 to-rose-500',
+  'Reggaeton':           'from-red-500 to-rose-500',
+  'Old School Reggaeton':'from-orange-500 to-amber-500',
+  'Dembow':              'from-yellow-500 to-orange-500',
+  'Trap':                'from-purple-600 to-indigo-600',
+  'House':               'from-blue-500 to-cyan-500',
+  'EDM':                 'from-pink-500 to-rose-500',
+  'Afro House':          'from-green-500 to-emerald-500',
+  'Remember':            'from-teal-500 to-cyan-500',
+  'International':       'from-indigo-500 to-blue-500',
+  'Others':              'from-gray-500 to-gray-600',
 };
 
 export default function AdminGenres() {

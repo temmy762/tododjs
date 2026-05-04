@@ -3,6 +3,7 @@ import Track from '../models/Track.js';
 import Album from '../models/Album.js';
 import Download from '../models/Download.js';
 import Source from '../models/Source.js';
+import { FIXED_GENRES } from '../services/genreDetection.js';
 
 // @desc    Get genre and tonality analytics
 // @route   GET /api/analytics/genres
@@ -11,6 +12,7 @@ export const getGenreStats = async (req, res) => {
   try {
     // Genre breakdown with track count, avg BPM, BPM range
     const genreStats = await Track.aggregate([
+      { $match: { genre: { $ne: null, $exists: true, $ne: '' } } },
       {
         $group: {
           _id: '$genre',
@@ -25,7 +27,7 @@ export const getGenreStats = async (req, res) => {
 
     // Camelot key distribution
     const camelotStats = await Track.aggregate([
-      { $match: { 'tonality.camelot': { $ne: null, $exists: true } } },
+      { $match: { 'tonality.camelot': { $nin: [null, ''], $exists: true } } },
       {
         $group: {
           _id: '$tonality.camelot',
@@ -48,7 +50,7 @@ export const getGenreStats = async (req, res) => {
 
     // Genre + Camelot cross-reference (top combos)
     const genreCamelotCross = await Track.aggregate([
-      { $match: { 'tonality.camelot': { $ne: null, $exists: true } } },
+      { $match: { 'tonality.camelot': { $nin: [null, ''], $exists: true } } },
       {
         $group: {
           _id: { genre: '$genre', camelot: '$tonality.camelot' },
@@ -64,8 +66,8 @@ export const getGenreStats = async (req, res) => {
     const totalTracks = await Track.countDocuments();
     const tracksWithTonality = await Track.countDocuments({ 'tonality.camelot': { $ne: null, $exists: true } });
 
-    // Available genre enum from schema
-    const genreEnum = Track.schema.path('genre').enumValues;
+    // Use the authoritative fixed genre list (genre field has no schema enum)
+    const genreEnum = FIXED_GENRES;
 
     res.status(200).json({
       success: true,
