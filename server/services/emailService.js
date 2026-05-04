@@ -14,21 +14,26 @@ import {
 } from './emailTemplates.js';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'TodoDJs <noreply@tododjs.com>';
+const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || 'TodoDJs <hello@tododjs.com>';
+const REPLY_TO_EMAIL = process.env.RESEND_REPLY_TO || 'support@tododjs.com';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+const UNSUBSCRIBE_EMAIL = process.env.RESEND_UNSUBSCRIBE_EMAIL || 'support@tododjs.com';
 
 /**
  * Send an email via Resend
  */
-export async function sendEmail({ to, subject, html, text }) {
+export async function sendEmail({ to, subject, html, text, replyTo, headers }) {
   try {
-    const { data, error } = await resend.emails.send({
+    const payload = {
       from: FROM_EMAIL,
+      reply_to: replyTo || REPLY_TO_EMAIL,
       to: Array.isArray(to) ? to : [to],
       subject,
       html,
-      text
-    });
+      text,
+    };
+    if (headers && Object.keys(headers).length > 0) payload.headers = headers;
+    const { data, error } = await resend.emails.send(payload);
 
     if (error) {
       console.error('Resend API error:', JSON.stringify(error, null, 2));
@@ -52,12 +57,16 @@ export async function sendEmail({ to, subject, html, text }) {
 export async function sendWelcomeEmail(user) {
   const lang = user.preferredLanguage || 'en';
   const { subject, html, text } = getWelcomeEmailTemplate(user, lang);
-  
+
   return sendEmail({
     to: user.email,
     subject,
     html,
-    text
+    text,
+    headers: {
+      'List-Unsubscribe': `<mailto:${UNSUBSCRIBE_EMAIL}?subject=unsubscribe>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
   });
 }
 
@@ -85,12 +94,16 @@ export async function sendPasswordResetEmail(user, resetToken, isNewUser = false
 export async function sendSubscriptionEmail(user, plan) {
   const lang = user.preferredLanguage || 'en';
   const { subject, html, text } = getSubscriptionEmailTemplate(user, plan, lang);
-  
+
   return sendEmail({
     to: user.email,
     subject,
     html,
-    text
+    text,
+    headers: {
+      'List-Unsubscribe': `<mailto:${UNSUBSCRIBE_EMAIL}?subject=unsubscribe>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    },
   });
 }
 

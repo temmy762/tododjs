@@ -80,6 +80,17 @@ const translations = {
       button: 'Update Payment Method',
       footer: 'If you need help, please contact our support team.',
       copyright: 'All rights reserved.'
+    },
+    newUserSetup: {
+      subject: 'Welcome to TodoDJs — Set Your Password',
+      title: 'Welcome to TodoDJs!',
+      greeting: 'Hey',
+      message: 'Your subscription is now active and your account has been created.',
+      step: 'To get started, please set your password by clicking the button below:',
+      button: 'Set Your Password',
+      footer: 'This link will expire in 24 hours. After setting your password you can log in and start downloading tracks!',
+      linkText: 'Or copy this link:',
+      copyright: 'All rights reserved.'
     }
   },
   es: {
@@ -158,6 +169,17 @@ const translations = {
       button: 'Actualizar Método de Pago',
       footer: 'Si necesitas ayuda, por favor contacta a nuestro equipo de soporte.',
       copyright: 'Todos los derechos reservados.'
+    },
+    newUserSetup: {
+      subject: 'Bienvenido a TodoDJs — Configura tu Contraseña',
+      title: '¡Bienvenido a TodoDJs!',
+      greeting: 'Hola',
+      message: 'Tu suscripción está activa y tu cuenta ha sido creada.',
+      step: 'Para comenzar, configura tu contraseña haciendo clic en el botón de abajo:',
+      button: 'Configurar Contraseña',
+      footer: 'Este enlace expirará en 24 horas. Después de configurar tu contraseña podrás iniciar sesión y comenzar a descargar pistas.',
+      linkText: 'O copia este enlace:',
+      copyright: 'Todos los derechos reservados.'
     }
   }
 };
@@ -183,21 +205,41 @@ function t(lang, key, replacements = {}) {
 }
 
 // Base email template
-function getEmailTemplate(lang, title, content) {
+function getEmailTemplate(lang, title, content, { preheader = '', gradient = 'linear-gradient(135deg, #6366f1, #8b5cf6)' } = {}) {
   const year = new Date().getFullYear();
   const copyright = t(lang, 'welcome.copyright');
-  
-  return `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0a0a0a; color: #ffffff; border-radius: 12px; overflow: hidden;">
-      <div style="background: linear-gradient(135deg, #6366f1, #8b5cf6); padding: 40px 30px; text-align: center;">
-        <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #ffffff;">${title}</h1>
-      </div>
-      ${content}
-      <div style="padding: 20px 30px; border-top: 1px solid #1a1a1a; text-align: center;">
-        <p style="margin: 0; font-size: 12px; color: #555;">© ${year} TodoDJs. ${copyright}</p>
-      </div>
-    </div>
-  `;
+  const preheaderHtml = preheader
+    ? `<div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">${preheader}&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>`
+    : '';
+
+  return `<!DOCTYPE html>
+<html lang="${lang}" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>${title}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0f0f0f;">
+  ${preheaderHtml}
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#0f0f0f;">
+    <tr>
+      <td align="center" style="padding:20px 10px;">
+        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;width:100%;background:#0a0a0a;color:#ffffff;border-radius:12px;overflow:hidden;">
+          <div style="background:${gradient};padding:40px 30px;text-align:center;">
+            <h1 style="margin:0;font-size:28px;font-weight:700;color:#ffffff;">${title}</h1>
+          </div>
+          ${content}
+          <div style="padding:20px 30px;border-top:1px solid #1a1a1a;text-align:center;">
+            <p style="margin:0 0 4px;font-size:12px;color:#555;">© ${year} TodoDJs. ${copyright}</p>
+            <p style="margin:0;font-size:11px;color:#444;">TodoDJs &middot; <a href="mailto:support@tododjs.com" style="color:#6366f1;text-decoration:none;">support@tododjs.com</a> &middot; tododjs.com</p>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 }
 
 // Welcome email template
@@ -225,24 +267,23 @@ export function getPasswordResetEmailTemplate(user, resetToken, lang = 'en', isN
   const resetUrl = `${FRONTEND_URL}/reset-password?token=${resetToken}`;
   
   if (isNewUser) {
-    // Welcome email for new users with password setup
     const content = `
       <div style="padding: 30px;">
-        <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">Hey <strong>${user.name}</strong>,</p>
-        <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">Welcome to TodoDJs! Your subscription is now active and your account has been created.</p>
-        <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">To get started, please set your password by clicking the button below:</p>
+        <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">${t(lang, 'newUserSetup.greeting')} <strong>${user.name}</strong>,</p>
+        <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'newUserSetup.message')}</p>
+        <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'newUserSetup.step')}</p>
         <div style="margin: 25px 0;">
-          <a href="${resetUrl}" style="display: inline-block; background: #10b981; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">Set Your Password</a>
+          <a href="${resetUrl}" style="display: inline-block; background: #10b981; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">${t(lang, 'newUserSetup.button')}</a>
         </div>
-        <p style="font-size: 14px; color: #666; line-height: 1.6;">This link will expire in 24 hours. After setting your password, you can log in and start downloading tracks!</p>
-        <p style="font-size: 12px; color: #555; margin-top: 20px; word-break: break-all;">Or copy this link: ${resetUrl}</p>
+        <p style="font-size: 14px; color: #666; line-height: 1.6;">${t(lang, 'newUserSetup.footer')}</p>
+        <p style="font-size: 12px; color: #555; margin-top: 20px; word-break: break-all;">${t(lang, 'newUserSetup.linkText')} ${resetUrl}</p>
       </div>
     `;
-    
+
     return {
-      subject: 'Welcome to TodoDJs - Set Your Password',
-      html: getEmailTemplate(lang, 'Welcome to TodoDJs!', content),
-      text: `Hey ${user.name}, Welcome to TodoDJs! Your subscription is active. Set your password here: ${resetUrl}`
+      subject: t(lang, 'newUserSetup.subject'),
+      html: getEmailTemplate(lang, t(lang, 'newUserSetup.title'), content, { gradient: 'linear-gradient(135deg, #10b981, #059669)' }),
+      text: `${t(lang, 'newUserSetup.greeting')} ${user.name}, ${t(lang, 'newUserSetup.message')} ${resetUrl}`
     };
   }
   
@@ -279,28 +320,9 @@ export function getSubscriptionEmailTemplate(user, planName, lang = 'en') {
     </div>
   `;
   
-  const titleContent = `
-    <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 40px 30px; text-align: center;">
-      <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #ffffff;">${t(lang, 'subscription.title')}</h1>
-    </div>
-  `;
-  
-  const year = new Date().getFullYear();
-  const copyright = t(lang, 'subscription.copyright');
-  
-  const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0a0a0a; color: #ffffff; border-radius: 12px; overflow: hidden;">
-      ${titleContent}
-      ${content}
-      <div style="padding: 20px 30px; border-top: 1px solid #1a1a1a; text-align: center;">
-        <p style="margin: 0; font-size: 12px; color: #555;">© ${year} TodoDJs. ${copyright}</p>
-      </div>
-    </div>
-  `;
-  
   return {
     subject: t(lang, 'subscription.subject', { plan: planName }),
-    html,
+    html: getEmailTemplate(lang, t(lang, 'subscription.title'), content, { gradient: 'linear-gradient(135deg, #10b981, #059669)', preheader: t(lang, 'subscription.footer') }),
     text: `${t(lang, 'subscription.greeting')} ${user.name}, ${t(lang, 'subscription.message', { plan: planName })} ${FRONTEND_URL}`
   };
 }
@@ -376,28 +398,9 @@ export function getPaymentReceiptEmailTemplate(user, planName, amount, currency,
     </div>
   `;
 
-  const titleContent = `
-    <div style="background: linear-gradient(135deg, #10b981, #059669); padding: 40px 30px; text-align: center;">
-      <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #ffffff;">${t(lang, 'paymentReceipt.title')}</h1>
-    </div>
-  `;
-
-  const year = new Date().getFullYear();
-  const copyright = t(lang, 'paymentReceipt.copyright');
-
-  const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0a0a0a; color: #ffffff; border-radius: 12px; overflow: hidden;">
-      ${titleContent}
-      ${content}
-      <div style="padding: 20px 30px; border-top: 1px solid #1a1a1a; text-align: center;">
-        <p style="margin: 0; font-size: 12px; color: #555;">© ${year} TodoDJs. ${copyright}</p>
-      </div>
-    </div>
-  `;
-
   return {
     subject: t(lang, 'paymentReceipt.subject'),
-    html,
+    html: getEmailTemplate(lang, t(lang, 'paymentReceipt.title'), content, { gradient: 'linear-gradient(135deg, #10b981, #059669)', preheader: t(lang, 'paymentReceipt.message') }),
     text: `${t(lang, 'paymentReceipt.greeting')} ${user.name}, ${t(lang, 'paymentReceipt.message')} ${planName} - ${currencySymbol}${amount}`
   };
 }
@@ -439,28 +442,9 @@ export function getSubscriptionCancelledEmailTemplate(user, planName, accessUnti
     </div>
   `;
 
-  const titleContent = `
-    <div style="background: linear-gradient(135deg, #ef4444, #dc2626); padding: 40px 30px; text-align: center;">
-      <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #ffffff;">${t(lang, 'subscriptionCancelled.title')}</h1>
-    </div>
-  `;
-
-  const year = new Date().getFullYear();
-  const copyright = t(lang, 'subscriptionCancelled.copyright');
-
-  const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0a0a0a; color: #ffffff; border-radius: 12px; overflow: hidden;">
-      ${titleContent}
-      ${content}
-      <div style="padding: 20px 30px; border-top: 1px solid #1a1a1a; text-align: center;">
-        <p style="margin: 0; font-size: 12px; color: #555;">© ${year} TodoDJs. ${copyright}</p>
-      </div>
-    </div>
-  `;
-
   return {
     subject: t(lang, 'subscriptionCancelled.subject'),
-    html,
+    html: getEmailTemplate(lang, t(lang, 'subscriptionCancelled.title'), content, { gradient: 'linear-gradient(135deg, #ef4444, #dc2626)', preheader: t(lang, 'subscriptionCancelled.accessNote') }),
     text: `${t(lang, 'subscriptionCancelled.greeting')} ${user.name}, ${t(lang, 'subscriptionCancelled.message')}`
   };
 }
@@ -480,28 +464,9 @@ export function getPaymentFailedEmailTemplate(user, lang = 'en') {
     </div>
   `;
 
-  const titleContent = `
-    <div style="background: linear-gradient(135deg, #ef4444, #b91c1c); padding: 40px 30px; text-align: center;">
-      <h1 style="margin: 0; font-size: 28px; font-weight: 700; color: #ffffff;">${t(lang, 'paymentFailed.title')}</h1>
-    </div>
-  `;
-
-  const year = new Date().getFullYear();
-  const copyright = t(lang, 'paymentFailed.copyright');
-
-  const html = `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0a0a0a; color: #ffffff; border-radius: 12px; overflow: hidden;">
-      ${titleContent}
-      ${content}
-      <div style="padding: 20px 30px; border-top: 1px solid #1a1a1a; text-align: center;">
-        <p style="margin: 0; font-size: 12px; color: #555;">© ${year} TodoDJs. ${copyright}</p>
-      </div>
-    </div>
-  `;
-
   return {
     subject: t(lang, 'paymentFailed.subject'),
-    html,
+    html: getEmailTemplate(lang, t(lang, 'paymentFailed.title'), content, { gradient: 'linear-gradient(135deg, #ef4444, #b91c1c)', preheader: t(lang, 'paymentFailed.reason') }),
     text: `${t(lang, 'paymentFailed.greeting')} ${user.name}, ${t(lang, 'paymentFailed.message')}`
   };
 }
@@ -510,18 +475,33 @@ export function getPaymentFailedEmailTemplate(user, lang = 'en') {
 
 function getAdminEmailTemplate(title, content) {
   const year = new Date().getFullYear();
-  return `
-    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; background: #0a0a0a; color: #ffffff; border-radius: 12px; overflow: hidden;">
-      <div style="background: linear-gradient(135deg, #f59e0b, #d97706); padding: 30px; text-align: center;">
-        <h1 style="margin: 0; font-size: 22px; font-weight: 700; color: #ffffff;">🔔 Admin Notification</h1>
-        <p style="margin: 8px 0 0; font-size: 14px; color: rgba(255,255,255,0.85);">${title}</p>
-      </div>
-      ${content}
-      <div style="padding: 16px 30px; border-top: 1px solid #1a1a1a; text-align: center;">
-        <p style="margin: 0; font-size: 11px; color: #555;">© ${year} TodoDJs Admin · This is an automated notification</p>
-      </div>
-    </div>
-  `;
+  return `<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>${title}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#0f0f0f;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#0f0f0f;">
+    <tr>
+      <td align="center" style="padding:20px 10px;">
+        <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;width:100%;background:#0a0a0a;color:#ffffff;border-radius:12px;overflow:hidden;">
+          <div style="background:linear-gradient(135deg,#f59e0b,#d97706);padding:30px;text-align:center;">
+            <h1 style="margin:0;font-size:22px;font-weight:700;color:#ffffff;">Admin Notification</h1>
+            <p style="margin:8px 0 0;font-size:14px;color:rgba(255,255,255,0.85);">${title}</p>
+          </div>
+          ${content}
+          <div style="padding:16px 30px;border-top:1px solid #1a1a1a;text-align:center;">
+            <p style="margin:0;font-size:11px;color:#555;">© ${year} TodoDJs Admin &middot; Automated notification</p>
+          </div>
+        </div>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 }
 
 function formatDate(date) {
