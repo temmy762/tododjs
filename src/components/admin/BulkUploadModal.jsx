@@ -24,6 +24,8 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   const pollIntervalRef = useRef(null);
   const xhrByItemIdRef = useRef(new Map());
   const uploadRateByItemIdRef = useRef(new Map());
+  const pollIntervalByItemIdRef = useRef(new Map());
+  const cancelledItemsRef = useRef(new Set());
   
   // New state for 3-phase workflow
   const [uploadPhase, setUploadPhase] = useState('upload'); // 'upload' | 'cards'
@@ -131,8 +133,11 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     if (!it) return;
 
     if (it.uploadStatus === 'uploading') {
+      cancelledItemsRef.current.add(it.id);
       const xhr = xhrByItemIdRef.current.get(it.id);
       try { xhr?.abort(); } catch { /* ignore */ }
+      const pi = pollIntervalByItemIdRef.current.get(it.id);
+      if (pi) { clearInterval(pi); pollIntervalByItemIdRef.current.delete(it.id); }
       updateItem(idx, {
         uploadStatus: 'failed',
         uploadError: 'Upload cancelled by user.'
@@ -141,9 +146,10 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     }
 
     if (it.uploadStatus === 'processing' && it.collectionId) {
-      updateItem(idx, {
-        uploadError: ''
-      });
+      cancelledItemsRef.current.add(it.id);
+      const pi = pollIntervalByItemIdRef.current.get(it.id);
+      if (pi) { clearInterval(pi); pollIntervalByItemIdRef.current.delete(it.id); }
+      updateItem(idx, { uploadError: '' });
       try {
         const token = localStorage.getItem('token');
         await fetch(api(`/collections/${it.collectionId}/cancel`), {
@@ -187,7 +193,6 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     try {
       const response = await uploadSingleItem(it, idx);
       const newCollectionId = response.data?.collection?._id;
-      if (newCollectionId) startPolling(newCollectionId);
 
       updateItem(idx, {
         uploadStatus: 'processing',
@@ -199,6 +204,12 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
 
       await new Promise((resolve) => {
         const interval = setInterval(async () => {
+          if (cancelledItemsRef.current.has(it.id)) {
+            clearInterval(interval);
+            pollIntervalByItemIdRef.current.delete(it.id);
+            resolve();
+            return;
+          }
           try {
             const token = localStorage.getItem('token');
             const statusResp = await fetch(api(`/collections/${newCollectionId}/status`), {
@@ -209,6 +220,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
 
             if (statusResp.status === 401 || statusResp.status === 403) {
               clearInterval(interval);
+              pollIntervalByItemIdRef.current.delete(it.id);
               updateItem(idx, {
                 uploadStatus: 'failed',
                 uploadError: 'Unauthorized. Please log in as admin to track upload progress.'
@@ -234,6 +246,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
               });
               if (status === 'completed' || status === 'failed') {
                 clearInterval(interval);
+                pollIntervalByItemIdRef.current.delete(it.id);
                 resolve();
               }
             }
@@ -241,6 +254,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
             // ignore transient
           }
         }, 3000);
+        pollIntervalByItemIdRef.current.set(it.id, interval);
       });
     } catch (e) {
       updateItem(idx, {
@@ -339,12 +353,12 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     }
   };
 
-  // Cleanup polling on unmount
+  // Cleanup all polling on unmount
   useEffect(() => {
     return () => {
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-      }
+      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      pollIntervalByItemIdRef.current.forEach(id => clearInterval(id));
+      pollIntervalByItemIdRef.current.clear();
     };
   }, []);
 
@@ -623,6 +637,12 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
 
         await new Promise((resolve) => {
           const interval = setInterval(async () => {
+            if (cancelledItemsRef.current.has(item.id)) {
+              clearInterval(interval);
+              pollIntervalByItemIdRef.current.delete(item.id);
+              resolve();
+              return;
+            }
             try {
               const token = localStorage.getItem('token');
               const statusResp = await fetch(api(`/collections/${newCollectionId}/status`), {
@@ -630,6 +650,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
               });
               if (statusResp.status === 401 || statusResp.status === 403) {
                 clearInterval(interval);
+                pollIntervalByItemIdRef.current.delete(item.id);
                 updateItem(idx, {
                   uploadStatus: 'failed',
                   uploadError: 'Unauthorized. Please log in as admin to track upload progress.'
@@ -651,6 +672,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                 });
                 if (status === 'completed' || status === 'failed') {
                   clearInterval(interval);
+                  pollIntervalByItemIdRef.current.delete(item.id);
                   resolve();
                 }
               }
@@ -658,6 +680,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
               // ignore transient poll errors
             }
           }, 3000);
+          pollIntervalByItemIdRef.current.set(item.id, interval);
         });
       } catch (e) {
         updateItem(idx, {
