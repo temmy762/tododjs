@@ -223,8 +223,18 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
         processingProgress: 0
       });
 
+      let retryPollTicks = 0;
+      const MAX_RETRY_POLL_TICKS = 200; // 200 × 3 s = 10 min hard cap
       await new Promise((resolve) => {
         const interval = setInterval(async () => {
+          retryPollTicks++;
+          if (retryPollTicks > MAX_RETRY_POLL_TICKS) {
+            clearInterval(interval);
+            pollIntervalByItemIdRef.current.delete(it.id);
+            updateItem(idx, { uploadStatus: 'failed', uploadError: 'Processing timed out after 10 minutes. Check server logs.' });
+            resolve();
+            return;
+          }
           if (cancelledItemsRef.current.has(it.id)) {
             clearInterval(interval);
             pollIntervalByItemIdRef.current.delete(it.id);
@@ -262,6 +272,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                   ? 'completed'
                   : status === 'failed'
                     ? 'failed'
+                    : status === 'queued' ? 'server-queued'
                     : 'processing',
                 uploadError: status === 'failed' ? (errorMessage || 'Processing failed. Check server logs.') : ''
               });
@@ -654,14 +665,27 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
           processingProgress: 0
         });
 
-        if (!newCollectionId) return;
+        if (!newCollectionId) {
+          updateItem(idx, { uploadStatus: 'failed', uploadError: 'Server did not return a collection ID. Check server logs.' });
+          return false;
+        }
 
-        await new Promise((resolve) => {
+        let pollTicks = 0;
+        const MAX_POLL_TICKS = 200; // 200 × 3 s = 10 min hard cap
+        const completed = await new Promise((resolve) => {
           const interval = setInterval(async () => {
+            pollTicks++;
+            if (pollTicks > MAX_POLL_TICKS) {
+              clearInterval(interval);
+              pollIntervalByItemIdRef.current.delete(item.id);
+              updateItem(idx, { uploadStatus: 'failed', uploadError: 'Processing timed out after 10 minutes. Check server logs.' });
+              resolve(false);
+              return;
+            }
             if (cancelledItemsRef.current.has(item.id)) {
               clearInterval(interval);
               pollIntervalByItemIdRef.current.delete(item.id);
-              resolve();
+              resolve(false);
               return;
             }
             try {
@@ -676,7 +700,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                   uploadStatus: 'failed',
                   uploadError: 'Unauthorized. Please log in as admin to track upload progress.'
                 });
-                resolve();
+                resolve(false);
                 return;
               }
               const statusJson = await statusResp.json();
@@ -698,7 +722,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                   clearInterval(interval);
                   pollIntervalByItemIdRef.current.delete(item.id);
                   if (status === 'completed') onSuccess?.();
-                  resolve();
+                  resolve(status === 'completed');
                 }
               }
             } catch (e) {
@@ -707,25 +731,34 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
           }, 3000);
           pollIntervalByItemIdRef.current.set(item.id, interval);
         });
+        return completed;
       } catch (e) {
         updateItem(idx, {
           uploadStatus: 'failed',
           uploadError: e?.message || 'Upload failed. Please try again.'
         });
+        return false;
       }
     };
 
-    // Process uploads SEQUENTIALLY to avoid server overload / concurrent failures
+    // Process uploads SEQUENTIALLY — each ZIP must fully complete before the next starts
     const itemsToProcess = uploadItems
       .map((item, idx) => ({ item, idx }))
       .filter(({ item }) => item.scanStatus === 'scanned' && item.uploadStatus === 'idle');
 
+    let completedCount = 0;
+    let failedCount = 0;
     for (const { item, idx } of itemsToProcess) {
-      await processItem(item, idx);
+      const ok = await processItem(item, idx);
+      if (ok) completedCount++; else failedCount++;
     }
 
     setUploading(false);
-    setSuccess('All uploads complete.');
+    if (completedCount > 0 && failedCount === 0) {
+      setSuccess(`All ${completedCount} upload${completedCount !== 1 ? 's' : ''} complete.`);
+    } else if (completedCount > 0) {
+      setSuccess(`${completedCount} complete, ${failedCount} failed — see details above.`);
+    }
   };
 
   const hasPendingScans = uploadItems.some(i => i.scanStatus === 'pending');
