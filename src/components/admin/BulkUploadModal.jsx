@@ -63,7 +63,8 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
     } catch {
       // ignore
     }
-    onClose?.();
+    // Minimize instead of closing — keeps the upload running in the background
+    setMinimized(true);
   };
 
   const updateItem = (index, patch) => {
