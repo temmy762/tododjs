@@ -255,10 +255,10 @@ export default function AdminSubscriptions() {
             <select value={filterPlan} onChange={e => { setFilterPlan(e.target.value); }}
               className="px-3 py-2.5 bg-dark-elevated border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-accent">
               <option value="">{t('admin.allPlans')}</option>
-              <option value="individual-monthly">{t('admin.indivMonthly')}</option>
-              <option value="individual-quarterly">{t('admin.indivQuarterly')}</option>
-              <option value="shared-monthly">{t('admin.sharedMonthly')}</option>
-              <option value="shared-quarterly">{t('admin.sharedQuarterly')}</option>
+              <option value="individual_monthly">{t('admin.indivMonthly')}</option>
+              <option value="individual_quarterly">{t('admin.indivQuarterly')}</option>
+              <option value="shared_monthly">{t('admin.sharedMonthly')}</option>
+              <option value="shared_quarterly">{t('admin.sharedQuarterly')}</option>
             </select>
             <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
               className="px-3 py-2.5 bg-dark-elevated border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-accent">

@@ -1,4 +1,5 @@
 import User from '../models/User.js';
+import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import { uploadToWasabi, deleteFromWasabi, getSignedDownloadUrl } from '../config/wasabi.js';
 
 // @desc    Get all users with search, pagination, stats
@@ -26,7 +27,19 @@ export const getAllUsers = async (req, res) => {
     }
 
     if (role) query.role = role;
-    if (plan) query['subscription.planId'] = plan;
+    if (plan) {
+      const planVariants = [plan, plan.replace(/-/g, '_'), plan.replace(/_/g, '-')];
+      const planCondition = { $or: [
+        { 'subscription.planId': { $in: planVariants } },
+        { 'subscription.plan': { $in: planVariants } }
+      ]};
+      if (query.$or) {
+        query.$and = [{ $or: query.$or }, planCondition];
+        delete query.$or;
+      } else {
+        query.$or = planCondition.$or;
+      }
+    }
     if (status) query['subscription.status'] = status;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -43,23 +56,43 @@ export const getAllUsers = async (req, res) => {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    // All variants of individual (premium) and shared (pro) plan IDs
-    const individualPlans = ['premium', 'individual-monthly', 'individual-quarterly', 'individual_monthly', 'individual_quarterly'];
-    const sharedPlans = ['pro', 'shared-monthly', 'shared-quarterly', 'shared_monthly', 'shared_quarterly'];
+    const planMatch = (ids) => ({
+      'subscription.status': 'active',
+      $or: [
+        { 'subscription.plan': { $in: ids } },
+        { 'subscription.planId': { $in: ids } }
+      ]
+    });
 
     const [
       totalUsers,
       activeCount,
-      premiumCount,
-      proCount,
-      newThisMonth
+      individualMonthlyCount,
+      individualQuarterlyCount,
+      sharedMonthlyCount,
+      sharedQuarterlyCount,
+      freeCount,
+      newThisMonth,
+      activePlans
     ] = await Promise.all([
       User.countDocuments({ role: { $ne: 'admin' } }),
       User.countDocuments({ 'subscription.status': 'active', role: { $ne: 'admin' } }),
-      User.countDocuments({ 'subscription.status': 'active', $or: [{ 'subscription.plan': { $in: individualPlans } }, { 'subscription.planId': { $in: individualPlans } }] }),
-      User.countDocuments({ 'subscription.status': 'active', $or: [{ 'subscription.plan': { $in: sharedPlans } }, { 'subscription.planId': { $in: sharedPlans } }] }),
-      User.countDocuments({ createdAt: { $gte: startOfMonth }, role: { $ne: 'admin' } })
+      User.countDocuments(planMatch(['premium', 'individual-monthly', 'individual_monthly'])),
+      User.countDocuments(planMatch(['individual-quarterly', 'individual_quarterly'])),
+      User.countDocuments(planMatch(['pro', 'shared-monthly', 'shared_monthly'])),
+      User.countDocuments(planMatch(['shared-quarterly', 'shared_quarterly'])),
+      User.countDocuments({ 'subscription.status': { $ne: 'active' }, role: { $ne: 'admin' } }),
+      User.countDocuments({ createdAt: { $gte: startOfMonth }, role: { $ne: 'admin' } }),
+      SubscriptionPlan.find({ isActive: true }).select('planId price duration').lean()
     ]);
+
+    const priceOf = (id) => (activePlans.find(p => p.planId === id)?.price || 0);
+    const estimatedRevenue = (
+      individualMonthlyCount  * priceOf('individual_monthly') +
+      individualQuarterlyCount * (priceOf('individual_quarterly') / 3) +
+      sharedMonthlyCount      * priceOf('shared_monthly') +
+      sharedQuarterlyCount    * (priceOf('shared_quarterly') / 3)
+    ).toFixed(2);
 
     res.status(200).json({
       success: true,
@@ -67,9 +100,13 @@ export const getAllUsers = async (req, res) => {
       stats: {
         totalUsers,
         activeCount,
-        premiumCount,
-        proCount,
-        newThisMonth
+        individualMonthlyCount,
+        individualQuarterlyCount,
+        sharedMonthlyCount,
+        sharedQuarterlyCount,
+        freeCount,
+        newThisMonth,
+        estimatedRevenue: parseFloat(estimatedRevenue)
       },
       pagination: {
         total,
