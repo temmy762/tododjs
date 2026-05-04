@@ -9,6 +9,13 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.join(__dirname, '../.env') });
 
+const priceIds = {
+  individual_monthly:  process.env.STRIPE_PRICE_INDIVIDUAL_MONTHLY  || 'price_1TTSD6ENp1BvwFvRNknUdKSR',
+  individual_quarterly: process.env.STRIPE_PRICE_INDIVIDUAL_QUARTERLY || 'price_1TTSDrENp1BvwFvRl8E3HD8A',
+  shared_monthly:      process.env.STRIPE_PRICE_SHARED_MONTHLY       || 'price_1TTSEeENp1BvwFvRcRAXjE9t',
+  shared_quarterly:    process.env.STRIPE_PRICE_SHARED_QUARTERLY      || 'price_1TTSFOENp1BvwFvRn1nZm3b8'
+};
+
 const subscriptionPlans = [
   {
     planId: 'individual_monthly',
@@ -30,7 +37,7 @@ const subscriptionPlans = [
       noCommitment: true
     },
     durationDays: 30,
-    stripePriceId: 'price_1TTQzvCf0RJKfcIBpNlXxRl8',
+    stripePriceId: priceIds.individual_monthly,
     order: 1
   },
   {
@@ -53,7 +60,7 @@ const subscriptionPlans = [
       noCommitment: true
     },
     durationDays: 90,
-    stripePriceId: 'price_1TTR1nCf0RJKfcIBgF6f67Hr',
+    stripePriceId: priceIds.individual_quarterly,
     order: 2
   },
   {
@@ -76,7 +83,7 @@ const subscriptionPlans = [
       noCommitment: true
     },
     durationDays: 30,
-    stripePriceId: 'price_1TTR35Cf0RJKfcIBMpq5zVfJ',
+    stripePriceId: priceIds.shared_monthly,
     order: 3
   },
   {
@@ -99,7 +106,7 @@ const subscriptionPlans = [
       noCommitment: true
     },
     durationDays: 90,
-    stripePriceId: 'price_1TTR4PCf0RJKfcIBjzSOnxNZ',
+    stripePriceId: priceIds.shared_quarterly,
     order: 4
   }
 ];
