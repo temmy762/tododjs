@@ -83,16 +83,21 @@ export default function AdminSettings({ user, onUserUpdate }) {
         body: formData
       });
       const json = await res.json();
+      const flash = (msg) => {
+        setAvatarMsg(msg);
+        setTimeout(() => setAvatarMsg(null), 4000);
+      };
       if (json.success) {
-        setAvatarMsg({ type: 'success', text: 'Profile photo updated!' });
+        flash({ type: 'success', text: 'Profile photo updated!' });
         onUserUpdate?.({ ...user, avatar: json.data.avatar });
       } else {
-        setAvatarMsg({ type: 'error', text: json.message || 'Upload failed' });
+        flash({ type: 'error', text: json.message || 'Upload failed' });
         setAvatarPreview(null);
       }
     } catch (err) {
       console.error('Avatar upload error:', err);
       setAvatarMsg({ type: 'error', text: 'Upload failed. Please try again.' });
+      setTimeout(() => setAvatarMsg(null), 4000);
       setAvatarPreview(null);
     } finally {
       setAvatarUploading(false);
@@ -118,7 +123,7 @@ export default function AdminSettings({ user, onUserUpdate }) {
 
   const { server, config, database } = data;
   const heapPct = server.memoryUsage.heapTotal > 0
-    ? (server.memoryUsage.heapUsed / server.memoryUsage.heapTotal * 100).toFixed(0)
+    ? Number((server.memoryUsage.heapUsed / server.memoryUsage.heapTotal * 100).toFixed(0))
     : 0;
 
   return (
@@ -169,7 +174,7 @@ export default function AdminSettings({ user, onUserUpdate }) {
               {avatarUploading ? 'Uploading...' : 'Upload Photo'}
               <input
                 type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif"
+                accept="image/jpeg,image/png,image/webp"
                 onChange={handleAvatarChange}
                 disabled={avatarUploading}
                 className="hidden"
@@ -311,7 +316,7 @@ function FeatureRow({ label, enabled }) {
 function DbStat({ label, value }) {
   return (
     <div className="bg-dark-surface rounded-xl p-4 text-center">
-      <div className="text-2xl font-bold text-white">{value.toLocaleString()}</div>
+      <div className="text-2xl font-bold text-white">{(value ?? 0).toLocaleString()}</div>
       <div className="text-xs text-brand-text-tertiary mt-1">{label}</div>
     </div>
   );
