@@ -89,7 +89,10 @@ export default function DownloadHistory({ onTrackInteraction }) {
             const isAlbum = dl.type === 'bulk' || (!track && album);
             const title = isAlbum ? (album?.name || t('tracks.album')) : (track?.title || t('downloadHistory.unknownTrack'));
             const subtitle = isAlbum ? t('downloadHistory.albumDownload') : (track?.artist || '');
-            const coverArt = track?.coverArt || album?.coverArt;
+            // Resolve cover art strictly by type — prevents album cover bleeding onto track rows
+            const coverArt = isAlbum
+              ? (album?.coverArt || null)
+              : (track?.coverArt && track.coverArt.trim() !== '' ? track.coverArt : null);
 
             return (
               <div
@@ -104,10 +107,16 @@ export default function DownloadHistory({ onTrackInteraction }) {
                 {/* Cover Art */}
                 <div className="w-10 h-10 rounded-md overflow-hidden flex-shrink-0 bg-dark-elevated">
                   {coverArt ? (
-                    <img src={coverArt} alt={title} className="w-full h-full object-cover" />
-                  ) : (
+                    <img
+                      src={coverArt}
+                      alt={title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.nextSibling.style.display = 'flex'; }}
+                    />
+                  ) : null}
+                  <div style={{ display: coverArt ? 'none' : 'flex' }} className="w-full h-full">
                     <GenericCoverArt title={title} artist={subtitle} size="sm" />
-                  )}
+                  </div>
                 </div>
 
                 {/* Info */}

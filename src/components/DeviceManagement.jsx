@@ -14,7 +14,7 @@ const authHeaders = (json = false) => {
   return h;
 };
 
-export default function DeviceManagement() {
+export default function DeviceManagement({ user }) {
   const { t } = useTranslation();
   const [devices, setDevices] = useState([]);
   const [maxDevices, setMaxDevices] = useState(2);
@@ -25,6 +25,7 @@ export default function DeviceManagement() {
   const [showSignOutAll, setShowSignOutAll] = useState(false);
   const [notification, setNotification] = useState(null);
   const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const isAdmin = user?.role === 'admin';
 
   useEffect(() => {
     fetchDevices();
@@ -54,11 +55,13 @@ export default function DeviceManagement() {
   };
 
   const handleRemoveDevice = async (deviceId) => {
-    // Verify user with biometric authentication
-    const verified = await verifyUserForAction('remove this device');
-    if (!verified) {
-      showNotification(t('deviceMgmt.authRequired'), 'error');
-      return;
+    // Biometric is preferred but optional — fall back to confirm dialog if unavailable or cancelled
+    if (biometricAvailable) {
+      const verified = await verifyUserForAction('remove this device');
+      if (!verified) {
+        const confirmed = window.confirm(t('deviceMgmt.confirmRemove', 'Remove this device? It will need to be re-registered on next login.'));
+        if (!confirmed) return;
+      }
     }
 
     setActionLoading(deviceId);
@@ -111,12 +114,16 @@ export default function DeviceManagement() {
   };
 
   const handleSignOutAll = async () => {
-    // Verify user with biometric authentication
-    const verified = await verifyUserForAction('sign out from all devices');
-    if (!verified) {
-      showNotification(t('deviceMgmt.authRequired'), 'error');
-      setShowSignOutAll(false);
-      return;
+    // Biometric is preferred but optional — fall back to confirm dialog if unavailable or cancelled
+    if (biometricAvailable) {
+      const verified = await verifyUserForAction('sign out from all devices');
+      if (!verified) {
+        const confirmed = window.confirm(t('deviceMgmt.confirmSignOutAll', 'Sign out from all devices? You will need to log in again on each device.'));
+        if (!confirmed) {
+          setShowSignOutAll(false);
+          return;
+        }
+      }
     }
 
     setActionLoading('signout-all');
@@ -200,22 +207,26 @@ export default function DeviceManagement() {
 
   return (
     <div className="p-6">
-      {/* Device Usage Info - Only show for paid accounts */}
-      {maxDevices > 0 && (
-        <div className="mb-6 p-4 rounded-lg bg-dark-surface border border-white/10">
-          <div className="flex items-center justify-between">
+      {/* Device Usage Info */}
+      <div className="mb-6 p-4 rounded-lg bg-dark-surface border border-white/10">
+        <div className="flex items-center justify-between">
+          {isAdmin ? (
+            <p className="text-sm text-brand-text-tertiary">
+              {t('deviceMgmt.usingDevices')} <span className="font-semibold text-white">{devices.length}</span> {t('deviceMgmt.ofDevices')} <span className="font-semibold text-accent">{t('deviceMgmt.unlimited', 'Unlimited')}</span>
+            </p>
+          ) : (
             <p className="text-sm text-brand-text-tertiary">
               {t('deviceMgmt.usingDevices')} <span className="font-semibold text-white">{devices.length}</span> {t('deviceMgmt.ofDevices')} <span className="font-semibold text-white">{maxDevices}</span> {t('deviceMgmt.availableDevices')}
             </p>
-            {biometricAvailable && (
-              <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/30">
-                <Fingerprint className="w-4 h-4 text-green-400" />
-                <span className="text-xs font-semibold text-green-400">{t('deviceMgmt.biometricEnabled')}</span>
-              </div>
-            )}
-          </div>
+          )}
+          {biometricAvailable && (
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-green-500/10 border border-green-500/30">
+              <Fingerprint className="w-4 h-4 text-green-400" />
+              <span className="text-xs font-semibold text-green-400">{t('deviceMgmt.biometricEnabled')}</span>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Notification */}
       {notification && (

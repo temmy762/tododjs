@@ -639,7 +639,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
           {/* ── Devices Tab ── */}
           {activeTab === 'devices' && (
             <div>
-              <DeviceManagement />
+              <DeviceManagement user={user} />
             </div>
           )}
 

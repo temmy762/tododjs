@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
+import { parseDeviceInfo } from '../utils/deviceParser.js';
 
 // Protect routes - verify JWT token
 export const protect = async (req, res, next) => {
@@ -35,13 +36,42 @@ export const protect = async (req, res, next) => {
       });
     }
 
-    // Per-request device enforcement for active subscribers
+    // Register/upsert device for ALL authenticated users (fire-and-forget, never blocks)
+    const deviceId = req.headers['x-device-id'];
+    if (deviceId) {
+      setImmediate(async () => {
+        try {
+          const freshUser = await User.findById(decoded.id).select('subscription role');
+          if (!freshUser) return;
+          const existing = freshUser.subscription.devices.find(d => d.deviceId === deviceId);
+          if (existing) {
+            existing.lastActive = new Date();
+          } else {
+            const info = parseDeviceInfo(req.headers['user-agent'] || '');
+            freshUser.subscription.devices.push({
+              deviceId,
+              deviceName: info.deviceName,
+              deviceType: info.deviceType,
+              browser: info.browser,
+              os: info.os,
+              deviceInfo: info.deviceInfo,
+              ipAddress: req.ip,
+              lastActive: new Date(),
+              addedAt: new Date()
+            });
+          }
+          await freshUser.save();
+        } catch { /* fire-and-forget — never block the request */ }
+      });
+    }
+
+    // Per-request device enforcement for active subscribers (paid only, not admin)
     const hasActiveSubscription =
+      req.user.role !== 'admin' &&
       req.user.subscription?.status === 'active' &&
       req.user.subscription?.planId;
 
     if (hasActiveSubscription) {
-      const deviceId = req.headers['x-device-id'];
       const registeredDevices = req.user.subscription?.devices || [];
 
       // Only enforce if the client sends a device ID AND the user already has registered devices
@@ -54,13 +84,6 @@ export const protect = async (req, res, next) => {
             message: 'This device is not authorized on your account. Please log in again.',
             code: 'DEVICE_NOT_REGISTERED'
           });
-        }
-
-        // Update lastActive for this device (fire-and-forget, don't block the request)
-        const device = registeredDevices.find(d => d.deviceId === deviceId);
-        if (device) {
-          device.lastActive = new Date();
-          req.user.save().catch(() => {});
         }
       }
     }
