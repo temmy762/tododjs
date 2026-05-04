@@ -60,7 +60,7 @@ export const checkDeviceLimit = async (req, res, next) => {
       return next();
     }
 
-    const deviceId = req.headers['x-device-id'] || req.body.deviceId;
+    const deviceId = req.headers['x-device-id'] || req.body.deviceId || req.query.deviceId;
 
     if (!deviceId) {
       return res.status(400).json({

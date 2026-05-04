@@ -9,7 +9,7 @@ let refreshPromise = null;
  * Wrapper around fetch that auto-refreshes JWT on 401 responses.
  * Usage: import { apiFetch } from './apiFetch'; then use like fetch().
  */
-function getDeviceId() {
+export function getDeviceId() {
   let id = localStorage.getItem('deviceId');
   if (!id) {
     id = 'dev_' + crypto.randomUUID();

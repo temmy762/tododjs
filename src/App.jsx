@@ -10,7 +10,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { useUpload } from './context/UploadContext';
 import BulkUploadModal from './components/admin/BulkUploadModal';
 import { AlbumUploadModal } from './components/admin/AdminRecordPool';
-import { startTokenRefreshScheduler, stopTokenRefreshScheduler } from './services/apiFetch';
+import { startTokenRefreshScheduler, stopTokenRefreshScheduler, apiFetch, getDeviceId } from './services/apiFetch';
 import ArtistAlbumView from './components/ArtistAlbumView';
 import TonalityFilter from './components/TonalityFilter';
 import GenreFilterHorizontal from './components/GenreFilterHorizontal';
@@ -455,11 +455,7 @@ function App() {
       }
 
       const trackId = track.id || track._id;
-      const token = localStorage.getItem('token');
-      fetch(`${API}/downloads/track/${trackId}/file`, {
-        method: 'GET',
-        headers: { Authorization: `Bearer ${token}` },
-      })
+      apiFetch(`${API}/downloads/track/${trackId}/file`)
         .then(async (res) => {
           const data = await res.json().catch(() => null);
           if (!res.ok) {
@@ -666,9 +662,10 @@ function App() {
     }
 
     const token = localStorage.getItem('token');
+    const deviceId = getDeviceId();
     const iframe = document.createElement('iframe');
     iframe.style.display = 'none';
-    iframe.src = `${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`;
+    iframe.src = `${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&deviceId=${encodeURIComponent(deviceId)}`;
     document.body.appendChild(iframe);
     setTimeout(() => iframe.remove(), 120000);
   };

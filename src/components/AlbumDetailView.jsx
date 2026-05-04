@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import GenericCoverArt from './GenericCoverArt';
 import PremiumPrompt from './PremiumPrompt';
 import API_URL from '../config/api';
+import { apiFetch } from '../services/apiFetch';
 
 // Trigger a file download from a URL without navigating away from the current page
 const triggerDownload = (url) => {
@@ -93,11 +94,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
     const trackId = track.id || track._id;
     setDownloadingTrackId(trackId);
     try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/downloads/track/${trackId}/file`, {
-        method: 'GET',
-        headers: token ? { Authorization: `Bearer ${token}` } : {},
-      });
+      const res = await apiFetch(`${API_URL}/downloads/track/${trackId}/file`);
       const data = await res.json().catch(() => null);
       if (!res.ok) {
         throw new Error(data?.message || 'Download failed');
