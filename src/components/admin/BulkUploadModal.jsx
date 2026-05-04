@@ -26,6 +26,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   const uploadRateByItemIdRef = useRef(new Map());
   const pollIntervalByItemIdRef = useRef(new Map());
   const cancelledItemsRef = useRef(new Set());
+  const resolveByItemIdRef = useRef(new Map());
   
   // New state for 3-phase workflow
   const [uploadPhase, setUploadPhase] = useState('upload'); // 'upload' | 'cards'
@@ -148,10 +149,14 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
       return;
     }
 
-    if (it.uploadStatus === 'server-queued') {
+    if (it.uploadStatus === 'server-queued' || (it.uploadStatus === 'processing' && it.collectionId)) {
       cancelledItemsRef.current.add(it.id);
+      // Clear the poll interval
       const pi = pollIntervalByItemIdRef.current.get(it.id);
       if (pi) { clearInterval(pi); pollIntervalByItemIdRef.current.delete(it.id); }
+      // Resolve the awaited Promise so the sequential queue can advance
+      const resolveFn = resolveByItemIdRef.current.get(it.id);
+      if (resolveFn) { resolveFn(false); resolveByItemIdRef.current.delete(it.id); }
       if (it.collectionId) {
         try {
           const token = localStorage.getItem('token');
@@ -161,31 +166,11 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
           });
         } catch { /* ignore */ }
       }
-      updateItem(idx, { uploadStatus: 'failed', uploadError: 'Cancelled by user.' });
-      return;
-    }
-
-    if (it.uploadStatus === 'processing' && it.collectionId) {
-      cancelledItemsRef.current.add(it.id);
-      const pi = pollIntervalByItemIdRef.current.get(it.id);
-      if (pi) { clearInterval(pi); pollIntervalByItemIdRef.current.delete(it.id); }
-      updateItem(idx, { uploadError: '' });
-      try {
-        const token = localStorage.getItem('token');
-        await fetch(api(`/collections/${it.collectionId}/cancel`), {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: token ? `Bearer ${token}` : ''
-          }
-        });
-      } catch {
-        // ignore
-      }
       updateItem(idx, {
         uploadStatus: 'failed',
-        uploadError: 'Processing cancelled by user.'
+        uploadError: it.uploadStatus === 'server-queued' ? 'Cancelled by user.' : 'Processing cancelled by user.'
       });
+      return;
     }
   };
 
@@ -223,9 +208,15 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
         processingProgress: 0
       });
 
+      if (!newCollectionId) {
+        updateItem(idx, { uploadStatus: 'failed', uploadError: 'Server did not return a collection ID. Check server logs.' });
+        return;
+      }
+
       let retryPollTicks = 0;
       const MAX_RETRY_POLL_TICKS = 200; // 200 × 3 s = 10 min hard cap
       await new Promise((resolve) => {
+        resolveByItemIdRef.current.set(it.id, resolve);
         const interval = setInterval(async () => {
           retryPollTicks++;
           if (retryPollTicks > MAX_RETRY_POLL_TICKS) {
@@ -279,6 +270,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
               if (status === 'completed' || status === 'failed') {
                 clearInterval(interval);
                 pollIntervalByItemIdRef.current.delete(it.id);
+                resolveByItemIdRef.current.delete(it.id);
                 if (status === 'completed') onSuccess?.();
                 resolve();
               }
@@ -289,6 +281,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
         }, 3000);
         pollIntervalByItemIdRef.current.set(it.id, interval);
       });
+      resolveByItemIdRef.current.delete(it.id);
     } catch (e) {
       updateItem(idx, {
         uploadStatus: 'failed',
@@ -392,6 +385,9 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
       if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
       pollIntervalByItemIdRef.current.forEach(id => clearInterval(id));
       pollIntervalByItemIdRef.current.clear();
+      // Resolve any pending promises so nothing hangs after unmount
+      resolveByItemIdRef.current.forEach(fn => fn(false));
+      resolveByItemIdRef.current.clear();
     };
   }, []);
 
@@ -673,6 +669,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
         let pollTicks = 0;
         const MAX_POLL_TICKS = 200; // 200 × 3 s = 10 min hard cap
         const completed = await new Promise((resolve) => {
+          resolveByItemIdRef.current.set(item.id, resolve);
           const interval = setInterval(async () => {
             pollTicks++;
             if (pollTicks > MAX_POLL_TICKS) {
@@ -721,6 +718,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                 if (status === 'completed' || status === 'failed') {
                   clearInterval(interval);
                   pollIntervalByItemIdRef.current.delete(item.id);
+                  resolveByItemIdRef.current.delete(item.id);
                   if (status === 'completed') onSuccess?.();
                   resolve(status === 'completed');
                 }
@@ -731,6 +729,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
           }, 3000);
           pollIntervalByItemIdRef.current.set(item.id, interval);
         });
+        resolveByItemIdRef.current.delete(item.id);
         return completed;
       } catch (e) {
         updateItem(idx, {
