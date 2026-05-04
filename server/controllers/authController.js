@@ -250,6 +250,17 @@ export const login = async (req, res) => {
 export const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
+
+    // Auto-expire subscription if endDate has passed
+    if (
+      user.subscription?.endDate &&
+      new Date() > user.subscription.endDate &&
+      user.subscription.status === 'active'
+    ) {
+      user.subscription.status = 'expired';
+      await user.save();
+    }
+
     const avatar = await signAvatarUrl(user);
     const userData = user.toObject();
     userData.avatar = avatar;

@@ -209,9 +209,19 @@ export const handleWebhook = async (req, res) => {
         await handlePaymentFailed(failedPayment);
         break;
 
+      case 'charge.refunded':
+        const refundedCharge = event.data.object;
+        await handleChargeRefunded(refundedCharge);
+        break;
+
       case 'customer.subscription.deleted':
         const deletedSubscription = event.data.object;
         await handleSubscriptionDeleted(deletedSubscription);
+        break;
+
+      case 'customer.subscription.updated':
+        const updatedSubscription = event.data.object;
+        await handleSubscriptionUpdated(updatedSubscription);
         break;
 
       default:
@@ -342,24 +352,79 @@ async function handlePaymentFailed(paymentIntent) {
   }
 }
 
-// Helper function to handle subscription deletion
+// Helper: handle Stripe charge refunded (one-time payment model cancellation)
+async function handleChargeRefunded(charge) {
+  const user = await User.findOne({
+    $or: [
+      { 'subscription.stripePaymentIntentId': charge.payment_intent },
+      { 'subscription.stripeCustomerId': charge.customer }
+    ]
+  });
+
+  if (user && user.subscription.status === 'active') {
+    const planId = user.subscription.planId;
+    user.subscription.status = 'cancelled';
+    user.subscription.autoRenew = false;
+    await user.save();
+    console.log(`Subscription cancelled via refund for user ${user._id}`);
+
+    sendSubscriptionCancelledEmail(user, planId, null)
+      .catch(err => console.error('Cancellation email failed:', err));
+    notifyAdminCancelledSubscription(user, planId)
+      .catch(err => console.error('Admin cancellation notification failed:', err));
+  }
+}
+
+// Helper: handle subscription deletion (Stripe subscription mode)
 async function handleSubscriptionDeleted(subscription) {
-  const user = await User.findOne({ 'subscription.stripeSubscriptionId': subscription.id });
-  
+  const user = await User.findOne({
+    $or: [
+      { 'subscription.stripeSubscriptionId': subscription.id },
+      { 'subscription.stripeCustomerId': subscription.customer }
+    ]
+  });
+
   if (user) {
     const planId = user.subscription.planId;
     user.subscription.status = 'cancelled';
     user.subscription.autoRenew = false;
     await user.save();
-    console.log(`Subscription cancelled for user ${user._id}`);
+    console.log(`Subscription deleted for user ${user._id}`);
 
-    // Notify user of cancellation (non-blocking)
     sendSubscriptionCancelledEmail(user, planId, null)
       .catch(err => console.error('User cancellation email failed:', err));
-
-    // Notify admin of cancellation (non-blocking)
     notifyAdminCancelledSubscription(user, planId)
       .catch(err => console.error('Admin cancellation notification failed:', err));
+  }
+}
+
+// Helper: handle subscription updated (Stripe subscription mode)
+async function handleSubscriptionUpdated(subscription) {
+  const user = await User.findOne({
+    $or: [
+      { 'subscription.stripeSubscriptionId': subscription.id },
+      { 'subscription.stripeCustomerId': subscription.customer }
+    ]
+  });
+
+  if (!user) return;
+
+  const stripeStatus = subscription.status;
+  // Map Stripe statuses to internal statuses
+  const statusMap = {
+    active: 'active',
+    canceled: 'cancelled',
+    past_due: 'past_due',
+    unpaid: 'past_due',
+    paused: 'inactive',
+    trialing: 'active',
+  };
+
+  const newStatus = statusMap[stripeStatus];
+  if (newStatus && user.subscription.status !== newStatus) {
+    user.subscription.status = newStatus;
+    await user.save();
+    console.log(`Subscription status updated to ${newStatus} for user ${user._id}`);
   }
 }
 
