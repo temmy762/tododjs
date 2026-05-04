@@ -144,13 +144,15 @@ export default function AdminCategories() {
   const toggleActive = async (cat) => {
     try {
       const token = localStorage.getItem('token');
-      await fetch(`${API_URL}/categories/${cat._id}`, {
+      const res = await fetch(`${API_URL}/categories/${cat._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ isActive: !cat.isActive })
       });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.message);
       fetchCategories();
-    } catch { /* ignore */ }
+    } catch (e) { flash(e.message, 'error'); }
   };
 
   return (
@@ -197,10 +199,7 @@ export default function AdminCategories() {
         ))}
       </div>
 
-      {activeTab === 'review' && <ReviewQueue categories={categories} flash={flash} />}
-
-      {activeTab === 'manage' && (<>
-      {/* Alerts */}
+      {/* Alerts — visible on both tabs */}
       {error && (
         <div className="flex items-center gap-2 mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm">
           <AlertCircle size={16} /> {error}
@@ -211,6 +210,10 @@ export default function AdminCategories() {
           <CheckCircle size={16} /> {success}
         </div>
       )}
+
+      {activeTab === 'review' && <ReviewQueue categories={categories} flash={flash} />}
+
+      {activeTab === 'manage' && (<>
 
       {/* Create / Edit Form */}
       {showForm && (
@@ -592,19 +595,19 @@ function ReviewQueue({ categories, flash }) {
           </div>
         ) : (
           <div className="divide-y divide-white/5">
-            {tracks.map(t => (
-              <div key={t._id} onClick={() => toggleSelect(t._id)}
-                className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-all ${selected.has(t._id) ? 'bg-accent/10' : 'hover:bg-white/5'}`}>
-                <div className={`w-4 h-4 rounded border-2 flex-shrink-0 transition-all ${selected.has(t._id) ? 'bg-accent border-accent' : 'border-white/30'}`}>
-                  {selected.has(t._id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+            {tracks.map(track => (
+              <div key={track._id} onClick={() => toggleSelect(track._id)}
+                className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-all ${selected.has(track._id) ? 'bg-accent/10' : 'hover:bg-white/5'}`}>
+                <div className={`w-4 h-4 rounded border-2 flex-shrink-0 transition-all ${selected.has(track._id) ? 'bg-accent border-accent' : 'border-white/30'}`}>
+                  {selected.has(track._id) && <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
                 </div>
-                <TrackThumb src={t.coverArt} alt={t.title} />
+                <TrackThumb src={track.coverArt} alt={track.title} />
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white font-medium truncate">{t.title}</p>
-                  <p className="text-xs text-brand-text-tertiary truncate">{t.artist}</p>
+                  <p className="text-sm text-white font-medium truncate">{track.title}</p>
+                  <p className="text-xs text-brand-text-tertiary truncate">{track.artist}</p>
                 </div>
-                {t.categoryRaw && (
-                  <span className="text-xs px-2 py-0.5 bg-amber-500/15 text-amber-400 rounded-full flex-shrink-0">{t.categoryRaw}</span>
+                {track.categoryRaw && (
+                  <span className="text-xs px-2 py-0.5 bg-amber-500/15 text-amber-400 rounded-full flex-shrink-0">{track.categoryRaw}</span>
                 )}
               </div>
             ))}
