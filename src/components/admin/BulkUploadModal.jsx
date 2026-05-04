@@ -148,6 +148,23 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
       return;
     }
 
+    if (it.uploadStatus === 'server-queued') {
+      cancelledItemsRef.current.add(it.id);
+      const pi = pollIntervalByItemIdRef.current.get(it.id);
+      if (pi) { clearInterval(pi); pollIntervalByItemIdRef.current.delete(it.id); }
+      if (it.collectionId) {
+        try {
+          const token = localStorage.getItem('token');
+          await fetch(api(`/collections/${it.collectionId}/cancel`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: token ? `Bearer ${token}` : '' }
+          });
+        } catch { /* ignore */ }
+      }
+      updateItem(idx, { uploadStatus: 'failed', uploadError: 'Cancelled by user.' });
+      return;
+    }
+
     if (it.uploadStatus === 'processing' && it.collectionId) {
       cancelledItemsRef.current.add(it.id);
       const pi = pollIntervalByItemIdRef.current.get(it.id);
@@ -251,6 +268,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
               if (status === 'completed' || status === 'failed') {
                 clearInterval(interval);
                 pollIntervalByItemIdRef.current.delete(it.id);
+                if (status === 'completed') onSuccess?.();
                 resolve();
               }
             }
@@ -740,9 +758,9 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
 
   const completedCount = uploadItems.filter(i => i.uploadStatus === 'completed').length;
   const failedItemCount = uploadItems.filter(i => i.uploadStatus === 'failed').length;
-  const activeCount = uploadItems.filter(i => i.uploadStatus === 'uploading' || i.uploadStatus === 'processing').length;
+  const activeCount = uploadItems.filter(i => i.uploadStatus === 'uploading' || i.uploadStatus === 'processing' || i.uploadStatus === 'server-queued').length;
   const allDone = uploadItems.length > 0 && uploadItems.every(i => i.uploadStatus === 'completed' || i.uploadStatus === 'failed');
-  const currentlyActiveItem = uploadItems.find(i => i.uploadStatus === 'uploading' || i.uploadStatus === 'processing');
+  const currentlyActiveItem = uploadItems.find(i => i.uploadStatus === 'uploading' || i.uploadStatus === 'processing' || i.uploadStatus === 'server-queued');
 
   if (minimized) {
     return (
@@ -911,7 +929,7 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                         <div className="flex flex-col items-end gap-2">
                           <div className={`text-[11px] px-2 py-1 rounded-full border ${stageBadgeClass(it)}`}>
                             <div className="flex items-center gap-2">
-                              {(it.uploadStatus === 'uploading' || it.uploadStatus === 'processing') ? (
+                              {(it.uploadStatus === 'uploading' || it.uploadStatus === 'processing' || it.uploadStatus === 'server-queued') ? (
                                 <Loader className="w-3 h-3 animate-spin" />
                               ) : null}
                               <span className="whitespace-nowrap">{stageLabel}{(it.uploadStatus === 'processing' || it.uploadStatus === 'uploading') ? ` · ${pct}%` : ''}</span>
@@ -919,10 +937,10 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
                           </div>
 
                           <div className="flex items-center gap-2">
-                            {(it.uploadStatus === 'uploading' || it.uploadStatus === 'processing') ? (
+                            {(it.uploadStatus === 'uploading' || it.uploadStatus === 'processing' || it.uploadStatus === 'server-queued') ? (
                               <button
                                 type="button"
-                                disabled={uploading && idx !== activeItemIndex}
+                                disabled={uploading && idx !== activeItemIndex && it.uploadStatus !== 'server-queued'}
                                 onClick={() => cancelItem(idx)}
                                 className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 border border-red-500/20 text-red-200 text-[11px] font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                                 title="Cancel"
