@@ -101,12 +101,27 @@ export const getAnalytics = async (req, res) => {
     const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     // --- User stats ---
-    const [totalUsers, premiumUsers, proUsers, newUsersThisMonth, newUsersLastMonth] = await Promise.all([
-      User.countDocuments(),
-      User.countDocuments({ 'subscription.plan': 'premium' }),
-      User.countDocuments({ 'subscription.plan': 'pro' }),
-      User.countDocuments({ createdAt: { $gte: startOfMonth } }),
-      User.countDocuments({ createdAt: { $gte: startOfLastMonth, $lt: startOfMonth } })
+    const individualPlanIds = ['premium', 'individual_monthly', 'individual-monthly', 'individual_quarterly', 'individual-quarterly'];
+    const sharedPlanIds    = ['pro', 'shared_monthly', 'shared-monthly', 'shared_quarterly', 'shared-quarterly'];
+
+    const [totalUsers, newUsersThisMonth, newUsersLastMonth, individualUsers, sharedUsers] = await Promise.all([
+      User.countDocuments({ role: { $ne: 'admin' } }),
+      User.countDocuments({ createdAt: { $gte: startOfMonth }, role: { $ne: 'admin' } }),
+      User.countDocuments({ createdAt: { $gte: startOfLastMonth, $lt: startOfMonth }, role: { $ne: 'admin' } }),
+      User.countDocuments({
+        'subscription.status': 'active',
+        $or: [
+          { 'subscription.planId': { $in: individualPlanIds } },
+          { 'subscription.plan':   { $in: individualPlanIds } }
+        ]
+      }),
+      User.countDocuments({
+        'subscription.status': 'active',
+        $or: [
+          { 'subscription.planId': { $in: sharedPlanIds } },
+          { 'subscription.plan':   { $in: sharedPlanIds } }
+        ]
+      })
     ]);
 
     // --- Track stats ---
@@ -186,19 +201,48 @@ export const getAnalytics = async (req, res) => {
       }
     ]);
 
-    // --- Users by subscription plan ---
-    const usersByPlan = [
-      { plan: 'Free', count: totalUsers - premiumUsers - proUsers },
-      { plan: 'Premium', count: premiumUsers },
-      { plan: 'Pro', count: proUsers }
-    ];
+    // --- Users by subscription plan (real aggregation) ---
+    const planLabelMap = {
+      individual_monthly: 'Indiv. Monthly',   'individual-monthly': 'Indiv. Monthly',
+      individual_quarterly: 'Indiv. Quarterly', 'individual-quarterly': 'Indiv. Quarterly',
+      shared_monthly: 'Shared Monthly',       'shared-monthly': 'Shared Monthly',
+      shared_quarterly: 'Shared Quarterly',   'shared-quarterly': 'Shared Quarterly',
+      premium: 'Individual', pro: 'Shared'
+    };
+    const usersByPlanAgg = await User.aggregate([
+      { $match: { role: { $ne: 'admin' } } },
+      {
+        $group: {
+          _id: {
+            $cond: {
+              if: { $eq: ['$subscription.status', 'active'] },
+              then: { $ifNull: ['$subscription.planId', { $ifNull: ['$subscription.plan', 'free'] }] },
+              else: 'free'
+            }
+          },
+          count: { $sum: 1 }
+        }
+      }
+    ]);
+    const planTotals = {};
+    usersByPlanAgg.forEach(p => {
+      const label = planLabelMap[p._id] || (p._id && p._id !== 'free' ? p._id : 'Free / Inactive');
+      planTotals[label] = (planTotals[label] || 0) + p.count;
+    });
+    const usersByPlan = Object.entries(planTotals)
+      .map(([plan, count]) => ({ plan, count }))
+      .sort((a, b) => {
+        if (a.plan === 'Free / Inactive') return 1;
+        if (b.plan === 'Free / Inactive') return -1;
+        return b.count - a.count;
+      });
 
     // --- Source stats ---
     const sourceCount = await Source.countDocuments();
 
     // --- Recent signups (last 7) ---
-    const recentSignups = await User.find()
-      .select('name email subscription.plan createdAt')
+    const recentSignups = await User.find({ role: { $ne: 'admin' } })
+      .select('name email subscription.plan subscription.planId createdAt')
       .sort('-createdAt')
       .limit(7)
       .lean();
@@ -213,8 +257,8 @@ export const getAnalytics = async (req, res) => {
           totalDownloads,
           downloadsToday,
           sourceCount,
-          premiumUsers,
-          proUsers
+          individualUsers,
+          sharedUsers
         },
         growth: {
           newUsersThisMonth,

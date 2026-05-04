@@ -59,10 +59,10 @@ export default function AdminAnalytics() {
   };
 
   const statCards = [
-    { label: 'Total Tracks', value: overview.totalTracks, icon: Music, color: 'from-blue-500 to-cyan-500', change: growthPct(growth.tracksThisMonth, growth.tracksLastMonth) },
-    { label: 'Total Members', value: overview.totalUsers, icon: Users, color: 'from-purple-500 to-pink-500', change: growthPct(growth.newUsersThisMonth, growth.newUsersLastMonth) },
+    { label: 'Total Tracks', value: overview.totalTracks, icon: Music, color: 'from-blue-500 to-cyan-500', change: null },
+    { label: 'Total Members', value: overview.totalUsers, icon: Users, color: 'from-purple-500 to-pink-500', change: null },
     { label: 'Downloads Today', value: overview.downloadsToday, icon: Download, color: 'from-green-500 to-emerald-500', change: null },
-    { label: 'Total Downloads', value: overview.totalDownloads, icon: Database, color: 'from-orange-500 to-red-500', change: growthPct(growth.downloadsThisMonth, growth.downloadsLastMonth) },
+    { label: 'Total Downloads', value: overview.totalDownloads, icon: Database, color: 'from-orange-500 to-red-500', change: null },
   ];
 
   const maxDownload = Math.max(...(charts.downloadsOverTime.map(d => d.count)), 1);
@@ -113,8 +113,8 @@ export default function AdminAnalytics() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <MiniStat label="Albums" value={overview.totalAlbums} />
         <MiniStat label="Sources" value={overview.sourceCount} />
-        <MiniStat label="Premium Members" value={overview.premiumUsers} />
-        <MiniStat label="Pro Members" value={overview.proUsers} />
+        <MiniStat label="Individual Members" value={overview.individualUsers} />
+        <MiniStat label="Shared Members" value={overview.sharedUsers} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
@@ -214,7 +214,14 @@ export default function AdminAnalytics() {
           </div>
           <div className="space-y-4">
             {charts.usersByPlan.map((p, i) => {
-              const colors = ['bg-gray-500', 'bg-purple-500', 'bg-orange-500'];
+              const planColorMap = {
+                'Indiv. Monthly': 'bg-blue-500', 'Indiv. Quarterly': 'bg-indigo-500',
+                'Shared Monthly': 'bg-purple-500', 'Shared Quarterly': 'bg-pink-500',
+                'Individual': 'bg-blue-500', 'Shared': 'bg-purple-500',
+                'Free / Inactive': 'bg-gray-500',
+              };
+              const fallbackColors = ['bg-cyan-500','bg-orange-500','bg-green-500','bg-red-500','bg-yellow-500','bg-teal-500'];
+              const barColor = planColorMap[p.plan] || fallbackColors[i % fallbackColors.length];
               const pct = overview.totalUsers > 0 ? (p.count / overview.totalUsers * 100).toFixed(1) : 0;
               return (
                 <div key={i}>
@@ -224,7 +231,7 @@ export default function AdminAnalytics() {
                   </div>
                   <div className="w-full h-3 bg-dark-surface rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full ${colors[i]} transition-all`}
+                      className={`h-full rounded-full ${barColor} transition-all`}
                       style={{ width: `${pct}%` }}
                     />
                   </div>
@@ -297,7 +304,7 @@ export default function AdminAnalytics() {
                     <p className="text-xs text-brand-text-tertiary truncate">{u.email}</p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <span className="text-xs font-medium text-accent capitalize">{u.subscription?.plan || 'free'}</span>
+                    <span className="text-xs font-medium text-accent">{{ individual_monthly:'Indiv. Monthly', 'individual-monthly':'Indiv. Monthly', individual_quarterly:'Indiv. Quarterly', 'individual-quarterly':'Indiv. Quarterly', shared_monthly:'Shared Monthly', 'shared-monthly':'Shared Monthly', shared_quarterly:'Shared Quarterly', 'shared-quarterly':'Shared Quarterly', premium:'Individual', pro:'Shared' }[u.subscription?.planId || u.subscription?.plan] || u.subscription?.plan || 'Free'}</span>
                     <p className="text-xs text-brand-text-tertiary">{new Date(u.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</p>
                   </div>
                 </div>
@@ -315,28 +322,30 @@ export default function AdminAnalytics() {
 function MiniStat({ label, value }) {
   return (
     <div className="bg-dark-elevated rounded-xl p-4 border border-white/10">
-      <div className="text-2xl font-bold text-white">{value.toLocaleString()}</div>
+      <div className="text-2xl font-bold text-white">{(value ?? 0).toLocaleString()}</div>
       <p className="text-xs text-brand-text-tertiary">{label}</p>
     </div>
   );
 }
 
 function GrowthCard({ label, value, prev }) {
-  const pct = prev != null && prev > 0 ? ((value - prev) / prev * 100).toFixed(0) : null;
-  const isUp = pct !== null && pct >= 0;
+  const v = value ?? 0;
+  const p = prev ?? null;
+  const pct = p != null && p > 0 ? ((v - p) / p * 100).toFixed(0) : null;
+  const isUp = pct !== null && Number(pct) >= 0;
 
   return (
     <div className="bg-dark-surface rounded-xl p-4">
       <p className="text-xs text-brand-text-tertiary mb-1">{label}</p>
       <div className="flex items-end gap-2">
-        <span className="text-2xl font-bold text-white">{value.toLocaleString()}</span>
+        <span className="text-2xl font-bold text-white">{v.toLocaleString()}</span>
         {pct !== null && (
           <span className={`text-xs font-semibold mb-1 ${isUp ? 'text-green-400' : 'text-red-400'}`}>
             {isUp ? '+' : ''}{pct}%
           </span>
         )}
       </div>
-      {prev != null && <p className="text-xs text-brand-text-tertiary mt-1">vs {prev.toLocaleString()} last month</p>}
+      {p != null && <p className="text-xs text-brand-text-tertiary mt-1">vs {p.toLocaleString()} last month</p>}
     </div>
   );
 }
