@@ -51,13 +51,21 @@ const RiskBadge = ({ score }) => {
   );
 };
 
+const PLAN_DISPLAY = {
+  individual_monthly:   'Individual Monthly',
+  individual_quarterly: 'Individual Quarterly',
+  shared_monthly:       'Shared Monthly',
+  shared_quarterly:     'Shared Quarterly',
+};
+const formatPlan = (raw) => PLAN_DISPLAY[raw] || (raw ? raw.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Free');
+
 const PlanBadge = ({ plan, status }) => {
   const color = status === 'active'
     ? 'bg-accent/20 text-accent border-accent/30'
     : 'bg-white/5 text-brand-text-tertiary border-white/10';
   return (
     <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${color}`}>
-      {plan || 'Free'}
+      {formatPlan(plan)}
     </span>
   );
 };
@@ -355,15 +363,20 @@ export default function AdminUserDevices() {
     const user = users.find(u => u._id === userId);
     if (!user?.devices?.length) return;
     try {
-      await Promise.all(
+      const results = await Promise.all(
         user.devices.map(d =>
           fetch(`${API}/users/${userId}/devices/${d.deviceId}`, {
             method: 'DELETE',
             headers: authHeaders()
-          })
+          }).then(res => res.json())
         )
       );
-      showToast(`All devices revoked for ${user.name}`);
+      const failed = results.filter(r => !r.success).length;
+      if (failed > 0) {
+        showToast(`${failed} device(s) failed to revoke`, 'error');
+      } else {
+        showToast(`All devices revoked for ${user.name}`);
+      }
       fetchDevices(pagination.page);
       fetchSuspects();
     } catch {
@@ -471,8 +484,11 @@ export default function AdminUserDevices() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search users..."
-            className="w-full pl-9 pr-4 py-2.5 bg-dark-elevated border border-white/10 rounded-xl text-sm focus:outline-none focus:border-accent"
+            placeholder={tab === 'suspects' ? 'Search not available for suspects' : 'Search users...'}
+            disabled={tab === 'suspects'}
+            className={`w-full pl-9 pr-4 py-2.5 bg-dark-elevated border border-white/10 rounded-xl text-sm focus:outline-none focus:border-accent ${
+              tab === 'suspects' ? 'opacity-40 cursor-not-allowed' : ''
+            }`}
           />
         </div>
 
