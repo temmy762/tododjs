@@ -30,6 +30,7 @@ const subscriptionPlans = [
       noCommitment: true
     },
     durationDays: 30,
+    stripePriceId: 'price_1TTQzvCf0RJKfcIBpNlXxRl8',
     order: 1
   },
   {
@@ -52,6 +53,7 @@ const subscriptionPlans = [
       noCommitment: true
     },
     durationDays: 90,
+    stripePriceId: 'price_1TTR1nCf0RJKfcIBgF6f67Hr',
     order: 2
   },
   {
@@ -74,6 +76,7 @@ const subscriptionPlans = [
       noCommitment: true
     },
     durationDays: 30,
+    stripePriceId: 'price_1TTR35Cf0RJKfcIBMpq5zVfJ',
     order: 3
   },
   {
@@ -96,6 +99,7 @@ const subscriptionPlans = [
       noCommitment: true
     },
     durationDays: 90,
+    stripePriceId: 'price_1TTR4PCf0RJKfcIBjzSOnxNZ',
     order: 4
   }
 ];
