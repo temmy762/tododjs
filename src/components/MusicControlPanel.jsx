@@ -408,7 +408,13 @@ export default function MusicControlPanel({
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleAudioEnded}
-        onCanPlay={() => setAudioLoading(false)}
+        onCanPlay={() => {
+          setAudioLoading(false);
+          // If play() was aborted by the preceding audio.load() call (common in
+          // Safari / Firefox), retry now that the browser signals it is ready.
+          const a = audioRef.current;
+          if (isPlaying && a?.paused) a.play().catch(() => {});
+        }}
         onWaiting={() => { if (isPlaying) setAudioLoading(true); }}
         onPlaying={() => setAudioLoading(false)}
       />
