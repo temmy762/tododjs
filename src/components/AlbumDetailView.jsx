@@ -1,8 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { usePlayer } from '../context/PlayerContext';
-import { Play, Download, Heart, Clock, Music, X, Loader, Archive, Share2, Pause, Check, ArrowLeft } from 'lucide-react';
+import { Play, Download, Heart, Music, Archive, Share2, Pause, Check, ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import GenericCoverArt from './GenericCoverArt';
 import PremiumPrompt from './PremiumPrompt';
 import API_URL from '../config/api';
 import { apiFetch, getDeviceId } from '../services/apiFetch';
@@ -59,7 +58,11 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
   const [downloadingZip, setDownloadingZip] = useState(false);
 
   const isAdmin = user?.role === 'admin';
-  const isPremium = isAdmin || (user && user.subscription?.plan && user.subscription.plan !== 'free');
+  const isPremium = isAdmin || (
+    user &&
+    (user.subscription?.planId || (user.subscription?.plan && user.subscription.plan !== 'free')) &&
+    user.subscription?.status === 'active'
+  );
   const autoPlayTriggered = useRef(false);
 
   const handlePlayPause = (track) => {
@@ -131,7 +134,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
     } finally {
       setDownloadingZip(false);
     }
-  }, [album, requireAuth, tracks]);
+  }, [album, requireAuth]);
 
   const toggleLike = useCallback((track, e) => {
     e?.stopPropagation();
@@ -173,12 +176,6 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       }).catch(() => {});
     }
   }, [album]);
-
-  const handlePlayAll = () => {
-    if (tracks.length > 0) {
-      handlePlayPause(tracks[0]);
-    }
-  };
 
   // Safety check for album prop - must be after all hooks
   if (!album) {
@@ -323,11 +320,12 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
                   
                   {!isLoading && tracks.map((track, index) => {
                     const isCurrentlyPlaying = currentTrackId === (track.id || track._id) && isPanelPlaying;
-                    const isLiked = likedTracks.has(track.id);
+                    const trackId = track.id || track._id;
+                    const isLiked = likedTracks.has(trackId);
 
                     return (
                       <div
-                        key={track.id}
+                        key={trackId}
                         className="group px-3 md:px-5 py-2.5 hover:bg-white/5 transition-all duration-200 animate-in fade-in slide-in-from-right cursor-pointer"
                         style={{ animationDelay: `${index * 30}ms`, animationDuration: '400ms' }}
                         onClick={() => handlePlayPause(track)}
