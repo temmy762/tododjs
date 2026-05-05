@@ -174,10 +174,12 @@ const server = app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
 
-// Set timeout to 0 (no timeout) for large file uploads
+// Per-route req.setTimeout(0) already handles upload timeouts.
+// Setting keepAliveTimeout=0 globally was killing HTTP connection reuse for ALL
+// requests (Nginx had to open a new TCP connection to Node on every API call).
 server.timeout = 0;
-server.keepAliveTimeout = 0;
-server.headersTimeout = 0;
+server.keepAliveTimeout = 65000; // match Nginx keepalive_timeout (65 s) — enables connection reuse
+server.headersTimeout = 66000;   // must be slightly above keepAliveTimeout
 server.requestTimeout = 0;
 
 // Handle unhandled promise rejections — log but do NOT crash in production

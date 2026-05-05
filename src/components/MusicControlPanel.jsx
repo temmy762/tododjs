@@ -1,4 +1,4 @@
-import { X, Pause, Play, Info, Volume2, VolumeX, SkipBack, SkipForward, Music, User, Shuffle, Repeat2 } from 'lucide-react';
+import { X, Pause, Play, Info, Volume2, VolumeX, SkipBack, SkipForward, Music, User, Shuffle, Repeat2, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import PremiumPrompt from './PremiumPrompt';
@@ -122,18 +122,21 @@ export default function MusicControlPanel({
         const res = await fetch(`${API_URL}/${collection}/${trackId}/playback`, { headers });
         const data = await res.json();
         if (data.success && data.data?.url) {
+          // Keep audioLoading=true here — onCanPlay will clear it once Wasabi
+          // has buffered enough to play. This covers the full latency gap:
+          // API round-trip + initial Wasabi buffer, not just the API round-trip.
           setAudioUrl(data.data.url);
         } else {
           console.error('Playback URL error:', data.message);
+          setAudioLoading(false);
           setAudioUrl(null);
           lastTrackIdRef.current = null; // allow retry
         }
       } catch (err) {
         console.error('Error fetching playback URL:', err);
+        setAudioLoading(false);
         setAudioUrl(null);
         lastTrackIdRef.current = null; // allow retry
-      } finally {
-        setAudioLoading(false);
       }
     };
 
@@ -392,6 +395,9 @@ export default function MusicControlPanel({
         onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onEnded={handleAudioEnded}
+        onCanPlay={() => setAudioLoading(false)}
+        onWaiting={() => { if (isPlaying) setAudioLoading(true); }}
+        onPlaying={() => setAudioLoading(false)}
       />
       {!hidden && (
       <div className="fixed bottom-[60px] md:bottom-0 left-0 right-0 z-[45]">
@@ -461,8 +467,11 @@ export default function MusicControlPanel({
                     type="button"
                     onClick={onPlayPause}
                     className="w-10 h-10 rounded-full bg-white flex items-center justify-center transition-all duration-200 shadow-lg shadow-white/10 hover:shadow-xl hover:shadow-white/20 hover:scale-105 active:scale-95"
+                    disabled={audioLoading}
                   >
-                    {isPlaying ? (
+                    {audioLoading ? (
+                      <Loader2 className="w-5 h-5 text-black animate-spin" />
+                    ) : isPlaying ? (
                       <Pause className="w-5 h-5 text-black" fill="black" strokeWidth={0} />
                     ) : (
                       <Play className="w-5 h-5 text-black ml-0.5" fill="black" strokeWidth={0} />
@@ -592,8 +601,11 @@ export default function MusicControlPanel({
                     type="button"
                     onClick={onPlayPause}
                     className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-lg shadow-white/10"
+                    disabled={audioLoading}
                   >
-                    {isPlaying ? (
+                    {audioLoading ? (
+                      <Loader2 className="w-5 h-5 text-black animate-spin" />
+                    ) : isPlaying ? (
                       <Pause className="w-5 h-5 text-black" fill="black" strokeWidth={0} />
                     ) : (
                       <Play className="w-5 h-5 text-black ml-0.5" fill="black" strokeWidth={0} />
