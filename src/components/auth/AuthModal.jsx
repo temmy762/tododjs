@@ -160,7 +160,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
 
   const handleEnableBiometric = async () => {
     try {
-      await registerBiometric(lastLoginData.user._id, lastLoginData.user.name || lastLoginData.user.email);
+      await registerBiometric(lastLoginData.user.id || lastLoginData.user._id, lastLoginData.user.name || lastLoginData.user.email);
       setBiometricRegistered(true);
     } catch { /* user declined */ }
     onSuccess(lastLoginData.user);
