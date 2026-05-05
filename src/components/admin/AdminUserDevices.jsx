@@ -314,9 +314,10 @@ export default function AdminUserDevices() {
         setPagination(data.pagination);
         const totalDevices = data.data.reduce((s, u) => s + (u.devices?.length || 0), 0);
         const activeSessions = data.data.reduce((s, u) => s + (u.activeSessions || 0), 0);
-        const suspiciousUsers = data.data.filter(u => u.suspiciousSharing).length;
         const blockedAttempts = data.data.reduce((s, u) => s + (u.blockedLoginAttempts?.length || 0), 0);
-        setStats({ totalDevices, activeSessions, suspiciousUsers, blockedAttempts, totalUsers: data.pagination.total });
+        // suspiciousUsers is intentionally NOT derived here — it is set exclusively
+        // by fetchSuspects so the stat card always matches the Sharing Suspects tab count.
+        setStats(prev => ({ ...prev, totalDevices, activeSessions, blockedAttempts, totalUsers: data.pagination.total }));
       }
     } catch (err) {
       console.error('Failed to fetch devices:', err);
@@ -329,7 +330,12 @@ export default function AdminUserDevices() {
     try {
       const res = await fetch(`${API}/users/sharing-suspects`, { headers: authHeaders() });
       const data = await res.json();
-      if (data.success) setSuspects(data.data);
+      if (data.success) {
+        setSuspects(data.data);
+        // Keep the SUSPICIOUS stat card in sync with the Sharing Suspects tab —
+        // both must come from the same source so the numbers always match.
+        setStats(prev => ({ ...prev, suspiciousUsers: data.data.length }));
+      }
     } catch (err) {
       console.error('Failed to fetch suspects:', err);
     }
