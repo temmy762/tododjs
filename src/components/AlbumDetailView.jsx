@@ -198,89 +198,91 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
             <span className="text-sm font-medium">{t('album.back', 'Back')}</span>
           </button>
           {/* Split Layout Container */}
-          <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[380px_1fr] gap-6 lg:gap-8 animate-in slide-in-from-bottom duration-500">
+          <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[380px_1fr] gap-4 lg:gap-8 animate-in slide-in-from-bottom duration-500">
             
             {/* LEFT: Album Card */}
             <div className="lg:sticky lg:top-6 h-fit">
               <div className="bg-gradient-to-br from-dark-elevated to-dark-surface rounded-2xl overflow-hidden shadow-2xl border border-white/5 animate-in slide-in-from-left duration-500">
-                {/* Album Cover - Reduced Height */}
-                <div className="relative group aspect-square lg:aspect-auto lg:h-[260px] xl:h-[300px]">
-                  {album.coverArt ? (
-                    <img
-                      src={album.coverArt}
-                      alt={album.title || album.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full bg-dark-surface flex items-center justify-center">
-                      <Archive className="w-16 h-16 text-white/10" />
-                    </div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
-                  
-                  {/* Animated Gradient Overlay */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-accent/10 via-transparent to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
-                </div>
 
-                {/* Album Info */}
-                <div className="p-4 md:p-6">
-                  <div className="mb-3 md:mb-4">
-                    {album.isNew && (
-                      <span className="inline-block px-3 py-1 rounded-full bg-gradient-to-r from-accent to-purple-500 text-xs font-bold text-white uppercase tracking-wider mb-3">
-                        {t('album.newRelease')}
-                      </span>
+                {/* Mobile: horizontal compact card */}
+                <div className="flex lg:block">
+                  {/* Cover */}
+                  <div className="relative group flex-shrink-0 w-28 h-28 sm:w-36 sm:h-36 lg:w-full lg:h-[260px] xl:h-[300px]">
+                    {album.coverArt ? (
+                      <img
+                        src={album.coverArt}
+                        alt={album.title || album.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-dark-surface flex items-center justify-center">
+                        <Archive className="w-10 h-10 lg:w-16 lg:h-16 text-white/10" />
+                      </div>
                     )}
-                    <h1 className="text-lg md:text-2xl font-bold text-white mb-1 md:mb-2 leading-tight">
-                      {album.title || album.name}
-                    </h1>
-                    <p className="text-sm md:text-lg text-brand-text-secondary font-medium">
-                      {album.artist}
-                    </p>
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-accent/10 via-transparent to-purple-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                   </div>
 
-                  {/* Album Stats */}
-                  <div className="flex items-center gap-4 text-sm text-brand-text-tertiary mb-6">
-                    <span>{album.year}</span>
-                    <span>•</span>
-                    <span>{album.trackCount} {t('album.tracks')}</span>
-                  </div>
+                  {/* Album Info */}
+                  <div className="flex-1 min-w-0 p-3 sm:p-4 lg:p-6">
+                    <div className="mb-2 lg:mb-4">
+                      {album.isNew && (
+                        <span className="inline-block px-2 py-0.5 rounded-full bg-gradient-to-r from-accent to-purple-500 text-[10px] font-bold text-white uppercase tracking-wider mb-2">
+                          {t('album.newRelease')}
+                        </span>
+                      )}
+                      <h1 className="text-sm sm:text-base lg:text-2xl font-bold text-white mb-1 leading-tight line-clamp-2 break-words">
+                        {album.title || album.name}
+                      </h1>
+                      <p className="text-xs sm:text-sm lg:text-base text-brand-text-secondary font-medium truncate">
+                        {album.artist}
+                      </p>
+                    </div>
 
-                  {/* Action Buttons */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={handleDownloadZip}
-                      disabled={downloadingZip}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-gradient-to-r from-accent to-purple-500 hover:from-accent-hover hover:to-purple-600 transition-all duration-200 hover:scale-105 shadow-lg shadow-accent/30 disabled:opacity-60 disabled:hover:scale-100"
-                    >
-                      {downloadingZip ? (
-                        <svg className="animate-spin w-4 h-4 text-white" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                        </svg>
-                      ) : (
-                        <Archive className="w-4 h-4 text-white" />
-                      )}
-                      <span className="text-sm font-semibold text-white">
-                        {downloadingZip ? t('album.downloading') : t('album.downloadAll')}
-                      </span>
-                    </button>
-                    <button
-                      onClick={handleLikeAlbum}
-                      className="px-4 py-3 rounded-lg bg-dark-elevated hover:bg-dark-elevated/80 transition-all duration-200 hover:scale-105 group"
-                    >
-                      <Heart className={`w-4 h-4 transition-colors ${allTracksLiked ? 'text-accent fill-accent' : 'text-white group-hover:text-accent'}`} />
-                    </button>
-                    <button
-                      onClick={handleShare}
-                      className="relative px-4 py-3 rounded-lg bg-dark-elevated hover:bg-dark-elevated/80 transition-all duration-200 hover:scale-105 group"
-                    >
-                      <Share2 className="w-4 h-4 text-white group-hover:text-accent transition-colors" />
-                      {shareToast && (
-                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1 rounded-lg bg-accent text-white text-[10px] font-semibold whitespace-nowrap shadow-lg animate-in fade-in zoom-in-95 duration-200 flex items-center gap-1">
-                          <Check className="w-3 h-3" /> {t('album.linkCopied')}
-                        </div>
-                      )}
-                    </button>
+                    {/* Album Stats */}
+                    <div className="flex items-center gap-2 text-xs text-brand-text-tertiary mb-3 lg:mb-6">
+                      <span>{album.year}</span>
+                      <span>•</span>
+                      <span>{album.trackCount} {t('album.tracks')}</span>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleDownloadZip}
+                        disabled={downloadingZip}
+                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 lg:px-4 lg:py-3 rounded-lg bg-gradient-to-r from-accent to-purple-500 hover:from-accent-hover hover:to-purple-600 transition-all duration-200 hover:scale-105 shadow-lg shadow-accent/30 disabled:opacity-60 disabled:hover:scale-100"
+                      >
+                        {downloadingZip ? (
+                          <svg className="animate-spin w-3.5 h-3.5 text-white" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                        ) : (
+                          <Archive className="w-3.5 h-3.5 text-white" />
+                        )}
+                        <span className="text-xs font-semibold text-white whitespace-nowrap">
+                          {downloadingZip ? t('album.downloading') : t('album.downloadAll')}
+                        </span>
+                      </button>
+                      <button
+                        onClick={handleLikeAlbum}
+                        className="px-3 py-2 lg:px-4 lg:py-3 rounded-lg bg-dark-elevated hover:bg-dark-elevated/80 transition-all duration-200 hover:scale-105 group"
+                      >
+                        <Heart className={`w-3.5 h-3.5 lg:w-4 lg:h-4 transition-colors ${allTracksLiked ? 'text-accent fill-accent' : 'text-white group-hover:text-accent'}`} />
+                      </button>
+                      <button
+                        onClick={handleShare}
+                        className="relative px-3 py-2 lg:px-4 lg:py-3 rounded-lg bg-dark-elevated hover:bg-dark-elevated/80 transition-all duration-200 hover:scale-105 group"
+                      >
+                        <Share2 className="w-3.5 h-3.5 lg:w-4 lg:h-4 text-white group-hover:text-accent transition-colors" />
+                        {shareToast && (
+                          <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1 rounded-lg bg-accent text-white text-[10px] font-semibold whitespace-nowrap shadow-lg animate-in fade-in zoom-in-95 duration-200 flex items-center gap-1">
+                            <Check className="w-3 h-3" /> {t('album.linkCopied')}
+                          </div>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -326,105 +328,83 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
                     return (
                       <div
                         key={track.id}
-                        className="group px-3 md:px-6 py-2.5 md:py-3 hover:bg-white/5 transition-all duration-200 animate-in fade-in slide-in-from-right"
-                        style={{ 
-                          animationDelay: `${index * 30}ms`,
-                          animationDuration: '400ms'
-                        }}
+                        className="group px-3 md:px-5 py-2.5 hover:bg-white/5 transition-all duration-200 animate-in fade-in slide-in-from-right cursor-pointer"
+                        style={{ animationDelay: `${index * 30}ms`, animationDuration: '400ms' }}
                         onClick={() => handlePlayPause(track)}
                       >
-                        <div className="flex items-center gap-3 md:gap-4">
+                        <div className="flex items-center gap-2 md:gap-3">
                           {/* Track Number / Play Button */}
-                          <div className="w-6 md:w-8 flex items-center justify-center flex-shrink-0">
-                            <span className={`text-sm font-medium ${
-                              isCurrentlyPlaying ? 'text-accent' : 'text-brand-text-tertiary group-hover:hidden'
-                            }`}>
-                              {index + 1}
-                            </span>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handlePlayPause(track);
-                              }}
-                              className="hidden group-hover:flex items-center justify-center"
-                            >
-                              {isCurrentlyPlaying ? (
-                                <Pause className="w-4 h-4 text-accent" fill="currentColor" />
-                              ) : (
-                                <Play className="w-4 h-4 text-white" fill="currentColor" />
-                              )}
-                            </button>
+                          <div className="w-5 md:w-7 flex items-center justify-center flex-shrink-0">
+                            {isCurrentlyPlaying ? (
+                              <Pause className="w-3.5 h-3.5 text-accent" fill="currentColor" />
+                            ) : (
+                              <>
+                                <span className={`text-xs font-medium text-brand-text-tertiary group-hover:hidden`}>{index + 1}</span>
+                                <Play className="w-3.5 h-3.5 text-white hidden group-hover:block" fill="currentColor" />
+                              </>
+                            )}
                           </div>
 
-                          {/* Track Info */}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-3">
-                              <div className="flex-1 min-w-0">
-                                <h3 className={`text-sm font-semibold truncate transition-colors duration-200 ${
-                                  isCurrentlyPlaying ? 'text-accent' : 'text-white group-hover:text-accent'
-                                }`}>
-                                  {track.title}
-                                </h3>
-                                <div className="flex items-center gap-2 mt-0.5">
-                                  <p className="text-xs text-brand-text-tertiary truncate">
-                                    {track.artist}
-                                  </p>
-                                  <span className="text-brand-text-tertiary/40">•</span>
-                                  <span className="text-[10px] text-brand-text-tertiary/60 truncate">
-                                    {track.pool}
-                                  </span>
-                                </div>
-                              </div>
+                          {/* Track Info — takes all remaining space */}
+                          <div className="flex-1 min-w-0 flex items-center gap-2">
+                            {/* Title + artist stacked */}
+                            <div className="flex-1 min-w-0">
+                              <h3 className={`text-xs sm:text-sm font-semibold truncate transition-colors duration-200 ${
+                                isCurrentlyPlaying ? 'text-accent' : 'text-white group-hover:text-accent'
+                              }`}>
+                                {track.title}
+                              </h3>
+                              <p className="text-[10px] sm:text-xs text-brand-text-tertiary truncate mt-0.5">
+                                {track.artist}
+                              </p>
+                            </div>
 
-                              {/* Genre Tag */}
-                              <span className="hidden sm:inline px-2 py-0.5 rounded-md text-[10px] font-bold text-white bg-accent/80 border border-accent/40">
+                            {/* Tags — progressively hidden on small screens */}
+                            <div className="hidden sm:flex items-center gap-1.5 flex-shrink-0">
+                              <span className="hidden md:inline px-1.5 py-0.5 rounded-md text-[10px] font-bold text-white bg-accent/80 border border-accent/40 whitespace-nowrap">
                                 {track.genre}
                               </span>
-
-                              <span
-                                className="px-1.5 sm:px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-extrabold text-black border border-black/10"
-                                style={{ backgroundColor: getTonalityColor(track.tonality) }}
-                              >
-                                {track.tonality}
-                              </span>
-
-                              {/* BPM */}
-                              <span className="px-1.5 sm:px-2 py-0.5 rounded bg-dark-elevated/50 text-[9px] font-medium text-brand-text-secondary">
-                                {track.bpm}
-                              </span>
-
-                              {/* Date with Year */}
-                              <span className="hidden md:inline text-[10px] text-brand-text-tertiary w-20 text-right">
-                                {new Date(track.dateAdded).toLocaleDateString(dateLocale, { month: 'short', day: 'numeric', year: 'numeric' })}
-                              </span>
+                              {track.tonality && (
+                                <span
+                                  className="px-1.5 py-0.5 rounded-md text-[10px] font-extrabold text-black border border-black/10 whitespace-nowrap"
+                                  style={{ backgroundColor: getTonalityColor(track.tonality) }}
+                                >
+                                  {track.tonality}
+                                </span>
+                              )}
+                              {track.bpm && (
+                                <span className="px-1.5 py-0.5 rounded bg-dark-elevated/50 text-[10px] font-medium text-brand-text-secondary whitespace-nowrap">
+                                  {track.bpm}
+                                </span>
+                              )}
                             </div>
                           </div>
 
-                          {/* Action Buttons */}
-                          <div className="flex items-center gap-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-200">
+                          {/* Action Buttons — always visible on mobile, hover-only on desktop */}
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity duration-200">
                             <button
                               onClick={(e) => toggleLike(track, e)}
-                              className="hover:scale-110 transition-transform duration-150"
+                              className="p-1 hover:scale-110 transition-transform duration-150"
                               title={isLiked ? t('album.unlike') : t('album.like')}
                             >
-                              <Heart 
-                                className={`w-4 h-4 ${isLiked ? 'text-accent fill-accent' : 'text-white/70 hover:text-white'}`}
+                              <Heart
+                                className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isLiked ? 'text-accent fill-accent' : 'text-white/70 hover:text-white'}`}
                                 strokeWidth={2}
                               />
                             </button>
-                            <button 
+                            <button
                               onClick={(e) => handleDownloadTrack(track, e)}
                               disabled={downloadingTrackId === (track.id || track._id)}
-                              className="hover:scale-110 transition-transform duration-150 disabled:opacity-50"
+                              className="p-1 hover:scale-110 transition-transform duration-150 disabled:opacity-50"
                               title={t('album.downloadTrack')}
                             >
                               {downloadingTrackId === (track.id || track._id) ? (
-                                <svg className="animate-spin w-4 h-4 text-accent" viewBox="0 0 24 24">
+                                <svg className="animate-spin w-3.5 h-3.5 text-accent" viewBox="0 0 24 24">
                                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                                 </svg>
                               ) : (
-                                <Download className="w-4 h-4 text-white/70 hover:text-white" strokeWidth={2} />
+                                <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white/70 hover:text-white" strokeWidth={2} />
                               )}
                             </button>
                           </div>
