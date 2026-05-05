@@ -606,19 +606,24 @@ export const deleteMashup = async (req, res) => {
 // @access  Public
 export const getMashupPlayback = async (req, res) => {
   try {
-    const mashup = await Mashup.findById(req.params.id);
+    const mashup = await Mashup.findById(req.params.id)
+      .select('audioFile.key plays');
     if (!mashup || !mashup.audioFile?.key) {
       return res.status(404).json({ success: false, message: 'Mashup not found' });
     }
 
     const url = await getSignedDownloadUrl(mashup.audioFile.key, 3600);
 
-    mashup.plays = (mashup.plays || 0) + 1;
-    await mashup.save();
-
-    // Cache response for 55 min to reduce repeated Wasabi egress
+    // Respond immediately — increment play counter in the background so it
+    // never blocks the client from receiving the signed URL.
     res.set('Cache-Control', 'private, max-age=3300');
     res.status(200).json({ success: true, data: { url } });
+
+    setImmediate(async () => {
+      try {
+        await Mashup.findByIdAndUpdate(req.params.id, { $inc: { plays: 1 } });
+      } catch { /* non-critical — never block playback */ }
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

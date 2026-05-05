@@ -380,7 +380,8 @@ export const updateTrack = async (req, res) => {
 // @access  Private
 export const getTrackPlaybackUrl = async (req, res) => {
   try {
-    const track = await Track.findById(req.params.id);
+    const track = await Track.findById(req.params.id)
+      .select('audioFile.key audioFile.duration title artist coverArt');
 
     if (!track) {
       return res.status(404).json({

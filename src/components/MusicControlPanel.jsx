@@ -109,7 +109,9 @@ export default function MusicControlPanel({
 
     setPreviewLimitHit(false);
     setShowPrompt(false);
-    setAudioUrl(null);
+    // Pause immediately but keep the element alive — destroying it (setAudioUrl(null))
+    // forces the browser to drop its Wasabi connection and re-buffer from zero.
+    audioRef.current?.pause();
 
     const fetchPlaybackUrl = async () => {
       setAudioLoading(true);
@@ -380,18 +382,17 @@ export default function MusicControlPanel({
 
   return (
     <>
-      {/* Audio always stays mounted so music keeps playing even when panel is hidden */}
-      {audioUrl && (
-        <audio
-          ref={audioRef}
-          src={audioUrl}
-          preload="auto"
-          muted={muted}
-          onTimeUpdate={handleTimeUpdate}
-          onLoadedMetadata={handleLoadedMetadata}
-          onEnded={handleAudioEnded}
-        />
-      )}
+      {/* Audio always stays mounted — conditional render destroys the element and drops
+           the Wasabi connection, forcing a full re-buffer on every track change */}
+      <audio
+        ref={audioRef}
+        src={audioUrl || undefined}
+        preload="auto"
+        muted={muted}
+        onTimeUpdate={handleTimeUpdate}
+        onLoadedMetadata={handleLoadedMetadata}
+        onEnded={handleAudioEnded}
+      />
       {!hidden && (
       <div className="fixed bottom-[60px] md:bottom-0 left-0 right-0 z-[45]">
       {/* Gradient top edge */}
