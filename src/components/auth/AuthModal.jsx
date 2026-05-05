@@ -124,7 +124,13 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
     setError('');
     try {
       const { userId } = await verifyBiometric();
-      if (!userId) throw new Error(t('auth.noSavedSession'));
+      if (!userId) {
+        // Stored credential is corrupt (e.g. from an old bug) — clear it so the
+        // user can re-enable biometric on their next password login.
+        clearBiometric();
+        setBiometricRegistered(false);
+        throw new Error(t('auth.noSavedSession'));
+      }
 
       const response = await fetch(`${API_URL}/auth/biometric-login`, {
         method: 'POST',
@@ -138,11 +144,14 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
         onSuccess(data.user);
       } else {
         setError(data.message || t('auth.biometricFailed'));
-        // Only wipe the stored credential when the user account itself is gone or inactive.
-        // "Device not recognised" (401) keeps the credential — user just needs to password-login once.
-        // Transient server errors (500) also keep the credential.
-        const accountGone = response.status === 401 && !data.message?.toLowerCase().includes('device');
-        if (accountGone) {
+        // 400 → corrupt credential (userId/deviceId malformed) — clear and let user re-register.
+        // 401 without "device" → account gone/inactive — clear credential.
+        // 401 with "device" → device not registered — keep credential, user needs one password login.
+        // 500 → transient server error — keep credential.
+        const shouldClear =
+          response.status === 400 ||
+          (response.status === 401 && !data.message?.toLowerCase().includes('device'));
+        if (shouldClear) {
           clearBiometric();
           setBiometricRegistered(false);
         }
