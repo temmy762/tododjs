@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import GenericCoverArt from './GenericCoverArt';
 import PremiumPrompt from './PremiumPrompt';
 import API_URL from '../config/api';
-import { apiFetch } from '../services/apiFetch';
+import { apiFetch, getDeviceId } from '../services/apiFetch';
 
 // Trigger a file download from a URL without navigating away from the current page
 const triggerDownload = (url) => {
@@ -117,11 +117,12 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
     setDownloadingZip(true);
     try {
       const token = localStorage.getItem('token');
+      const deviceId = getDeviceId();
       const albumId = album.id || album._id;
       if (!albumId) throw new Error('Album id is missing');
       const iframe = document.createElement('iframe');
       iframe.style.display = 'none';
-      iframe.src = `${API_URL}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`;
+      iframe.src = `${API_URL}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&deviceId=${encodeURIComponent(deviceId)}`;
       document.body.appendChild(iframe);
       setTimeout(() => iframe.remove(), 120000);
     } catch (err) {
