@@ -74,6 +74,26 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
     }
   };
 
+  const handleReactivateSubscription = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/payment/reactivate-subscription`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        fetchSubscriptionData();
+        if (onUpdate) onUpdate();
+      } else {
+        alert(data.message);
+      }
+    } catch (error) {
+      console.error('Error reactivating subscription:', error);
+      alert(t('subscriptionMgmt.failedToCancel'));
+    }
+  };
+
   const handleRemoveDevice = async (deviceId) => {
     if (!confirm(t('subscriptionMgmt.removeDeviceConfirm'))) {
       return;
@@ -243,12 +263,31 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
 
           {/* Actions — only show cancel for Stripe-managed (non-admin-granted) plans */}
           <div className="space-y-3">
-            {subscription.status === 'active' && !subscription.grantedByAdmin && (
+            {subscription.cancelAtPeriodEnd && (
+              <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                <p className="text-sm text-yellow-400 font-semibold mb-1">
+                  {t('subscription.cancelPending', 'Cancellation Scheduled')}
+                </p>
+                <p className="text-xs text-brand-text-tertiary">
+                  {t('subscription.cancelPendingDesc', 'Your subscription will cancel at the end of the billing period.')}
+                  {subscription.endDate ? ` ${t('subscription.accessUntil', 'Access until')} ${new Date(subscription.endDate).toLocaleDateString()}.` : ''}
+                </p>
+              </div>
+            )}
+            {subscription.status === 'active' && !subscription.grantedByAdmin && !subscription.cancelAtPeriodEnd && (
               <button
                 onClick={handleCancelSubscription}
                 className="w-full py-3 rounded-lg border border-red-500/20 text-red-400 hover:bg-red-500/10 transition-colors"
               >
                 {t('subscription.cancelSubscription')}
+              </button>
+            )}
+            {subscription.status === 'active' && !subscription.grantedByAdmin && subscription.cancelAtPeriodEnd && (
+              <button
+                onClick={handleReactivateSubscription}
+                className="w-full py-3 rounded-lg border border-green-500/20 text-green-400 hover:bg-green-500/10 transition-colors"
+              >
+                {t('subscription.reactivate', 'Reactivate Subscription')}
               </button>
             )}
           </div>
