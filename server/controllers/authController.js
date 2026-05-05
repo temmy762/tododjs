@@ -555,8 +555,6 @@ export const biometricLogin = async (req, res) => {
       return res.status(401).json({ success: false, message: 'User not found or inactive' });
     }
 
-    if (deviceId) req.body.deviceId = deviceId;
-
     await sendTokenResponse(user, 200, res, req);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
