@@ -78,6 +78,7 @@ export default function MusicControlPanel({
   const infoButtonRef = useRef(null);
   const infoPopoverRef = useRef(null);
   const lastTrackIdRef = useRef(null);
+  const prevAudioUrlRef = useRef(null);
   const volumeTimeoutRef = useRef(null);
 
   const { t } = useTranslation();
@@ -98,7 +99,9 @@ export default function MusicControlPanel({
     // Reset ref when panel closes so same track can be re-fetched on reopen
     if (!trackId) {
       lastTrackIdRef.current = null;
+      prevAudioUrlRef.current = null;
       setAudioUrl(null);
+      setAudioLoading(false);
       setShowPrompt(false);
       setPreviewLimitHit(false);
       return;
@@ -147,6 +150,16 @@ export default function MusicControlPanel({
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio || !audioUrl) return;
+
+    // When the URL changes (new track), call load() explicitly so the browser
+    // processes the new src before play() — without this some browsers play the
+    // old buffered audio or stall because they haven't yet processed the React
+    // setAttribute() call that updated the src.
+    const srcChanged = audioUrl !== prevAudioUrlRef.current;
+    if (srcChanged) {
+      prevAudioUrlRef.current = audioUrl;
+      audio.load();
+    }
 
     if (isPlaying) {
       if (previewLimitHit) {
