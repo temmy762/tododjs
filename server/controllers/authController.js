@@ -538,3 +538,27 @@ export const resetPassword = async (req, res) => {
     });
   }
 };
+
+// @desc    Issue a fresh JWT after client-side WebAuthn biometric verification
+// @route   POST /api/auth/biometric-login
+// @access  Public (WebAuthn already verified on client side)
+export const biometricLogin = async (req, res) => {
+  try {
+    const { userId, deviceId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ success: false, message: 'User ID required' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user || !user.isActive) {
+      return res.status(401).json({ success: false, message: 'User not found or inactive' });
+    }
+
+    if (deviceId) req.body.deviceId = deviceId;
+
+    await sendTokenResponse(user, 200, res, req);
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

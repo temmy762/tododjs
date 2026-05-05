@@ -9,7 +9,8 @@ import {
   updatePassword,
   deleteMe,
   forgotPassword,
-  resetPassword
+  resetPassword,
+  biometricLogin
 } from '../controllers/authController.js';
 import { protect } from '../middleware/auth.js';
 
@@ -17,6 +18,7 @@ const router = express.Router();
 
 router.post('/register', register);
 router.post('/login', login);
+router.post('/biometric-login', biometricLogin);
 router.get('/logout', protect, logout);
 router.get('/me', protect, getMe);
 router.post('/refresh', protect, refreshToken);

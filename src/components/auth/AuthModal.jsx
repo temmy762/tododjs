@@ -123,25 +123,21 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
     setBiometricLoading(true);
     setError('');
     try {
-      await verifyBiometric();
-      const storedToken = localStorage.getItem('token');
-      if (!storedToken) {
-        throw new Error(t('auth.noSavedSession'));
-      }
-      const response = await fetch(`${API_URL}/auth/refresh`, {
+      const { userId } = await verifyBiometric();
+      if (!userId) throw new Error(t('auth.noSavedSession'));
+
+      const response = await fetch(`${API_URL}/auth/biometric-login`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${storedToken}`,
-        },
+        headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        body: JSON.stringify({ userId, deviceId: getDeviceId() }),
       });
       const data = await response.json();
       if (data.success) {
         localStorage.setItem('token', data.token);
         onSuccess(data.user);
       } else {
-        setError(t('auth.sessionExpired'));
+        setError(data.message || t('auth.biometricFailed'));
         clearBiometric();
         setBiometricRegistered(false);
       }
