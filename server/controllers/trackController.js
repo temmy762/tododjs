@@ -259,28 +259,30 @@ export const libraryTracks = async (req, res) => {
       { $unionWith: { coll: 'mashups', pipeline: mashupNorm } }
     ];
 
-    // Total count
-    const countResult = await Track.aggregate([
+    // Single aggregation: $facet gets count + paginated data in one DB round-trip
+    const facetResult = await Track.aggregate([
       ...basePipeline,
-      { $count: 'total' }
-    ]);
-    const total = countResult[0]?.total || 0;
-
-    // Paginated data
-    const combined = await Track.aggregate([
-      ...basePipeline,
-      { $sort: { [sortField]: sortDir } },
-      { $skip: skip },
-      { $limit: limitNum },
       {
-        $project: {
-          title: 1, artist: 1, genre: 1, bpm: 1, tonality: 1,
-          pool: 1, collection: 1, coverArt: 1, coverArtKey: 1,
-          'audioFile.duration': 1, isLocked: 1, requiredPlan: 1,
-          dateAdded: 1, source: 1, albumId: 1
+        $facet: {
+          total: [{ $count: 'n' }],
+          data: [
+            { $sort: { [sortField]: sortDir } },
+            { $skip: skip },
+            { $limit: limitNum },
+            {
+              $project: {
+                title: 1, artist: 1, genre: 1, bpm: 1, tonality: 1,
+                pool: 1, collection: 1, coverArt: 1, coverArtKey: 1,
+                'audioFile.duration': 1, isLocked: 1, requiredPlan: 1,
+                dateAdded: 1, source: 1, albumId: 1
+              }
+            }
+          ]
         }
       }
     ]);
+    const total = facetResult[0]?.total[0]?.n || 0;
+    const combined = facetResult[0]?.data || [];
 
     // Resolve cover art signed URLs
     const mapped = await Promise.all(combined.map(async (t) => {
