@@ -46,7 +46,12 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
     // Determine max devices based on subscription status
     let maxDevices = 0; // Free accounts get 0 devices (no downloads)
     
-    if (user.subscription.planId && user.subscription.status === 'active') {
+    const _isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
+    const _hasValidSub = user.subscription.planId && (
+      user.subscription.status === 'active' ||
+      (user.subscription.status === 'cancelled' && _isWithinPeriod)
+    );
+    if (_hasValidSub) {
       const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
       if (plan) {
         maxDevices = plan.features.maxDevices;
