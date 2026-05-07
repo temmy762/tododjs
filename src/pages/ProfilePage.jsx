@@ -279,11 +279,20 @@ export default function ProfilePage({ user, onLogout, onUserUpdate }) {
               </div>
               <div>
                 <p className="text-xs text-brand-text-tertiary uppercase tracking-wider mb-1">{t('userDashboard.status')}</p>
-                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
-                  user.subscription?.status === 'active' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'
-                }`}>
-                  {user.subscription?.status || 'Active'}
-                </span>
+                {(() => {
+                  const sub = user.subscription;
+                  const isWithinPeriod = !!(sub?.endDate) && new Date(sub.endDate) > new Date();
+                  const isActivePaid = sub?.status === 'active' || (sub?.status === 'cancelled' && isWithinPeriod);
+                  return (
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${
+                      isActivePaid ? 'bg-green-500/20 text-green-400' :
+                      sub?.status === 'cancelled' ? 'bg-yellow-500/20 text-yellow-400' :
+                      'bg-red-500/20 text-red-400'
+                    }`}>
+                      {sub?.status || 'inactive'}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
           </div>
