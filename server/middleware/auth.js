@@ -131,7 +131,9 @@ export const authorize = (...roles) => {
 export const checkSubscription = (...plans) => {
   return (req, res, next) => {
     if (req.user.role === 'admin') return next();
-    if (req.user.subscription?.status !== 'active') {
+    const _isWithinPeriod = !!req.user.subscription?.endDate && new Date() <= new Date(req.user.subscription.endDate);
+    const _hasAccess = req.user.subscription?.status === 'active' || (req.user.subscription?.status === 'cancelled' && _isWithinPeriod);
+    if (!_hasAccess) {
       return res.status(403).json({
         success: false,
         message: 'Active subscription required',
@@ -151,11 +153,14 @@ export const checkSubscription = (...plans) => {
 
 // Check if subscription is active
 export const checkSubscriptionActive = (req, res, next) => {
-  if (req.user.subscription.status !== 'active') {
+  if (req.user.role === 'admin') return next();
+  const isWithinPeriod = !!req.user.subscription?.endDate && new Date() <= new Date(req.user.subscription.endDate);
+  const hasAccess = req.user.subscription?.status === 'active' || (req.user.subscription?.status === 'cancelled' && isWithinPeriod);
+  if (!hasAccess) {
     return res.status(403).json({
       success: false,
       message: 'Your subscription is not active. Please renew to continue.',
-      subscriptionStatus: req.user.subscription.status
+      subscriptionStatus: req.user.subscription?.status
     });
   }
   next();

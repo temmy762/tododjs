@@ -140,7 +140,8 @@ export const downloadTrackFile = async (req, res) => {
     // Admin bypasses all download restrictions
     if (user.role !== 'admin') {
       if (!user.canDownload()) {
-        const hasSubscription = user.subscription.status === 'active' && user.subscription.planId;
+        const isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
+        const hasSubscription = (user.subscription.status === 'active' || (user.subscription.status === 'cancelled' && isWithinPeriod)) && user.subscription.planId;
         return res.status(403).json({
           success: false,
           message: hasSubscription ? 'Daily download limit reached' : 'Active subscription required for downloads',
@@ -238,7 +239,9 @@ export const downloadAlbum = async (req, res) => {
     // Admin bypasses all subscription checks
     if (user.role !== 'admin') {
       const hasPlan = user.subscription?.planId || (user.subscription?.plan && user.subscription.plan !== 'free');
-      if (!hasPlan || user.subscription?.status !== 'active') {
+      const isWithinPeriod = !!user.subscription?.endDate && new Date() <= new Date(user.subscription.endDate);
+      const hasAccess = user.subscription?.status === 'active' || (user.subscription?.status === 'cancelled' && isWithinPeriod);
+      if (!hasPlan || !hasAccess) {
         return res.status(403).json({
           success: false,
           message: 'Bulk album downloads require an active subscription',
@@ -310,7 +313,9 @@ export const downloadAlbumFile = async (req, res) => {
     // Admin bypasses all subscription checks
     if (user.role !== 'admin') {
       const hasPlan = user.subscription?.planId || (user.subscription?.plan && user.subscription.plan !== 'free');
-      if (!hasPlan || user.subscription?.status !== 'active') {
+      const isWithinPeriod = !!user.subscription?.endDate && new Date() <= new Date(user.subscription.endDate);
+      const hasAccess = user.subscription?.status === 'active' || (user.subscription?.status === 'cancelled' && isWithinPeriod);
+      if (!hasPlan || !hasAccess) {
         return res.status(403).json({
           success: false,
           message: 'Bulk album downloads require an active subscription',
