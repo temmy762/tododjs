@@ -1,7 +1,7 @@
 import User from '../models/User.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import { parseDeviceInfo, cleanupInactiveDevices } from '../utils/deviceParser.js';
-import { sendEmail } from '../services/emailService.js';
+import { sendEmail, getDeviceRemovedEmailTemplate, getSignOutAllEmailTemplate } from '../services/emailService.js';
 
 /**
  * @desc    Get all registered devices for current user
@@ -85,20 +85,9 @@ export const removeDevice = async (req, res) => {
 
     // Send email notification
     try {
-      await sendEmail({
-        to: user.email,
-        subject: 'Device Removed from Your Account',
-        html: `
-          <h2>Device Removed</h2>
-          <p>Hi ${user.name},</p>
-          <p>A device was removed from your TodoDJS account:</p>
-          <ul>
-            <li><strong>Device:</strong> ${removedDevice.deviceName || removedDevice.browser + ' on ' + removedDevice.os}</li>
-            <li><strong>Removed:</strong> ${new Date().toLocaleString()}</li>
-          </ul>
-          <p>If you didn't make this change, please contact support immediately.</p>
-        `
-      });
+      const lang = user.preferredLanguage || 'es';
+      const { subject, html, text } = getDeviceRemovedEmailTemplate(user, removedDevice, lang);
+      await sendEmail({ to: user.email, subject, html, text });
     } catch (emailError) {
       console.error('Failed to send device removal email:', emailError);
     }
@@ -194,18 +183,9 @@ export const signOutAllDevices = async (req, res) => {
 
     // Send email notification
     try {
-      await sendEmail({
-        to: user.email,
-        subject: 'All Devices Signed Out',
-        html: `
-          <h2>Security Alert: All Devices Signed Out</h2>
-          <p>Hi ${user.name},</p>
-          <p>All devices (${deviceCount}) have been signed out from your TodoDJS account.</p>
-          <p><strong>Time:</strong> ${new Date().toLocaleString()}</p>
-          <p>You will need to sign in again on each device you want to use.</p>
-          <p>If you didn't make this change, please reset your password immediately and contact support.</p>
-        `
-      });
+      const lang = user.preferredLanguage || 'es';
+      const { subject, html, text } = getSignOutAllEmailTemplate(user, deviceCount, lang);
+      await sendEmail({ to: user.email, subject, html, text });
     } catch (emailError) {
       console.error('Failed to send sign-out email:', emailError);
     }

@@ -91,6 +91,51 @@ const translations = {
       footer: 'This link will expire in 24 hours. After setting your password you can log in and start downloading tracks!',
       linkText: 'Or copy this link:',
       copyright: 'All rights reserved.'
+    },
+    deviceBlocked: {
+      subject: '⚠️ New Device Blocked — Device Limit Reached',
+      title: 'Unrecognized Device Blocked',
+      greeting: 'Hey',
+      message: 'Someone tried to log into your <strong>TodoDJS</strong> account from a new device, but your plan only allows <strong>{maxDevices} device{plural}</strong>.',
+      details: 'Blocked Device Details',
+      labelDevice: 'Device',
+      labelBrowser: 'Browser',
+      labelOs: 'OS',
+      labelIp: 'IP Address',
+      labelTime: 'Time',
+      footer: 'If this was you, sign in to your account and remove one of your existing devices to free up a slot.',
+      notYou: 'If this was <strong>not you</strong>, your account is secure — the login was blocked. Consider changing your password immediately.',
+      manageLink: 'Manage Your Devices →'
+    },
+    newDevice: {
+      subject: 'New Device Added to Your Account',
+      title: 'New Device Registered',
+      greeting: 'Hey',
+      message: 'A new device was added to your TodoDJS account:',
+      labelDevice: 'Device',
+      labelType: 'Type',
+      labelIp: 'IP Address',
+      labelTime: 'Time',
+      footer: 'If this wasn\'t you, please sign out all devices immediately from your account settings.',
+      manage: 'You can manage your devices at any time from your dashboard.'
+    },
+    deviceRemoved: {
+      subject: 'Device Removed from Your Account',
+      title: 'Device Removed',
+      greeting: 'Hey',
+      message: 'A device was removed from your TodoDJS account:',
+      labelDevice: 'Device',
+      labelRemoved: 'Removed',
+      footer: 'If you didn\'t make this change, please contact support immediately.'
+    },
+    signOutAll: {
+      subject: 'All Devices Signed Out',
+      title: 'Security Alert: All Devices Signed Out',
+      greeting: 'Hey',
+      message: 'All devices ({count}) have been signed out from your TodoDJS account.',
+      labelTime: 'Time',
+      footer: 'You will need to sign in again on each device you want to use.',
+      notYou: 'If you didn\'t make this change, please reset your password immediately and contact support.'
     }
   },
   es: {
@@ -180,6 +225,51 @@ const translations = {
       footer: 'Este enlace expirará en 24 horas. Después de configurar tu contraseña podrás iniciar sesión y comenzar a descargar pistas.',
       linkText: 'O copia este enlace:',
       copyright: 'Todos los derechos reservados.'
+    },
+    deviceBlocked: {
+      subject: '⚠️ Acceso Bloqueado — Límite de Dispositivos Alcanzado',
+      title: 'Dispositivo No Reconocido Bloqueado',
+      greeting: 'Hola',
+      message: 'Alguien intentó iniciar sesión en tu cuenta de <strong>TodoDJS</strong> desde un nuevo dispositivo, pero tu plan solo permite <strong>{maxDevices} dispositivo{plural}</strong>.',
+      details: 'Detalles del Dispositivo Bloqueado',
+      labelDevice: 'Dispositivo',
+      labelBrowser: 'Navegador',
+      labelOs: 'Sistema Operativo',
+      labelIp: 'Dirección IP',
+      labelTime: 'Hora',
+      footer: 'Si fuiste tú, inicia sesión en tu cuenta y elimina uno de tus dispositivos existentes para liberar un espacio.',
+      notYou: 'Si <strong>no fuiste tú</strong>, tu cuenta está segura — el acceso fue bloqueado. Considera cambiar tu contraseña inmediatamente.',
+      manageLink: 'Gestionar Tus Dispositivos →'
+    },
+    newDevice: {
+      subject: 'Nuevo Dispositivo Añadido a Tu Cuenta',
+      title: 'Nuevo Dispositivo Registrado',
+      greeting: 'Hola',
+      message: 'Se añadió un nuevo dispositivo a tu cuenta de TodoDJS:',
+      labelDevice: 'Dispositivo',
+      labelType: 'Tipo',
+      labelIp: 'Dirección IP',
+      labelTime: 'Hora',
+      footer: 'Si no fuiste tú, cierra sesión en todos los dispositivos inmediatamente desde la configuración de tu cuenta.',
+      manage: 'Puedes gestionar tus dispositivos en cualquier momento desde tu panel.'
+    },
+    deviceRemoved: {
+      subject: 'Dispositivo Eliminado de Tu Cuenta',
+      title: 'Dispositivo Eliminado',
+      greeting: 'Hola',
+      message: 'Se eliminó un dispositivo de tu cuenta de TodoDJS:',
+      labelDevice: 'Dispositivo',
+      labelRemoved: 'Eliminado el',
+      footer: 'Si no realizaste este cambio, por favor contacta al soporte inmediatamente.'
+    },
+    signOutAll: {
+      subject: 'Todos los Dispositivos Han Cerrado Sesión',
+      title: 'Alerta de Seguridad: Sesión Cerrada en Todos los Dispositivos',
+      greeting: 'Hola',
+      message: 'Se cerró sesión en todos los dispositivos ({count}) de tu cuenta de TodoDJS.',
+      labelTime: 'Hora',
+      footer: 'Necesitarás iniciar sesión nuevamente en cada dispositivo que desees usar.',
+      notYou: 'Si no realizaste este cambio, restablece tu contraseña inmediatamente y contacta al soporte.'
     }
   }
 };
@@ -243,7 +333,7 @@ function getEmailTemplate(lang, title, content, { preheader = '', gradient = 'li
 }
 
 // Welcome email template
-export function getWelcomeEmailTemplate(user, lang = 'en') {
+export function getWelcomeEmailTemplate(user, lang = 'es') {
   const content = `
     <div style="padding: 30px;">
       <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">${t(lang, 'welcome.greeting')} <strong>${user.name}</strong>,</p>
@@ -263,7 +353,7 @@ export function getWelcomeEmailTemplate(user, lang = 'en') {
 }
 
 // Password reset email template
-export function getPasswordResetEmailTemplate(user, resetToken, lang = 'en', isNewUser = false) {
+export function getPasswordResetEmailTemplate(user, resetToken, lang = 'es', isNewUser = false) {
   const resetUrl = `${FRONTEND_URL}/reset-password?token=${resetToken}`;
   
   if (isNewUser) {
@@ -308,7 +398,7 @@ export function getPasswordResetEmailTemplate(user, resetToken, lang = 'en', isN
 }
 
 // Subscription confirmation email template
-export function getSubscriptionEmailTemplate(user, planName, lang = 'en') {
+export function getSubscriptionEmailTemplate(user, planName, lang = 'es') {
   const content = `
     <div style="padding: 30px;">
       <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">${t(lang, 'subscription.greeting')} <strong>${user.name}</strong>,</p>
@@ -328,7 +418,7 @@ export function getSubscriptionEmailTemplate(user, planName, lang = 'en') {
 }
 
 // Download receipt email template
-export function getDownloadReceiptEmailTemplate(user, tracks, lang = 'en') {
+export function getDownloadReceiptEmailTemplate(user, tracks, lang = 'es') {
   const trackList = tracks.map(t => `<li style="padding: 6px 0; color: #a0a0a0; font-size: 14px;">${t.artist} — ${t.title}</li>`).join('');
   
   const dateOptions = lang === 'es' 
@@ -356,7 +446,7 @@ export function getDownloadReceiptEmailTemplate(user, tracks, lang = 'en') {
 
 // ─── User Payment & Subscription Templates ───
 
-export function getPaymentReceiptEmailTemplate(user, planName, amount, currency, endDate, lang = 'en') {
+export function getPaymentReceiptEmailTemplate(user, planName, amount, currency, endDate, lang = 'es') {
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
   const dateOptions = { year: 'numeric', month: 'long', day: 'numeric' };
   const formattedDate = new Date().toLocaleDateString(locale, dateOptions);
@@ -405,7 +495,7 @@ export function getPaymentReceiptEmailTemplate(user, planName, amount, currency,
   };
 }
 
-export function getSubscriptionCancelledEmailTemplate(user, planName, accessUntilDate, lang = 'en') {
+export function getSubscriptionCancelledEmailTemplate(user, planName, accessUntilDate, lang = 'es') {
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
   const dateOptions = { year: 'numeric', month: 'long', day: 'numeric' };
   const formattedCancelDate = new Date().toLocaleDateString(locale, dateOptions);
@@ -449,7 +539,7 @@ export function getSubscriptionCancelledEmailTemplate(user, planName, accessUnti
   };
 }
 
-export function getPaymentFailedEmailTemplate(user, lang = 'en') {
+export function getPaymentFailedEmailTemplate(user, lang = 'es') {
   const content = `
     <div style="padding: 30px;">
       <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">${t(lang, 'paymentFailed.greeting')} <strong>${user.name}</strong>,</p>
@@ -468,6 +558,107 @@ export function getPaymentFailedEmailTemplate(user, lang = 'en') {
     subject: t(lang, 'paymentFailed.subject'),
     html: getEmailTemplate(lang, t(lang, 'paymentFailed.title'), content, { gradient: 'linear-gradient(135deg, #ef4444, #b91c1c)', preheader: t(lang, 'paymentFailed.reason') }),
     text: `${t(lang, 'paymentFailed.greeting')} ${user.name}, ${t(lang, 'paymentFailed.message')}`
+  };
+}
+
+// ─── Device Email Templates ───
+
+export function getDeviceBlockedEmailTemplate(user, maxDevices, deviceInfo, ipAddress, lang = 'es') {
+  const plural = maxDevices > 1 ? 's' : '';
+  const locale = lang === 'es' ? 'es-ES' : 'en-US';
+  const content = `
+    <div style="padding: 30px;">
+      <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">${t(lang, 'deviceBlocked.greeting')} <strong>${user.name}</strong>,</p>
+      <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'deviceBlocked.message', { maxDevices, plural })}</p>
+      <div style="margin: 20px 0; background: #111; border: 1px solid #1a1a1a; border-radius: 10px; padding: 20px;">
+        <p style="margin: 0 0 12px; font-size: 13px; font-weight: 700; color: #f59e0b;">${t(lang, 'deviceBlocked.details')}</p>
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr><td style="padding: 6px 0; font-size: 13px; color: #888; width: 140px;">${t(lang, 'deviceBlocked.labelDevice')}</td><td style="padding: 6px 0; font-size: 13px; color: #e0e0e0;">${deviceInfo.deviceName || 'Unknown'}</td></tr>
+          <tr><td style="padding: 6px 0; font-size: 13px; color: #888;">${t(lang, 'deviceBlocked.labelBrowser')}</td><td style="padding: 6px 0; font-size: 13px; color: #e0e0e0;">${deviceInfo.browser || 'Unknown'}</td></tr>
+          <tr><td style="padding: 6px 0; font-size: 13px; color: #888;">${t(lang, 'deviceBlocked.labelOs')}</td><td style="padding: 6px 0; font-size: 13px; color: #e0e0e0;">${deviceInfo.os || 'Unknown'}</td></tr>
+          <tr><td style="padding: 6px 0; font-size: 13px; color: #888;">${t(lang, 'deviceBlocked.labelIp')}</td><td style="padding: 6px 0; font-size: 13px; color: #e0e0e0;">${ipAddress}</td></tr>
+          <tr><td style="padding: 6px 0; font-size: 13px; color: #888;">${t(lang, 'deviceBlocked.labelTime')}</td><td style="padding: 6px 0; font-size: 13px; color: #e0e0e0;">${new Date().toLocaleString(locale)}</td></tr>
+        </table>
+      </div>
+      <p style="font-size: 14px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'deviceBlocked.footer')}</p>
+      <p style="font-size: 14px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'deviceBlocked.notYou')}</p>
+      <div style="margin: 25px 0;">
+        <a href="${FRONTEND_URL}/subscription" style="display: inline-block; background: #7c3aed; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">${t(lang, 'deviceBlocked.manageLink')}</a>
+      </div>
+    </div>
+  `;
+  return {
+    subject: t(lang, 'deviceBlocked.subject'),
+    html: getEmailTemplate(lang, t(lang, 'deviceBlocked.title'), content, { gradient: 'linear-gradient(135deg, #f59e0b, #d97706)' }),
+    text: `${t(lang, 'deviceBlocked.greeting')} ${user.name}, ${t(lang, 'deviceBlocked.message', { maxDevices, plural })}`
+  };
+}
+
+export function getNewDeviceEmailTemplate(user, deviceInfo, ipAddress, lang = 'es') {
+  const locale = lang === 'es' ? 'es-ES' : 'en-US';
+  const content = `
+    <div style="padding: 30px;">
+      <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">${t(lang, 'newDevice.greeting')} <strong>${user.name}</strong>,</p>
+      <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'newDevice.message')}</p>
+      <div style="margin: 20px 0; background: #111; border: 1px solid #1a1a1a; border-radius: 10px; padding: 20px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr><td style="padding: 6px 0; font-size: 13px; color: #888; width: 140px;">${t(lang, 'newDevice.labelDevice')}</td><td style="padding: 6px 0; font-size: 13px; color: #e0e0e0;">${deviceInfo.deviceName || 'Unknown'}</td></tr>
+          <tr><td style="padding: 6px 0; font-size: 13px; color: #888;">${t(lang, 'newDevice.labelType')}</td><td style="padding: 6px 0; font-size: 13px; color: #e0e0e0;">${deviceInfo.deviceType || 'Unknown'}</td></tr>
+          <tr><td style="padding: 6px 0; font-size: 13px; color: #888;">${t(lang, 'newDevice.labelIp')}</td><td style="padding: 6px 0; font-size: 13px; color: #e0e0e0;">${ipAddress}</td></tr>
+          <tr><td style="padding: 6px 0; font-size: 13px; color: #888;">${t(lang, 'newDevice.labelTime')}</td><td style="padding: 6px 0; font-size: 13px; color: #e0e0e0;">${new Date().toLocaleString(locale)}</td></tr>
+        </table>
+      </div>
+      <p style="font-size: 14px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'newDevice.footer')}</p>
+      <p style="font-size: 14px; color: #666; line-height: 1.6;">${t(lang, 'newDevice.manage')}</p>
+    </div>
+  `;
+  return {
+    subject: t(lang, 'newDevice.subject'),
+    html: getEmailTemplate(lang, t(lang, 'newDevice.title'), content, { gradient: 'linear-gradient(135deg, #10b981, #059669)' }),
+    text: `${t(lang, 'newDevice.greeting')} ${user.name}, ${t(lang, 'newDevice.message')}`
+  };
+}
+
+export function getDeviceRemovedEmailTemplate(user, removedDevice, lang = 'es') {
+  const locale = lang === 'es' ? 'es-ES' : 'en-US';
+  const deviceLabel = removedDevice.deviceName || ((removedDevice.browser || '') + ' on ' + (removedDevice.os || ''));
+  const content = `
+    <div style="padding: 30px;">
+      <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">${t(lang, 'deviceRemoved.greeting')} <strong>${user.name}</strong>,</p>
+      <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'deviceRemoved.message')}</p>
+      <div style="margin: 20px 0; background: #111; border: 1px solid #1a1a1a; border-radius: 10px; padding: 20px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr><td style="padding: 6px 0; font-size: 13px; color: #888; width: 140px;">${t(lang, 'deviceRemoved.labelDevice')}</td><td style="padding: 6px 0; font-size: 13px; color: #e0e0e0;">${deviceLabel}</td></tr>
+          <tr><td style="padding: 6px 0; font-size: 13px; color: #888;">${t(lang, 'deviceRemoved.labelRemoved')}</td><td style="padding: 6px 0; font-size: 13px; color: #e0e0e0;">${new Date().toLocaleString(locale)}</td></tr>
+        </table>
+      </div>
+      <p style="font-size: 14px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'deviceRemoved.footer')}</p>
+    </div>
+  `;
+  return {
+    subject: t(lang, 'deviceRemoved.subject'),
+    html: getEmailTemplate(lang, t(lang, 'deviceRemoved.title'), content, { gradient: 'linear-gradient(135deg, #ef4444, #dc2626)' }),
+    text: `${t(lang, 'deviceRemoved.greeting')} ${user.name}, ${t(lang, 'deviceRemoved.message')}`
+  };
+}
+
+export function getSignOutAllEmailTemplate(user, deviceCount, lang = 'es') {
+  const locale = lang === 'es' ? 'es-ES' : 'en-US';
+  const content = `
+    <div style="padding: 30px;">
+      <p style="font-size: 16px; color: #e0e0e0; line-height: 1.6;">${t(lang, 'signOutAll.greeting')} <strong>${user.name}</strong>,</p>
+      <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'signOutAll.message', { count: deviceCount })}</p>
+      <div style="margin: 15px 0; padding: 12px 16px; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2); border-radius: 8px;">
+        <p style="margin: 0; font-size: 13px; color: #e0e0e0;"><strong>${t(lang, 'signOutAll.labelTime')}</strong> ${new Date().toLocaleString(locale)}</p>
+      </div>
+      <p style="font-size: 14px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'signOutAll.footer')}</p>
+      <p style="font-size: 14px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'signOutAll.notYou')}</p>
+    </div>
+  `;
+  return {
+    subject: t(lang, 'signOutAll.subject'),
+    html: getEmailTemplate(lang, t(lang, 'signOutAll.title'), content, { gradient: 'linear-gradient(135deg, #ef4444, #b91c1c)' }),
+    text: `${t(lang, 'signOutAll.greeting')} ${user.name}, ${t(lang, 'signOutAll.message', { count: deviceCount })}`
   };
 }
 
@@ -624,6 +815,10 @@ export default {
   getPaymentReceiptEmailTemplate,
   getSubscriptionCancelledEmailTemplate,
   getPaymentFailedEmailTemplate,
+  getDeviceBlockedEmailTemplate,
+  getNewDeviceEmailTemplate,
+  getDeviceRemovedEmailTemplate,
+  getSignOutAllEmailTemplate,
   getAdminNewSignupTemplate,
   getAdminNewPaymentTemplate,
   getAdminCancelledSubscriptionTemplate,

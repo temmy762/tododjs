@@ -2,7 +2,7 @@ import User from '../models/User.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { getSignedDownloadUrl } from '../config/wasabi.js';
-import { sendEmail, sendWelcomeEmail, sendPasswordResetEmail, notifyAdminNewSignup } from '../services/emailService.js';
+import { sendEmail, sendWelcomeEmail, sendPasswordResetEmail, notifyAdminNewSignup, getDeviceBlockedEmailTemplate } from '../services/emailService.js';
 
 // Sign avatar URL if it's stored in Wasabi
 const signAvatarUrl = async (user) => {
@@ -72,26 +72,9 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
 
         // Email the account owner with details of the blocked attempt
         try {
-          await sendEmail({
-            to: user.email,
-            subject: '⚠️ New Device Blocked — Device Limit Reached',
-            html: `
-              <h2>Unrecognized Device Blocked</h2>
-              <p>Hi ${user.name},</p>
-              <p>Someone tried to log into your <strong>TodoDJS</strong> account from a new device, but your plan only allows <strong>${maxDevices} device${maxDevices > 1 ? 's' : ''}</strong>.</p>
-              <h3>Blocked Device Details</h3>
-              <ul>
-                <li><strong>Device:</strong> ${deviceInfo.deviceName}</li>
-                <li><strong>Browser:</strong> ${deviceInfo.browser}</li>
-                <li><strong>OS:</strong> ${deviceInfo.os}</li>
-                <li><strong>IP Address:</strong> ${ipAddress}</li>
-                <li><strong>Time:</strong> ${new Date().toLocaleString()}</li>
-              </ul>
-              <p>If this was you, sign in to your account and remove one of your existing devices to free up a slot.</p>
-              <p>If this was <strong>not you</strong>, your account is secure — the login was blocked. Consider changing your password immediately.</p>
-              <p><a href="https://tododjs.com" style="color:#7C3AED">Manage Your Devices →</a></p>
-            `
-          });
+          const lang = user.preferredLanguage || 'es';
+          const { subject, html, text } = getDeviceBlockedEmailTemplate(user, maxDevices, deviceInfo, ipAddress, lang);
+          await sendEmail({ to: user.email, subject, html, text });
         } catch (emailError) {
           console.error('Failed to send device block email:', emailError);
         }

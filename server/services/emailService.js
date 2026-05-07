@@ -7,6 +7,10 @@ import {
   getPaymentReceiptEmailTemplate,
   getSubscriptionCancelledEmailTemplate,
   getPaymentFailedEmailTemplate,
+  getDeviceBlockedEmailTemplate,
+  getNewDeviceEmailTemplate,
+  getDeviceRemovedEmailTemplate,
+  getSignOutAllEmailTemplate,
   getAdminNewSignupTemplate,
   getAdminNewPaymentTemplate,
   getAdminCancelledSubscriptionTemplate,
@@ -55,7 +59,7 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers }) {
  * Welcome email sent after registration
  */
 export async function sendWelcomeEmail(user) {
-  const lang = user.preferredLanguage || 'en';
+  const lang = user.preferredLanguage || 'es';
   const { subject, html, text } = getWelcomeEmailTemplate(user, lang);
 
   return sendEmail({
@@ -77,7 +81,7 @@ export async function sendWelcomeEmail(user) {
  * @param {boolean} isNewUser - If true, sends welcome email with password setup instead of reset
  */
 export async function sendPasswordResetEmail(user, resetToken, isNewUser = false) {
-  const lang = user.preferredLanguage || 'en';
+  const lang = user.preferredLanguage || 'es';
   const { subject, html, text } = getPasswordResetEmailTemplate(user, resetToken, lang, isNewUser);
   
   return sendEmail({
@@ -92,7 +96,7 @@ export async function sendPasswordResetEmail(user, resetToken, isNewUser = false
  * Subscription confirmation email
  */
 export async function sendSubscriptionEmail(user, plan) {
-  const lang = user.preferredLanguage || 'en';
+  const lang = user.preferredLanguage || 'es';
   const { subject, html, text } = getSubscriptionEmailTemplate(user, plan, lang);
 
   return sendEmail({
@@ -111,7 +115,7 @@ export async function sendSubscriptionEmail(user, plan) {
  * Download receipt email
  */
 export async function sendDownloadReceiptEmail(user, tracks) {
-  const lang = user.preferredLanguage || 'en';
+  const lang = user.preferredLanguage || 'es';
   const { subject, html, text } = getDownloadReceiptEmailTemplate(user, tracks, lang);
   
   return sendEmail({
@@ -135,7 +139,7 @@ export async function sendNotificationEmail(to, subject, message) {
         <p style="font-size: 15px; color: #a0a0a0; line-height: 1.6;">${message}</p>
       </div>
       <div style="padding: 20px 30px; border-top: 1px solid #1a1a1a; text-align: center;">
-        <p style="margin: 0; font-size: 12px; color: #555;">© ${new Date().getFullYear()} TodoDJs. All rights reserved.</p>
+        <p style="margin: 0; font-size: 12px; color: #555;">© ${new Date().getFullYear()} TodoDJs. Todos los derechos reservados.</p>
       </div>
     </div>
   `;
@@ -149,7 +153,7 @@ export async function sendNotificationEmail(to, subject, message) {
  * Payment receipt email sent to user after successful payment
  */
 export async function sendPaymentReceiptEmail(user, planName, amount, currency, endDate) {
-  const lang = user.preferredLanguage || 'en';
+  const lang = user.preferredLanguage || 'es';
   const { subject, html, text } = getPaymentReceiptEmailTemplate(user, planName, amount, currency, endDate, lang);
   
   return sendEmail({
@@ -164,7 +168,7 @@ export async function sendPaymentReceiptEmail(user, planName, amount, currency, 
  * Subscription cancelled email sent to user
  */
 export async function sendSubscriptionCancelledEmail(user, planName, accessUntilDate) {
-  const lang = user.preferredLanguage || 'en';
+  const lang = user.preferredLanguage || 'es';
   const { subject, html, text } = getSubscriptionCancelledEmailTemplate(user, planName, accessUntilDate, lang);
   
   return sendEmail({
@@ -179,7 +183,7 @@ export async function sendSubscriptionCancelledEmail(user, planName, accessUntil
  * Payment failed email sent to user
  */
 export async function sendPaymentFailedEmail(user) {
-  const lang = user.preferredLanguage || 'en';
+  const lang = user.preferredLanguage || 'es';
   const { subject, html, text } = getPaymentFailedEmailTemplate(user, lang);
   
   return sendEmail({
@@ -236,6 +240,13 @@ export async function notifyAdminExpiredSubscription(user, planName) {
   const { subject, html, text } = getAdminExpiredSubscriptionTemplate(user, planName);
   return sendAdminNotification({ subject, html, text });
 }
+
+export {
+  getDeviceBlockedEmailTemplate,
+  getNewDeviceEmailTemplate,
+  getDeviceRemovedEmailTemplate,
+  getSignOutAllEmailTemplate
+} from './emailTemplates.js';
 
 export default {
   sendWelcomeEmail,
