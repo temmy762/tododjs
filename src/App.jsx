@@ -855,6 +855,7 @@ function App() {
               <GenreFilterHorizontal
                 activeCategory={activeCategory}
                 onCategoryChange={(name) => setActiveCategory(name || null)}
+                scope="home"
               />
             </div>
 
