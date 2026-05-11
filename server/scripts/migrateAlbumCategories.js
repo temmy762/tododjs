@@ -17,7 +17,11 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: path.join(__dirname, '../../.env') });
+// Try server/.env first, fall back to project root .env
+dotenv.config({ path: path.join(__dirname, '../.env') });
+if (!process.env.MONGODB_URI) {
+  dotenv.config({ path: path.join(__dirname, '../../.env') });
+}
 
 const DRY_RUN = process.argv.includes('--dry-run');
 
