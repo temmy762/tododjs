@@ -661,6 +661,7 @@
     "searchMobile": "BUSCAR",
     "noCollectionsSearch": "Ninguna colección coincide con tu búsqueda",
     "noAlbumsYet": "Aún no hay álbumes en esta colección",
+    "noAlbumsCategory": "No se encontraron álbumes en esta categoría",
     "collectionSeries": "Serie de Colecciones",
     "recordPool": "Record Pool",
     "packs": "{{count}} packs",

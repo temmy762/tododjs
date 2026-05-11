@@ -105,8 +105,11 @@ export const updateCategory = async (req, res) => {
       const exists = await Category.findOne({ $or: [{ name }, { slug: newSlug }], _id: { $ne: category._id } });
       if (exists) return res.status(400).json({ success: false, message: 'A category with that name already exists' });
 
-      // Rename the category on all tracks too
-      await Track.updateMany({ category: category.name }, { $set: { category: name.trim() } });
+      // Rename the category on all tracks AND albums
+      await Promise.all([
+        Track.updateMany({ category: category.name }, { $set: { category: name.trim() } }),
+        Album.updateMany({ category: category.name }, { $set: { category: name.trim() } })
+      ]);
 
       category.name = name.trim();
       category.slug = newSlug;
@@ -134,8 +137,11 @@ export const deleteCategory = async (req, res) => {
     const category = await Category.findById(req.params.id);
     if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
 
-    // Unset category on all tracks that reference it
-    await Track.updateMany({ category: category.name }, { $set: { category: null } });
+    // Unset category on all tracks AND albums that reference it
+    await Promise.all([
+      Track.updateMany({ category: category.name }, { $set: { category: null } }),
+      Album.updateMany({ category: category.name }, { $set: { category: null } })
+    ]);
 
     await category.deleteOne();
     clearCategoryCache();

@@ -41,7 +41,7 @@ const mashupCategorySchema = new mongoose.Schema({
 }, { timestamps: true });
 
 mashupCategorySchema.pre('validate', function (next) {
-  if (this.isModified('name') && !this.slug) {
+  if (this.isModified('name')) {
     this.slug = this.name
       .toLowerCase()
       .trim()
