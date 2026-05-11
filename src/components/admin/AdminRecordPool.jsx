@@ -313,9 +313,11 @@ export default function AdminRecordPool() {
               )}
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-bold">Albums — {selectedDateCard.name}</h2>
-                <button onClick={openAlbumUpload} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
-                  <Upload size={18} /> Upload Album
-                </button>
+                {activeParentType === 'source' && (
+                  <button onClick={openAlbumUpload} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
+                    <Upload size={18} /> Upload Album
+                  </button>
+                )}
               </div>
               {loading ? <LoadingSpinner /> : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">

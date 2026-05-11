@@ -100,13 +100,40 @@ const albumSchema = new mongoose.Schema({
     type: String,
     enum: ['pending', 'processing', 'complete', 'failed'],
     default: 'pending'
+  },
+  // Record pool / premium pack category (auto-detected from album name at upload)
+  category: {
+    type: String,
+    index: true
+  },
+  categoryRaw: {
+    type: String,
+    default: null
   }
 }, {
   timestamps: true
 });
 
+// Auto-detect category from album name when not explicitly provided.
+// Uses the same categoryDetection service as tracks, cached for 60 s.
+albumSchema.pre('save', async function (next) {
+  if (this.isNew && !this.category) {
+    try {
+      const { detectCategoryAsync } = await import('../services/categoryDetection.js');
+      const result = await detectCategoryAsync(null, this.name);
+      const detected  = result.category && result.category !== 'Others' ? result.category : null;
+      this.category    = detected || 'Premium Pack';
+      this.categoryRaw = result.raw || null;
+    } catch {
+      this.category = 'Premium Pack';
+    }
+  }
+  next();
+});
+
 // Index for search and filtering
 albumSchema.index({ name: 'text' });
 albumSchema.index({ sourceId: 1, year: -1 });
+albumSchema.index({ category: 1, createdAt: -1 });
 
 export default mongoose.model('Album', albumSchema);

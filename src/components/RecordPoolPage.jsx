@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  Disc, Music, ChevronRight, ArrowLeft, Loader, Download, Play,
-  Search, X, Grid3x3, List, ChevronLeft, ChevronRight as ChevronRightIcon,
-  Calendar, Layers2
+  Disc, Music, ChevronRight, Loader, Download, Play,
+  Search, X, Grid3x3, List, ChevronLeft,
+  Calendar, Layers2, Tag
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import API_URL from '../config/api';
@@ -16,214 +16,153 @@ const GRADIENTS = [
   'from-yellow-600 to-amber-800',
 ];
 
-const SORT_VALUES = ['newest', 'oldest', 'name', 'tracks'];
+const SCROLL_STEP = 220;
+const ALBUMS_PER_PAGE = 40;
 
-// Strip trailing vol/number/edition to get the series base name
-function getSeriesName(name) {
-  return name
-    .replace(/[\s_\-]+(?:vol(?:ume)?\.?\s*\d+|ep\.?\s*\d+|n[o°]\.?\s*\d+|#\s*\d+|(?:part|pt)\.?\s*\d+|\b\d{1,2}(?:st|nd|rd|th)?\b)[\s.,:\-]*$/i, '')
-    .trim() || name;
-}
+const SORT_API_MAP = {
+  newest: '-createdAt',
+  oldest:  'createdAt',
+  name:    'name',
+  tracks:  '-trackCount',
+};
 
 export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
   const { t } = useTranslation();
+
+  // ── category filter bar ──────────────────────────────────────────────────────
+  const [categories, setCategories]       = useState([]);
+  const [activeCategory, setActiveCategory] = useState(null);
+  const [canScrollLeft, setCanScrollLeft]   = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const catScrollRef = useRef(null);
+
+  // ── album grid ───────────────────────────────────────────────────────────────
+  const [albums, setAlbums]   = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [total, setTotal]     = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [page, setPage]       = useState(1);
+
+  // ── controls ─────────────────────────────────────────────────────────────────
+  const [search, setSearch]     = useState('');
+  const [sort, setSort]         = useState('newest');
+  const [viewMode, setViewMode] = useState('grid');
+
   const SORT_OPTIONS = useMemo(() => [
     { value: 'newest', label: t('recordPool.newestFirst') },
     { value: 'oldest', label: t('recordPool.oldestFirst') },
     { value: 'name',   label: t('recordPool.nameAZ') },
     { value: 'tracks', label: t('recordPool.mostTracks') },
   ], [t]);
-  // ─── mode: 'pools' | 'pool-detail' ──────────────────────────────────────────
-  const [mode, setMode]             = useState('pools');
-  const [poolItems, setPoolItems]   = useState([]);
-  const [selectedPool, setSelectedPool] = useState(null);
-  const [loadingMeta, setLoadingMeta]   = useState(true);
 
-  // pool-detail state
-  const [poolAlbums, setPoolAlbums]   = useState([]);
-  const [poolLoading, setPoolLoading] = useState(false);
-
-  // filters
-  const [search, setSearch]     = useState('');
-  const [sort, setSort]         = useState('newest');
-  const [viewMode, setViewMode] = useState('grid');
-
-  // ─── initial load ────────────────────────────────────────────────────────────
+  // ── fetch categories once ────────────────────────────────────────────────────
   useEffect(() => {
-    (async () => {
-      setLoadingMeta(true);
-      try {
-        const [colRes, srcRes] = await Promise.all([
-          fetch(`${API_URL}/collections`),
-          fetch(`${API_URL}/sources`),
-        ]);
-        const [colData, srcData] = await Promise.all([colRes.json(), srcRes.json()]);
-        const cols = (colData.success ? colData.data || [] : []).map(c => ({ ...c, _type: 'collection' }));
-        const srcs = (srcData.success ? srcData.data || [] : []).map(s => ({ ...s, _type: 'source' }));
-        setPoolItems([...srcs, ...cols]);
-      } catch { /* ignore */ }
-      finally { setLoadingMeta(false); }
-    })();
+    fetch(`${API_URL}/categories`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setCategories(d.data || []); })
+      .catch(() => {});
   }, []);
 
-  // ─── derived: sources (treated as collection cards) ──────────────────────────
-  const sources = useMemo(() => poolItems.filter(i => i._type === 'source'), [poolItems]);
+  // ── scroll arrows ────────────────────────────────────────────────────────────
+  const updateArrows = useCallback(() => {
+    const el = catScrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
 
-  // ─── derived: collection series grouped by (seriesName, year) ────────────────
-  const collectionSeries = useMemo(() => {
-    const completed = poolItems.filter(i => i._type === 'collection' && i.status === 'completed');
-    const map = new Map();
-    for (const col of completed) {
-      const seriesName = getSeriesName(col.name);
-      const year = col.year || new Date(col.createdAt || Date.now()).getFullYear();
-      const key = `${seriesName.toLowerCase()}::${year}`;
-      if (!map.has(key)) {
-        map.set(key, {
-          _id: key, _type: 'series', name: seriesName, year,
-          collections: [], thumbnail: null, totalAlbums: 0, totalTracks: 0,
-          createdAt: col.createdAt,
-        });
-      }
-      const entry = map.get(key);
-      entry.collections.push(col);
-      entry.totalAlbums  += col.totalAlbums  || 0;
-      entry.totalTracks  += col.totalTracks  || 0;
-      if (!entry.thumbnail && col.thumbnail) entry.thumbnail = col.thumbnail;
-      if (col.createdAt && (!entry.createdAt || col.createdAt > entry.createdAt)) entry.createdAt = col.createdAt;
-    }
-    return [...map.values()];
-  }, [poolItems]);
+  useEffect(() => {
+    const el = catScrollRef.current;
+    if (!el) return;
+    updateArrows();
+    el.addEventListener('scroll', updateArrows, { passive: true });
+    const ro = new ResizeObserver(updateArrows);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', updateArrows); ro.disconnect(); };
+  }, [categories, updateArrows]);
 
-  // ─── derived: all items merged + sorted ───────────────────────────────────────
-  const allItems = useMemo(() => {
-    const items = [
-      ...sources.map(s => ({ ...s, _itemType: 'source' })),
-      ...collectionSeries.map(s => ({ ...s, _itemType: 'series' })),
-    ];
-    switch (sort) {
-      case 'oldest': items.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0)); break;
-      case 'name':   items.sort((a, b) => (a.name || '').localeCompare(b.name || '')); break;
-      case 'tracks': items.sort((a, b) => (b.totalTracks || 0) - (a.totalTracks || 0)); break;
-      default:       items.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0)); break;
-    }
-    return items;
-  }, [sources, collectionSeries, sort]);
+  const catScrollBy = (dir) => catScrollRef.current?.scrollBy({ left: dir * SCROLL_STEP, behavior: 'smooth' });
 
-  // ─── fetch pool/series detail albums ─────────────────────────────────────────
-  const openPool = useCallback(async (item) => {
-    setSelectedPool(item);
-    setMode('pool-detail');
-    setPoolLoading(true);
+  // ── fetch albums ─────────────────────────────────────────────────────────────
+  const fetchAlbums = useCallback(async () => {
+    setLoading(true);
     try {
-      let albums = [];
-      if (item._type === 'source') {
-        const res  = await fetch(`${API_URL}/albums?sourceId=${item._id}&limit=200`);
-        const data = await res.json();
-        if (data.success) albums = data.data || [];
-      } else if (item._type === 'series') {
-        const results = await Promise.all(
-          item.collections.map(c =>
-            fetch(`${API_URL}/collections/${c._id}/albums`).then(r => r.json())
-          )
-        );
-        for (const data of results) {
-          if (data.success) albums.push(...(data.data || []));
-        }
-        albums.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      const params = new URLSearchParams({
+        sort: SORT_API_MAP[sort] || '-createdAt',
+        limit: ALBUMS_PER_PAGE,
+        page,
+      });
+      if (activeCategory) params.set('category', activeCategory);
+      if (search.trim()) params.set('search', search.trim());
+
+      const res  = await fetch(`${API_URL}/albums?${params}`);
+      const data = await res.json();
+      if (data.success) {
+        setAlbums(data.data || []);
+        setTotal(data.total || data.pagination?.total || 0);
+        setTotalPages(data.pages || data.pagination?.pages || 1);
       }
-      setPoolAlbums(albums);
     } catch { /* ignore */ }
-    finally { setPoolLoading(false); }
-  }, []);
+    finally { setLoading(false); }
+  }, [activeCategory, sort, page, search]);
 
-  // ─── filtered pool-detail albums ─────────────────────────────────────────────
-  const filteredPoolAlbums = useMemo(() => {
-    let list = search.trim()
-      ? poolAlbums.filter(a => a.name?.toLowerCase().includes(search.toLowerCase()))
-      : [...poolAlbums];
-    switch (sort) {
-      case 'oldest': list.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)); break;
-      case 'name':   list.sort((a, b) => (a.name || '').localeCompare(b.name || '')); break;
-      case 'tracks': list.sort((a, b) => (b.trackCount || 0) - (a.trackCount || 0)); break;
-      default:       list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  useEffect(() => { fetchAlbums(); }, [fetchAlbums]);
+
+  // ── handlers ─────────────────────────────────────────────────────────────────
+  const handleCategoryChange = (name) => { setActiveCategory(name); setPage(1); };
+  const handleSortChange     = (v)    => { setSort(v); setPage(1); };
+  const handleSearchChange   = (v)    => { setSearch(v); setPage(1); };
+  const handlePageChange     = (p)    => { setPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+  const renderPageNumbers = () => {
+    const nums = [];
+    if (totalPages <= 5) {
+      for (let i = 1; i <= totalPages; i++) nums.push(i);
+    } else if (page <= 3) {
+      nums.push(1, 2, 3, '...', totalPages);
+    } else if (page >= totalPages - 2) {
+      nums.push(1, '...', totalPages - 2, totalPages - 1, totalPages);
+    } else {
+      nums.push(1, '...', page, '...', totalPages);
     }
-    return list;
-  }, [poolAlbums, search, sort]);
-
-  // ─── filtered sources & series for pools view ─────────────────────────────────
-  const filteredSources = useMemo(() => {
-    if (!search.trim()) return sources;
-    const q = search.toLowerCase();
-    return sources.filter(s => s.name?.toLowerCase().includes(q));
-  }, [sources, search]);
-
-  const filteredSeries = useMemo(() => {
-    if (!search.trim()) return collectionSeries;
-    const q = search.toLowerCase();
-    return collectionSeries.filter(s => s.name?.toLowerCase().includes(q));
-  }, [collectionSeries, search]);
-
-  const filteredAllItems = useMemo(() => {
-    if (!search.trim()) return allItems;
-    const q = search.toLowerCase();
-    return allItems.filter(i => i.name?.toLowerCase().includes(q));
-  }, [allItems, search]);
-
-  // ─── helpers ──────────────────────────────────────────────────────────────────
-  const goBack = () => {
-    setMode('pools');
-    setSelectedPool(null);
-    setPoolAlbums([]);
-    setSearch('');
+    return nums;
   };
 
-  // ─── render ───────────────────────────────────────────────────────────────────
+  // ── render ───────────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen">
 
       {/* ── Sticky header ──────────────────────────────────────────────────── */}
       <div className="sticky top-0 z-20 bg-dark-bg/95 backdrop-blur-md border-b border-white/[0.06]">
         <div className="px-4 md:px-10 pt-5 pb-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            {mode === 'pool-detail' && (
-              <button onClick={goBack} className="p-1.5 rounded-lg hover:bg-white/10 text-brand-text-tertiary hover:text-white transition-all">
-                <ArrowLeft size={18} />
-              </button>
-            )}
-            <div>
-              <h1 className="text-xl font-bold text-white leading-tight">
-                {mode === 'pool-detail' && selectedPool ? selectedPool.name : t('recordPool.title')}
-              </h1>
-              <p className="text-[11px] text-brand-text-tertiary mt-0.5">
-                {mode === 'pool-detail'
-                  ? `${filteredPoolAlbums.length} ${t('recordPool.albums')}`
-                  : `${filteredAllItems.length} ${t('recordPool.collections')}`}
-              </p>
-            </div>
+          <div>
+            <h1 className="text-xl font-bold text-white leading-tight">{t('recordPool.title')}</h1>
+            <p className="text-[11px] text-brand-text-tertiary mt-0.5">
+              {total > 0 ? `${total.toLocaleString()} ${t('recordPool.albums')}` : ''}
+              {activeCategory ? ` · ${activeCategory}` : ''}
+            </p>
           </div>
 
           {/* Controls */}
           <div className="flex items-center gap-2 flex-shrink-0">
-            {/* Search */}
             <div className="relative hidden sm:block">
               <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-brand-text-tertiary pointer-events-none" />
               <input
                 value={search}
-                onChange={e => setSearch(e.target.value)}
+                onChange={e => handleSearchChange(e.target.value)}
                 placeholder={t('recordPool.search')}
                 className="pl-7 pr-7 py-1.5 bg-white/[0.06] border border-white/10 rounded-lg text-xs text-white placeholder-brand-text-tertiary/60 focus:outline-none focus:border-accent/50 w-36"
               />
               {search && (
-                <button onClick={() => setSearch('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-brand-text-tertiary hover:text-white">
+                <button onClick={() => handleSearchChange('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-brand-text-tertiary hover:text-white">
                   <X size={11} />
                 </button>
               )}
             </div>
 
-            {/* Sort */}
             <select
               value={sort}
-              onChange={e => setSort(e.target.value)}
+              onChange={e => handleSortChange(e.target.value)}
               className="bg-[#1c1c2e] border border-white/10 rounded-lg text-xs text-white px-2.5 py-1.5 focus:outline-none focus:border-accent/50 cursor-pointer"
             >
               {SORT_OPTIONS.map(o => (
@@ -231,7 +170,6 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
               ))}
             </select>
 
-            {/* Grid / List toggle */}
             <div className="flex items-center bg-white/[0.06] border border-white/10 rounded-lg p-0.5">
               <button onClick={() => setViewMode('grid')}
                 className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-accent text-white' : 'text-brand-text-tertiary hover:text-white'}`}>
@@ -244,6 +182,68 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
             </div>
           </div>
         </div>
+
+        {/* ── Category filter bar with scroll arrows ──────────────────────── */}
+        <div className="px-4 md:px-10 pb-3">
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => catScrollBy(-1)}
+              className={`flex-shrink-0 p-1.5 rounded-lg bg-white/[0.06] border border-white/10 text-brand-text-tertiary hover:text-white hover:bg-white/10 transition-all duration-200 ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            >
+              <ChevronLeft size={15} />
+            </button>
+
+            <div ref={catScrollRef} className="overflow-x-auto scrollbar-hidden pb-1 flex-1">
+              <div className="flex gap-2 min-w-max">
+                {/* ALL pill */}
+                <button
+                  onClick={() => handleCategoryChange(null)}
+                  className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-medium text-xs transition-all duration-200 ${
+                    !activeCategory
+                      ? 'bg-accent text-white shadow-lg shadow-accent/30'
+                      : 'bg-white/5 text-brand-text-secondary hover:bg-white/10 hover:text-white'
+                  }`}
+                >
+                  <Music size={13} className="flex-shrink-0" />
+                  {t('common.all')}
+                </button>
+
+                {categories.map((cat) => {
+                  const isActive = activeCategory === cat.name;
+                  const count = cat.albumCount || 0;
+                  return (
+                    <button
+                      key={cat._id}
+                      onClick={() => handleCategoryChange(isActive ? null : cat.name)}
+                      className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-medium text-xs transition-all duration-200 ${
+                        isActive ? 'text-white shadow-lg' : 'bg-white/5 text-brand-text-secondary hover:bg-white/10 hover:text-white'
+                      }`}
+                      style={isActive ? { backgroundColor: cat.color || '#7C3AED', boxShadow: `0 4px 16px ${cat.color || '#7C3AED'}40` } : {}}
+                    >
+                      {cat.thumbnail
+                        ? <img src={cat.thumbnail} alt={cat.name} className="w-3.5 h-3.5 rounded-sm object-cover flex-shrink-0" />
+                        : <Tag size={12} className="flex-shrink-0" />
+                      }
+                      <span className="whitespace-nowrap">{cat.name}</span>
+                      {count > 0 && (
+                        <span className={`text-[10px] px-1 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/50'}`}>
+                          {count > 999 ? `${Math.floor(count / 1000)}k` : count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <button
+              onClick={() => catScrollBy(1)}
+              className={`flex-shrink-0 p-1.5 rounded-lg bg-white/[0.06] border border-white/10 text-brand-text-tertiary hover:text-white hover:bg-white/10 transition-all duration-200 ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+            >
+              <ChevronRight size={15} />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* ── Content ─────────────────────────────────────────────────────────── */}
@@ -252,72 +252,69 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
         {/* Mobile search */}
         <div className="relative sm:hidden mb-4">
           <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-brand-text-tertiary pointer-events-none" />
-          <input value={search} onChange={e => setSearch(e.target.value)}
+          <input value={search} onChange={e => handleSearchChange(e.target.value)}
             placeholder={t('recordPool.searchMobile')}
             className="w-full pl-7 pr-7 py-2 bg-white/[0.06] border border-white/10 rounded-lg text-xs text-white placeholder-brand-text-tertiary/60 focus:outline-none focus:border-accent/50"
           />
-          {search && <button onClick={() => setSearch('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-text-tertiary hover:text-white"><X size={11} /></button>}
+          {search && <button onClick={() => handleSearchChange('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-brand-text-tertiary hover:text-white"><X size={11} /></button>}
         </div>
 
-        {/* ── POOLS: All Collections (sources + series merged) ────────────── */}
-        {mode === 'pools' && (
-          loadingMeta ? <LoadingState /> : (
-            <div>
-              <div className="flex items-center gap-2 mb-4">
-                <Layers2 size={15} className="text-accent" />
-                <h2 className="text-sm font-semibold text-white uppercase tracking-wider">{t('recordPool.title')}</h2>
-                <span className="text-xs text-brand-text-tertiary">({filteredAllItems.length})</span>
-              </div>
-              {filteredAllItems.length === 0 ? (
-                <EmptyState icon={Layers2} text={t('recordPool.noCollectionsSearch')} />
-              ) : viewMode === 'grid' ? (
-                <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 sm:gap-5">
-                  {filteredAllItems.map((item, i) => (
-                    <CollectionCard key={item._id} item={item} index={i} onClick={() => openPool(item)} />
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {filteredAllItems.map((item, i) => (
-                    <CollectionRow key={item._id} item={item} index={i} onClick={() => openPool(item)} />
-                  ))}
-                </div>
-              )}
-            </div>
-          )
+        {loading ? <LoadingState /> : albums.length === 0 ? (
+          <EmptyState icon={Music} text={activeCategory ? t('recordPool.noAlbumsCategory') : t('recordPool.noAlbumsYet')} />
+        ) : viewMode === 'grid' ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+            {albums.map((album, i) => (
+              <AlbumCard key={album._id} album={album} index={i}
+                onClick={() => onAlbumClick?.(album)}
+                onPlay={() => onAlbumClick?.(album, { autoPlay: true })}
+                onDownload={() => onAlbumDownload?.(album)}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            {albums.map((album, i) => (
+              <AlbumRow key={album._id} album={album} index={i}
+                onClick={() => onAlbumClick?.(album)}
+                onDownload={() => onAlbumDownload?.(album)}
+              />
+            ))}
+          </div>
         )}
 
-        {/* ── POOL DETAIL: albums inside a specific pool ───────────────────── */}
-        {mode === 'pool-detail' && selectedPool && (
-          <>
-            {selectedPool && (
-              <CollectionHeader collection={selectedPool} albumCount={filteredPoolAlbums.length} />
-            )}
-            <div className="mt-5">
-              {poolLoading ? <LoadingState /> : filteredPoolAlbums.length === 0 ? (
-                <EmptyState icon={Music} text={t('recordPool.noAlbumsYet')} />
-              ) : viewMode === 'grid' ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {filteredPoolAlbums.map((album, i) => (
-                    <AlbumCard key={album._id} album={album} index={i}
-                      onClick={() => onAlbumClick?.(album)}
-                      onPlay={() => onAlbumClick?.(album, { autoPlay: true })}
-                      onDownload={() => onAlbumDownload?.(album)}
-                    />
-                  ))}
-                </div>
-              ) : (
-                <div className="space-y-1.5">
-                  {filteredPoolAlbums.map((album, i) => (
-                    <AlbumRow key={album._id} album={album} index={i}
-                      onClick={() => onAlbumClick?.(album)}
-                      onDownload={() => onAlbumDownload?.(album)}
-                    />
-                  ))}
-                </div>
+        {/* ── Pagination ──────────────────────────────────────────────────── */}
+        {!loading && totalPages > 1 && (
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={() => handlePageChange(page - 1)}
+              disabled={page === 1}
+              className={`px-5 py-2 rounded-xl font-semibold text-sm transition-all ${page === 1 ? 'bg-dark-elevated/20 text-brand-text-tertiary/40 cursor-not-allowed' : 'bg-white/[0.05] text-white hover:bg-white/[0.08] border border-white/10'}`}
+            >
+              {t('pagination.previous')}
+            </button>
+            <div className="flex items-center gap-1.5 bg-white/[0.02] border border-white/10 rounded-xl px-3 py-2">
+              {renderPageNumbers().map((num, i) =>
+                num === '...' ? (
+                  <span key={`e-${i}`} className="px-2 text-brand-text-tertiary font-bold">...</span>
+                ) : (
+                  <button
+                    key={num}
+                    onClick={() => handlePageChange(num)}
+                    className={`min-w-[34px] h-8 rounded-lg font-bold text-sm transition-all ${page === num ? 'bg-accent text-white shadow-lg shadow-accent/40' : 'bg-transparent text-brand-text-secondary hover:bg-white/[0.05] hover:text-white'}`}
+                  >
+                    {num}
+                  </button>
+                )
               )}
             </div>
-          </>
+            <button
+              onClick={() => handlePageChange(page + 1)}
+              disabled={page === totalPages}
+              className={`px-5 py-2 rounded-xl font-semibold text-sm transition-all ${page === totalPages ? 'bg-dark-elevated/20 text-brand-text-tertiary/40 cursor-not-allowed' : 'bg-white/[0.05] text-white hover:bg-white/[0.08] border border-white/10'}`}
+            >
+              {t('pagination.next')}
+            </button>
+          </div>
         )}
       </div>
     </div>

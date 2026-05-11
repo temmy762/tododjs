@@ -1,5 +1,20 @@
-import { useState } from 'react';
-import { X, Upload, AlertCircle, CheckCircle, Loader } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, Upload, AlertCircle, CheckCircle, Loader, Tag } from 'lucide-react';
+
+const API_URL = import.meta.env.VITE_API_URL || '/api';
+
+// Lightweight client-side category inference from filename (mirrors backend logic)
+function guessCategoryFromName(name) {
+  if (!name) return '';
+  return name
+    .replace(/[_]/g, ' ')
+    .replace(/[\s_-]+\d{1,2}[-./]\d{1,2}[-./]\d{2,4}[\w\s,.-]*$/gi, '')
+    .replace(/[\s_-]+\d{4}[-./]\d{1,2}[-./]\d{1,2}[\w\s,.-]*$/gi, '')
+    .replace(/[\s_-]+\d{8}[\w\s,.-]*$/gi, '')
+    .replace(/\s+(?:pack|vol\.?|volume|pt\.?|part|edition|series|\d{4}|\d+)[\s\d]*$/gi, '')
+    .replace(/\s*\(.*\)\s*$/, '')
+    .trim();
+}
 
 export default function CollectionUploadModal({ sources, onClose, onSuccess }) {
   const [formData, setFormData] = useState({
@@ -8,8 +23,17 @@ export default function CollectionUploadModal({ sources, onClose, onSuccess }) {
     year: new Date().getFullYear(),
     month: '',
     thumbnail: '',
-    platform: ''
+    platform: '',
+    category: ''
   });
+
+  const [availableCategories, setAvailableCategories] = useState([]);
+  useEffect(() => {
+    fetch(`${API_URL}/categories`)
+      .then(r => r.json())
+      .then(d => { if (d.success) setAvailableCategories(d.data || []); })
+      .catch(() => {});
+  }, []);
   const [file, setFile] = useState(null);
   const [thumbnailFile, setThumbnailFile] = useState(null);
   const [thumbnailPreview, setThumbnailPreview] = useState('');
@@ -30,10 +54,13 @@ export default function CollectionUploadModal({ sources, onClose, onSuccess }) {
       setFile(selectedFile);
       setError('');
       
-      if (!formData.name) {
-        const fileName = selectedFile.name.replace('.zip', '');
-        setFormData(prev => ({ ...prev, name: fileName }));
-      }
+      const autoName = selectedFile.name.replace(/\.zip$/i, '');
+      const guessedCategory = guessCategoryFromName(autoName);
+      setFormData(prev => ({
+        ...prev,
+        name: prev.name || autoName,
+        category: prev.category || guessedCategory
+      }));
     }
   };
 
@@ -79,6 +106,7 @@ export default function CollectionUploadModal({ sources, onClose, onSuccess }) {
       uploadFormData.append('name', formData.name);
       uploadFormData.append('year', formData.year);
       uploadFormData.append('month', formData.month);
+      if (formData.category) uploadFormData.append('category', formData.category);
       
       if (thumbnailMode === 'upload' && thumbnailFile) {
         uploadFormData.append('thumbnailFile', thumbnailFile);
@@ -251,6 +279,42 @@ export default function CollectionUploadModal({ sources, onClose, onSuccess }) {
                 className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent disabled:opacity-50"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-2 flex items-center gap-1.5">
+              <Tag size={14} /> Category (auto-detected — change if needed)
+            </label>
+            <div className="flex gap-2">
+              <select
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                disabled={uploading}
+                className="flex-1 px-4 py-3 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent disabled:opacity-50 text-white"
+              >
+                <option value="">Auto-detect from name</option>
+                <option value="Premium Pack">Premium Pack</option>
+                {availableCategories.map(c => (
+                  <option key={c._id} value={c.name}>{c.name}</option>
+                ))}
+              </select>
+              {formData.category && (
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, category: '' })}
+                  disabled={uploading}
+                  className="px-3 rounded-lg bg-white/5 hover:bg-white/10 text-brand-text-tertiary hover:text-white transition-colors disabled:opacity-50"
+                  title="Clear override"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            {formData.category && (
+              <p className="mt-1 text-[11px] text-accent/80">
+                Will assign: <strong>{formData.category}</strong>
+              </p>
+            )}
           </div>
 
           <div>

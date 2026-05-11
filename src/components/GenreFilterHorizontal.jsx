@@ -1,34 +1,50 @@
-import { useState, useEffect } from 'react';
-import { Music, Layers } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Music, Layers, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import API_URL from '../config/api';
 
+const SCROLL_STEP = 220;
+
 // activeCategory = category NAME (e.g. "Latin Box"), not slug
-export default function GenreFilterHorizontal({ activeCategory, onCategoryChange }) {
+// scope = 'recordpool' (default) — passed to API to filter category list
+export default function GenreFilterHorizontal({ activeCategory, onCategoryChange, scope = 'recordpool' }) {
   const { t } = useTranslation();
   const [categories, setCategories] = useState([]);
+  const [canScrollLeft, setCanScrollLeft]   = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const scrollRef = useRef(null);
 
   useEffect(() => {
     fetch(`${API_URL}/categories`)
       .then(r => r.json())
       .then(d => {
         if (d.success) {
-          const data = d.data || [];
-          const hasReggaeton = data.some(cat => cat.name === 'Reggaeton');
-          setCategories(hasReggaeton ? data : [
-            ...data,
-            {
-              _id: 'default-reggaeton',
-              name: 'Reggaeton',
-              color: '#06B6D4',
-              thumbnail: '',
-              trackCount: 0
-            }
-          ]);
+          setCategories(d.data || []);
         }
       })
       .catch(() => {});
+  }, [scope]);
+
+  const updateArrows = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
   }, []);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    updateArrows();
+    el.addEventListener('scroll', updateArrows, { passive: true });
+    const ro = new ResizeObserver(updateArrows);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', updateArrows); ro.disconnect(); };
+  }, [categories, updateArrows]);
+
+  const scrollBy = (dir) => {
+    scrollRef.current?.scrollBy({ left: dir * SCROLL_STEP, behavior: 'smooth' });
+  };
 
   return (
     <div className="relative px-4 md:px-10 pt-4 md:pt-5 pb-4 md:pb-5 bg-gradient-to-b from-dark-bg via-dark-bg/98 to-dark-bg/95">
@@ -37,9 +53,17 @@ export default function GenreFilterHorizontal({ activeCategory, onCategoryChange
         <p className="text-[10px] md:text-xs text-brand-text-tertiary/80 mt-1">{t('home.recordPoolSubtitle')}</p>
       </div>
 
-      <div className="relative">
-        <div className="overflow-x-auto scrollbar-hidden pb-3">
-          <div className="flex gap-3 min-w-max pr-10">
+      <div className="relative flex items-center gap-1">
+        {/* Left arrow */}
+        <button
+          onClick={() => scrollBy(-1)}
+          className={`flex-shrink-0 p-1.5 rounded-lg bg-white/[0.06] border border-white/10 text-brand-text-tertiary hover:text-white hover:bg-white/10 transition-all duration-200 ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        >
+          <ChevronLeft size={16} />
+        </button>
+
+        <div ref={scrollRef} className="overflow-x-auto scrollbar-hidden pb-1 flex-1">
+          <div className="flex gap-3 min-w-max">
             {/* "All" tab always first */}
             <button
               onClick={() => onCategoryChange(null)}
@@ -55,6 +79,9 @@ export default function GenreFilterHorizontal({ activeCategory, onCategoryChange
 
             {categories.map((cat) => {
               const isActive = activeCategory === cat.name;
+              const count = scope === 'recordpool'
+                ? (cat.albumCount || cat.trackCount || 0)
+                : (cat.trackCount || 0);
               return (
                 <button
                   key={cat._id}
@@ -72,22 +99,24 @@ export default function GenreFilterHorizontal({ activeCategory, onCategoryChange
                     <Layers size={16} className="flex-shrink-0" />
                   )}
                   <span className="whitespace-nowrap">{cat.name}</span>
-                  {(() => {
-                    const total = (cat.trackCount || 0) + (cat.mashupCount || 0);
-                    if (!total) return null;
-                    return (
-                      <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/50'}`}>
-                        {total > 999 ? `${Math.floor(total / 1000)}k` : total}
-                      </span>
-                    );
-                  })()}
+                  {count > 0 && (
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full ${isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/50'}`}>
+                      {count > 999 ? `${Math.floor(count / 1000)}k` : count}
+                    </span>
+                  )}
                 </button>
               );
             })}
           </div>
         </div>
 
-        <div className="absolute right-0 top-0 bottom-3 w-24 bg-gradient-to-l from-dark-bg via-dark-bg/80 to-transparent pointer-events-none" />
+        {/* Right arrow */}
+        <button
+          onClick={() => scrollBy(1)}
+          className={`flex-shrink-0 p-1.5 rounded-lg bg-white/[0.06] border border-white/10 text-brand-text-tertiary hover:text-white hover:bg-white/10 transition-all duration-200 ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+        >
+          <ChevronRight size={16} />
+        </button>
       </div>
     </div>
   );

@@ -28,6 +28,10 @@ const collectionSchema = new mongoose.Schema({
     type: String,
     required: false
   },
+  thumbnailKey: {
+    type: String,
+    default: null
+  },
   zipUrl: {
     type: String
   },

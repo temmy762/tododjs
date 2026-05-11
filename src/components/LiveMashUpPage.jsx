@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { List, Grid3x3, ArrowUpDown, X, Loader, Music } from 'lucide-react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { List, Grid3x3, ArrowUpDown, X, Loader, Music, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import TrackListView from './TrackListView';
 import TrackGridView from './TrackGridView';
@@ -56,8 +56,11 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
   const [totalTracks, setTotalTracks] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
 
-  // ── pool-brand categories (same source as home page) ──────────
+  // ── mashup categories (independent system, separate from record pools) ──────
   const [poolCategories, setPoolCategories] = useState([]);
+  const [canScrollLeft, setCanScrollLeft]   = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+  const catScrollRef = useRef(null);
 
   // ── standalone filter state (completely independent) ─────────
   const [filterCategory, setFilterCategory] = useState('all');
@@ -74,7 +77,7 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
       .then(d => { if (d.success) setSettings(d.data); })
       .catch(() => {});
 
-    fetch(`${API_URL}/categories`)
+    fetch(`${API_URL}/mashup-categories`)
       .then(r => r.json())
       .then(d => { if (d.success) setPoolCategories(d.data || []); })
       .catch(() => {});
@@ -117,6 +120,25 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
   const handleSortChange = (s) => { setSortBy(s); setCurrentPage(1); };
   const handleTracksPerPageChange = (n) => { setTracksPerPage(Number(n)); setCurrentPage(1); };
   const handlePageChange = (p) => { setCurrentPage(p); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+
+  const updateArrows = useCallback(() => {
+    const el = catScrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    const el = catScrollRef.current;
+    if (!el) return;
+    updateArrows();
+    el.addEventListener('scroll', updateArrows, { passive: true });
+    const ro = new ResizeObserver(updateArrows);
+    ro.observe(el);
+    return () => { el.removeEventListener('scroll', updateArrows); ro.disconnect(); };
+  }, [poolCategories, updateArrows]);
+
+  const catScrollBy = (dir) => catScrollRef.current?.scrollBy({ left: dir * 220, behavior: 'smooth' });
 
   const handleMashupInteraction = (action, track) => {
     if (action === 'play') {
@@ -203,44 +225,58 @@ export default function LiveMashUpPage({ onTrackInteraction, userFavorites }) {
           </div>
         </div>
 
-        {/* Pool-brand category filter row */}
-        <div className="overflow-x-auto scrollbar-hidden pb-1">
-          <div className="flex gap-2 min-w-max">
-            <button
-              onClick={() => handleCategoryChange('all')}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium text-xs transition-all duration-200 ${
-                filterCategory === 'all'
-                  ? 'bg-accent text-white shadow-lg shadow-accent/30'
-                  : 'bg-white/5 text-brand-text-secondary hover:bg-white/10 hover:text-white'
-              }`}
-            >
-              {t('common.all')}
-            </button>
-            {poolCategories.filter(cat => cat.mashupCount > 0).map((cat) => {
-              const isActive = filterCategory === cat.name;
-              return (
-                <button
-                  key={cat._id}
-                  onClick={() => handleCategoryChange(isActive ? 'all' : cat.name)}
-                  className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium text-xs transition-all duration-200 ${
-                    isActive ? 'text-white shadow-lg' : 'bg-white/5 text-brand-text-secondary hover:bg-white/10 hover:text-white'
-                  }`}
-                  style={isActive ? { backgroundColor: cat.color || '#7C3AED', boxShadow: `0 4px 16px ${cat.color || '#7C3AED'}40` } : {}}
-                >
-                  {cat.thumbnail
-                    ? <img src={cat.thumbnail} alt={cat.name} className="w-3.5 h-3.5 rounded-sm object-cover flex-shrink-0" />
-                    : null
-                  }
-                  <span className="whitespace-nowrap">{cat.name}</span>
-                  <span className={`text-[10px] px-1 py-0.5 rounded-full ${
-                    isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/50'
-                  }`}>
-                    {cat.mashupCount > 999 ? `${Math.floor(cat.mashupCount / 1000)}k` : cat.mashupCount}
-                  </span>
-                </button>
-              );
-            })}
+        {/* Mashup category filter row with scroll arrows */}
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => catScrollBy(-1)}
+            className={`flex-shrink-0 p-1.5 rounded-lg bg-white/[0.06] border border-white/10 text-brand-text-tertiary hover:text-white hover:bg-white/10 transition-all duration-200 ${canScrollLeft ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          >
+            <ChevronLeft size={15} />
+          </button>
+          <div ref={catScrollRef} className="overflow-x-auto scrollbar-hidden pb-1 flex-1">
+            <div className="flex gap-2 min-w-max">
+              <button
+                onClick={() => handleCategoryChange('all')}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium text-xs transition-all duration-200 ${
+                  filterCategory === 'all'
+                    ? 'bg-accent text-white shadow-lg shadow-accent/30'
+                    : 'bg-white/5 text-brand-text-secondary hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                {t('common.all')}
+              </button>
+              {poolCategories.filter(cat => cat.mashupCount > 0).map((cat) => {
+                const isActive = filterCategory === cat.name;
+                return (
+                  <button
+                    key={cat._id}
+                    onClick={() => handleCategoryChange(isActive ? 'all' : cat.name)}
+                    className={`flex-shrink-0 flex items-center gap-1.5 px-4 py-2 rounded-lg font-medium text-xs transition-all duration-200 ${
+                      isActive ? 'text-white shadow-lg' : 'bg-white/5 text-brand-text-secondary hover:bg-white/10 hover:text-white'
+                    }`}
+                    style={isActive ? { backgroundColor: cat.color || '#7C3AED', boxShadow: `0 4px 16px ${cat.color || '#7C3AED'}40` } : {}}
+                  >
+                    {cat.thumbnail
+                      ? <img src={cat.thumbnail} alt={cat.name} className="w-3.5 h-3.5 rounded-sm object-cover flex-shrink-0" />
+                      : null
+                    }
+                    <span className="whitespace-nowrap">{cat.name}</span>
+                    <span className={`text-[10px] px-1 py-0.5 rounded-full ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-white/10 text-white/50'
+                    }`}>
+                      {cat.mashupCount > 999 ? `${Math.floor(cat.mashupCount / 1000)}k` : cat.mashupCount}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
+          <button
+            onClick={() => catScrollBy(1)}
+            className={`flex-shrink-0 p-1.5 rounded-lg bg-white/[0.06] border border-white/10 text-brand-text-tertiary hover:text-white hover:bg-white/10 transition-all duration-200 ${canScrollRight ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+          >
+            <ChevronRight size={15} />
+          </button>
         </div>
 
         {/* Sort row */}

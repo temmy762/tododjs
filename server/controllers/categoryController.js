@@ -1,6 +1,7 @@
 import Category from '../models/Category.js';
 import Track from '../models/Track.js';
 import Mashup from '../models/Mashup.js';
+import Album from '../models/Album.js';
 
 import { clearCategoryCache } from '../services/categoryDetection.js';
 
@@ -13,10 +14,14 @@ export const getCategories = async (req, res) => {
     const filter = includeInactive ? {} : { isActive: true };
     const categories = await Category.find(filter).sort('sortOrder name').lean();
 
-    // Attach live track + mashup counts per category
-    const [trackCounts, mashupCounts, totalMashups] = await Promise.all([
+    // Attach live track + album + mashup counts per category
+    const [trackCounts, albumCounts, mashupCounts, totalMashups] = await Promise.all([
       Track.aggregate([
         { $match: { status: 'published', category: { $ne: null } } },
+        { $group: { _id: '$category', count: { $sum: 1 } } }
+      ]),
+      Album.aggregate([
+        { $match: { isActive: true, category: { $nin: [null, ''] } } },
         { $group: { _id: '$category', count: { $sum: 1 } } }
       ]),
       Mashup.aggregate([
@@ -25,12 +30,14 @@ export const getCategories = async (req, res) => {
       ]),
       Mashup.countDocuments({ isPublished: true })
     ]);
-    const countMap = Object.fromEntries(trackCounts.map(c => [c._id, c.count]));
+    const countMap       = Object.fromEntries(trackCounts.map(c => [c._id, c.count]));
+    const albumCountMap  = Object.fromEntries(albumCounts.map(c => [c._id, c.count]));
     const mashupCountMap = Object.fromEntries(mashupCounts.map(c => [c._id, c.count]));
 
     const data = categories.map(c => ({
       ...c,
-      trackCount: countMap[c.name] || 0,
+      trackCount:  countMap[c.name]  || 0,
+      albumCount:  albumCountMap[c.name] || 0,
       // live-mashups is a navigation hub: show total published mashup count
       mashupCount: c.slug === 'live-mashups' ? totalMashups : (mashupCountMap[c.name] || 0)
     }));

@@ -7,6 +7,7 @@ import { resolveSignedUrls, resolveSignedUrl } from '../utils/signedUrls.js';
 import { extractMetadataFromZip, detectDuplicates } from '../utils/metadataExtractor.js';
 import { detectTonality } from '../services/tonalityDetection.js';
 import { detectGenre } from '../services/genreDetection.js';
+import { detectCategoryAsync } from '../services/categoryDetection.js';
 import AdmZip from 'adm-zip';
 import path from 'path';
 import { parseBuffer } from 'music-metadata';
@@ -24,7 +25,7 @@ function withTimeout(promise, timeoutMs, timeoutValue) {
 // @access  Private/Admin
 export const uploadAlbum = async (req, res) => {
   try {
-    const { sourceId, datePackId, albumName, albumYear, genre } = req.body;
+    const { sourceId, datePackId, albumName, albumYear, genre, category } = req.body;
     const zipFile = req.files?.albumZip?.[0];
     const coverFile = req.files?.coverArt?.[0];
 
@@ -82,17 +83,30 @@ export const uploadAlbum = async (req, res) => {
     }
 
     // Create album record
+    // Auto-detect category if not explicitly provided by admin
+    const finalAlbumName = albumName || path.parse(zipFile.originalname).name;
+    let resolvedCategory = category || null;
+    let resolvedCategoryRaw = null;
+    if (!resolvedCategory) {
+      const catResult  = await detectCategoryAsync(null, finalAlbumName);
+      const detected   = catResult.category && catResult.category !== 'Others' ? catResult.category : null;
+      resolvedCategory    = detected || 'Premium Pack';
+      resolvedCategoryRaw = catResult.raw || null;
+    }
+
     const album = await Album.create({
       sourceId,
       datePackId,
-      name: albumName || path.parse(zipFile.originalname).name,
+      name: finalAlbumName,
       genre: genre || null,
       year: albumYear || source.year || new Date().getFullYear(),
       coverArt: coverArtUrl,
       coverArtKey: coverArtKeyVal,
       trackCount: mp3Files.length,
       totalSize: zipFile.size,
-      uploadedBy: req.user.id
+      uploadedBy: req.user.id,
+      category: resolvedCategory,
+      categoryRaw: resolvedCategoryRaw
     });
 
     // Respond immediately — ZIP upload + track processing happen in background
@@ -149,8 +163,9 @@ async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverA
       // (bad metadata, Wasabi blip, validation error) does NOT abort
       // the remaining tracks in the album.
       try {
+        const baseName = path.parse(mp3Name).name;
         let metadata = {
-          title: path.parse(mp3Name).name,
+          title: baseName,
           artist: 'Unknown Artist',
           bpm: null,
           duration: 0
@@ -184,6 +199,31 @@ async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverA
           }
         } catch (err) {
           console.warn(`   ⚠ Metadata parsing failed for ${mp3Name}`);
+        }
+
+        // Artist/Title fallback: if ID3 artist missing, parse filename "Artist - Title"
+        const UNKNOWN_RE = /^unknown\s*artist$/i;
+        if (!metadata.artist || UNKNOWN_RE.test(metadata.artist)) {
+          const dashIdx = baseName.indexOf(' - ');
+          if (dashIdx > 0) {
+            const fnArtist = baseName.slice(0, dashIdx).trim();
+            const fnTitle  = baseName.slice(dashIdx + 3).trim();
+            if (fnArtist) {
+              metadata.artist = fnArtist;
+              if (metadata.title === baseName) metadata.title = fnTitle || metadata.title;
+            }
+          }
+        }
+
+        // Skip track if artist is still unresolvable after all fallbacks
+        if (!metadata.artist || UNKNOWN_RE.test(metadata.artist)) {
+          console.warn(`   ⚠ Skipping ${mp3Name} — artist could not be determined`);
+          processedCount++;
+          const progress = Math.round((processedCount / mp3Files.length) * 100);
+          album.processingProgress = progress;
+          album.processedTracks = processedCount;
+          try { await album.save(); } catch { /* ignore */ }
+          continue;
         }
 
         // Tonality + BPM detection — wrapped with 45 s timeout so a hanging
@@ -227,6 +267,8 @@ async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverA
           bpm: detectedBpm || metadata.bpm || 128,
           tonality,
           pool: source.name,
+          category: album.category || 'Premium Pack',
+          categoryRaw: album.categoryRaw || null,
           coverArt: trackCoverArt,
           coverArtKey: trackCoverArtKey,
           audioFile: {
@@ -460,10 +502,11 @@ export const updateAlbum = async (req, res) => {
     const album = await Album.findById(req.params.id);
     if (!album) return res.status(404).json({ success: false, message: 'Album not found' });
 
-    const { name, genre, year } = req.body;
+    const { name, genre, year, category } = req.body;
     if (name) album.name = name;
     if (genre) album.genre = genre;
     if (year) album.year = parseInt(year);
+    if (category) album.category = category;
 
     if (req.file) {
       const ext = path.extname(req.file.originalname) || '.jpg';
@@ -494,29 +537,9 @@ export const getAlbums = async (req, res) => {
     if (year) query.year = year;
     if (genre) query.genre = { $regex: genre, $options: 'i' };
 
-    // category filter: match against source names → track categories → album genre/name
+    // category filter — direct match on album.category field
     if (category && !sourceId) {
-      const matchedSources = await Source.find({
-        name: { $regex: category, $options: 'i' }
-      }).select('_id').lean();
-
-      if (matchedSources.length > 0) {
-        query.sourceId = { $in: matchedSources.map(s => s._id) };
-      } else {
-        // Find albums that have tracks tagged with this category
-        const albumIdsFromTracks = await Track.distinct('albumId', {
-          category: { $regex: `^${category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' }
-        });
-        if (albumIdsFromTracks.length > 0) {
-          query._id = { $in: albumIdsFromTracks };
-        } else {
-          // Final fallback: match album name or genre field
-          query.$or = [
-            { genre: { $regex: category, $options: 'i' } },
-            { name:  { $regex: category, $options: 'i' } }
-          ];
-        }
-      }
+      query.category = { $regex: `^${category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' };
     }
 
     if (search) {

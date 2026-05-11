@@ -1739,10 +1739,11 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
         totalSize += trackSize;
         
         const mp3Name = path.basename(mp3Info.fileName);
+        const mp3BaseName = path.parse(mp3Name).name;
         
         // Parse metadata + extract embedded cover art
         let metadata = {
-          title: path.parse(mp3Name).name,
+          title: mp3BaseName,
           artist: 'Unknown Artist',
           bpm: null,
           duration: 0
@@ -1772,6 +1773,26 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
         } catch (error) {
           console.log(`      Metadata parsing failed for ${mp3Name}`);
           metadata.bpm = extractBPMFromFilename(mp3Name);
+        }
+
+        // Artist/Title fallback: if ID3 artist missing, parse filename "Artist - Title"
+        const UNKNOWN_ARTIST_RE = /^unknown\s*artist$/i;
+        if (!metadata.artist || UNKNOWN_ARTIST_RE.test(metadata.artist)) {
+          const dashIdx = mp3BaseName.indexOf(' - ');
+          if (dashIdx > 0) {
+            const fnArtist = mp3BaseName.slice(0, dashIdx).trim();
+            const fnTitle  = mp3BaseName.slice(dashIdx + 3).trim();
+            if (fnArtist) {
+              metadata.artist = fnArtist;
+              if (metadata.title === mp3BaseName) metadata.title = fnTitle || metadata.title;
+            }
+          }
+        }
+
+        // Skip track if artist is still unresolvable after all fallbacks
+        if (!metadata.artist || UNKNOWN_ARTIST_RE.test(metadata.artist)) {
+          console.log(`      Skipping ${mp3Name} — artist could not be determined`);
+          continue;
         }
 
         const trackCoverArt = albumCoverCache.get(album._id.toString())?.url || album.coverArt || collection.thumbnail;
@@ -1810,7 +1831,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
           'audio/mpeg'
         );
         
-        // Create track record
+        // Create track record — inherits category from parent album
         await Track.create({
           collectionId: collection._id,
           datePackId: datePack._id,
@@ -1818,7 +1839,8 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
           title: metadata.title,
           artist: metadata.artist,
           genre: genreResult.genre || album.genre || 'Others',
-          ...(await detectCategoryAsync(metadata.title, albumName)),
+          category: album.category || 'Premium Pack',
+          categoryRaw: album.categoryRaw || null,
           categoryVerified: false,
           genreConfidence: genreResult.confidence,
           genreSource: genreResult.source,
