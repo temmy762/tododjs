@@ -541,8 +541,8 @@ export const getAlbums = async (req, res) => {
     if (category && !sourceId) {
       const escaped = category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const exactRegex = { $regex: `^${escaped}$`, $options: 'i' };
-      // Premium Pack is the fallback — also include albums with no category set
-      if (/^premium\s*pack$/i.test(category)) {
+      // Premium Pack (or Pack Premium in Spanish) is the fallback — also include albums with no category set
+      if (/^(premium\s*pack|pack\s*premium)$/i.test(category)) {
         query.$or = [
           { category: exactRegex },
           { category: null },

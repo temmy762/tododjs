@@ -29,9 +29,20 @@ async function run() {
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('Connected to MongoDB');
 
-  const { default: Album } = await import('../models/Album.js');
-  const { default: Track } = await import('../models/Track.js');
+  const { default: Album }   = await import('../models/Album.js');
+  const { default: Track }   = await import('../models/Track.js');
+  const { default: Category } = await import('../models/Category.js');
   const { detectCategoryAsync } = await import('../services/categoryDetection.js');
+
+  // Resolve the actual fallback category name from the DB
+  const fallbackCat = await Category.findOne({
+    $or: [
+      { slug: 'premium-pack' },
+      { name: /^(premium\s*pack|pack\s*premium)$/i }
+    ]
+  }).lean();
+  const FALLBACK_CATEGORY = fallbackCat?.name || 'Premium Pack';
+  console.log(`Fallback category: "${FALLBACK_CATEGORY}"`);
 
   const albums = await Album.find({
     $or: [
@@ -48,7 +59,7 @@ async function run() {
   for (const album of albums) {
     const result = await detectCategoryAsync(null, album.name);
     const noMatch = !result.category || result.category === 'Others' || result.category === 'Premium Pack';
-    const finalCategory = noMatch ? 'Premium Pack' : result.category;
+    const finalCategory = noMatch ? FALLBACK_CATEGORY : result.category;
     const finalRaw      = noMatch ? null : (result.raw || null);
 
     if (noMatch) {
