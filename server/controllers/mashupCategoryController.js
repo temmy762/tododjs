@@ -51,10 +51,16 @@ export const createMashupCategory = async (req, res) => {
 // @access Admin
 export const updateMashupCategory = async (req, res) => {
   try {
-    const category = await MashupCategory.findByIdAndUpdate(req.params.id, req.body, {
-      new: true, runValidators: true
-    });
+    const category = await MashupCategory.findById(req.params.id);
     if (!category) return res.status(404).json({ success: false, message: 'Category not found' });
+    const { name, description, color, thumbnail, sortOrder, isActive } = req.body;
+    if (name       !== undefined) category.name        = name;
+    if (description !== undefined) category.description = description;
+    if (color      !== undefined) category.color       = color;
+    if (thumbnail  !== undefined) category.thumbnail   = thumbnail;
+    if (sortOrder  !== undefined) category.sortOrder   = sortOrder;
+    if (isActive   !== undefined) category.isActive    = isActive;
+    await category.save();
     res.json({ success: true, data: category });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
