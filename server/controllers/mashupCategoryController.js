@@ -13,7 +13,7 @@ export const getMashupCategories = async (req, res) => {
     const [mashupCounts, totalMashups] = await Promise.all([
       Mashup.aggregate([
         { $match: { isPublished: true, category: { $nin: [null, 'Others', ''] } } },
-        { $group: { _id: '$category', count: { $sum: 1 } } }
+        { $group: { _id: { $toLower: '$category' }, count: { $sum: 1 } } }
       ]),
       Mashup.countDocuments({ isPublished: true })
     ]);
@@ -21,7 +21,7 @@ export const getMashupCategories = async (req, res) => {
 
     const data = categories.map(c => ({
       ...c,
-      mashupCount: countMap[c.name] || 0
+      mashupCount: countMap[(c.name || '').toLowerCase()] || 0
     }));
 
     res.json({ success: true, data, totalMashups });

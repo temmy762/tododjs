@@ -25,7 +25,10 @@ export const getMashups = async (req, res) => {
 
     const query = { isPublished: true, tonality: { $exists: true, $nin: [null, ''] } };
     if (genre && genre !== 'all') query.genre = genre;
-    if (category && category !== 'all') query.category = category;
+    if (category && category !== 'all') {
+      const catEsc = category.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      query.category = { $regex: `^${catEsc}$`, $options: 'i' };
+    }
     if (tonality && tonality !== 'all') query.tonality = tonality;
 
     const total = await Mashup.countDocuments(query);
