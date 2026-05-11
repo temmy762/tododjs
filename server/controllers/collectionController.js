@@ -666,7 +666,7 @@ function extractEntryToBufferByName(zipPath, targetFileName, timeoutMs = 120000)
 // @access  Private/Admin
 export const uploadCollection = async (req, res) => {
   try {
-    const { name, year, month, thumbnail, scanResult, sourceId } = req.body;
+    const { name, year, month, thumbnail, scanResult, sourceId, category: categoryOverride } = req.body;
     const zipFile = req.files?.zipFile?.[0];
     const thumbnailFile = req.files?.thumbnailFile?.[0];
 
@@ -777,7 +777,8 @@ export const uploadCollection = async (req, res) => {
               uploadedBy: req.user.id,
               status: 'pending',
               sourceFolderName: albumData.name,
-              detectedGenre: detectedGenre
+              detectedGenre: detectedGenre,
+              ...(categoryOverride ? { category: categoryOverride } : {})
             });
             createdAlbums.push({ 
               _id: album._id, 
@@ -996,7 +997,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
           year: collection.year,
           coverArt: collection.thumbnail,
           trackCount: trackCountHint || 0,
-          uploadedBy: collection.uploadedBy
+          uploadedBy: collection.uploadedBy,
+          ...(categoryOverride ? { category: categoryOverride } : {})
         });
 
         albumsCreated++;
@@ -1131,6 +1133,26 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
                 // ignore
               }
 
+              // Artist/Title fallback: parse "Artist - Title" from filename if ID3 missing
+              const _mp3BaseName = path.parse(path.basename(mp3FileName)).name;
+              const _UNKNOWN_RE = /^unknown\s*artist$/i;
+              if (!metadata.artist || _UNKNOWN_RE.test(metadata.artist)) {
+                const dashIdx = _mp3BaseName.indexOf(' - ');
+                if (dashIdx > 0) {
+                  const fnArtist = _mp3BaseName.slice(0, dashIdx).trim();
+                  const fnTitle  = _mp3BaseName.slice(dashIdx + 3).trim();
+                  if (fnArtist) {
+                    metadata.artist = fnArtist;
+                    if (metadata.title === _mp3BaseName) metadata.title = fnTitle || metadata.title;
+                  }
+                }
+              }
+              // Skip track if artist still unresolvable
+              if (!metadata.artist || _UNKNOWN_RE.test(metadata.artist)) {
+                console.log(`      Skipping ${path.basename(mp3FileName)} — artist could not be determined`);
+                continue;
+              }
+
               const tonalityResult = await withTimeout(
                 detectTonality(mp3Buffer, metadata),
                 45000,
@@ -1169,7 +1191,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
                 title: metadata.title,
                 artist: metadata.artist,
                 genre: genreResult.genre || album.genre || 'Others',
-                ...(await detectCategoryAsync(metadata.title, finalAlbumName)),
+                category: album.category || 'Premium Pack',
+                categoryRaw: album.categoryRaw || null,
                 categoryVerified: false,
                 genreConfidence: genreResult.confidence,
                 genreSource: genreResult.source,
@@ -1559,7 +1582,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
           zipFilePath,
           mp3Files,
           datePack,
-          collection
+          collection,
+          categoryOverride || null
         );
 
         // Update date pack with results
@@ -1643,7 +1667,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
   }
 }
 
-async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collection) {
+async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collection, categoryOverride = null) {
   console.log(`   Processing ${mp3Files.length} tracks for date pack: ${datePack.name}`);
   
   // Get existing albums for this date pack
@@ -1682,7 +1706,8 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
       trackCount: 0,
       uploadedBy: collection.uploadedBy,
       status: 'pending',
-      sourceFolderName: albumName
+      sourceFolderName: albumName,
+      ...(categoryOverride ? { category: categoryOverride } : {})
     });
     albumMap.set(albumName, newAlbum._id.toString());
     albumMap.set(albumName.toLowerCase().trim(), newAlbum._id.toString());
