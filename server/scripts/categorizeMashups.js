@@ -14,10 +14,15 @@
  *  4. Prints a per-mashup change report and a summary
  */
 
-import 'dotenv/config';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import mongoose from 'mongoose';
 import Mashup from '../models/Mashup.js';
-import { detectCategoryAsync } from '../services/categoryDetection.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '../.env') });
+if (!process.env.MONGODB_URI) dotenv.config({ path: path.join(__dirname, '../../.env') });
 
 // ─── CLI flags ────────────────────────────────────────────────────────────────
 const args     = process.argv.slice(2);
@@ -48,11 +53,34 @@ function cleanMashupTitle(raw) {
   }).join(' ');
 }
 
-// ─── Old genre-style categories that should be re-detected ───────────────────
-const OLD_GENRE_CATS = new Set([
+// ─── Genre categories (the desired mashup categories) ───────────────────────
+const GENRE_CATS = new Set([
   'Reggaeton','Old School Reggaeton','Dembow','Trap',
   'House','EDM','Afro House','Remember','International'
 ]);
+
+// ─── Mashup category keyword rules ───────────────────────────────────────────
+const MASHUP_CATEGORY_RULES = [
+  { category: 'Old School Reggaeton', keywords: ['old school reggaeton','old-school reggaeton','reggaeton clasico','reggaeton clásico','reggaeton viejo','old school perreo'] },
+  { category: 'Dembow',               keywords: ['dembow','dem bow'] },
+  { category: 'Reggaeton',            keywords: ['reggaeton','reggaetón','regueton','reguetón','perreo','urbano latino'] },
+  { category: 'Trap',                 keywords: ['trap','latin trap','trap latino','drill'] },
+  { category: 'Afro House',           keywords: ['afro house','afrohouse','afro-house','afrobeat','amapiano','tribal house'] },
+  { category: 'House',                keywords: ['tech house','deep house','progressive house','funky house','vocal house'] },
+  { category: 'EDM',                  keywords: ['edm','electro house','big room','dubstep','trance','techno','drum and bass'] },
+  { category: 'Remember',             keywords: ['remember','throwback','retro','oldies','80s','90s','clasicos','clásicos'] },
+  { category: 'International',        keywords: ['hip hop','hip-hop','r&b','soul','funk','rock','indie','bachata','salsa','merengue','cumbia','reggae','dancehall'] },
+];
+
+function detectMashupCategoryByKeyword(text) {
+  const lower = (text || '').toLowerCase();
+  for (const rule of MASHUP_CATEGORY_RULES) {
+    for (const kw of rule.keywords) {
+      if (lower.includes(kw)) return rule.category;
+    }
+  }
+  return null;
+}
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 async function run() {
@@ -63,6 +91,8 @@ async function run() {
   await mongoose.connect(process.env.MONGODB_URI);
   console.log('✓ MongoDB connected\n');
 
+  // In FORCE mode, process all. Otherwise only process mashups that do NOT
+  // already have a valid genre category.
   const filter = FORCE
     ? {}
     : {
@@ -70,7 +100,8 @@ async function run() {
           { category: { $exists: false } },
           { category: null },
           { category: '' },
-          { category: { $in: [...OLD_GENRE_CATS] } },
+          { category: 'Others' },
+          { category: { $nin: [...GENRE_CATS] } },
         ]
       };
 
@@ -83,7 +114,9 @@ async function run() {
 
   for (const m of mashups) {
     const newTitle = cleanMashupTitle(m.title);
-    const { category: newCat, raw: catRaw } = await detectCategoryAsync(newTitle, null);
+    const kwCat = detectMashupCategoryByKeyword(newTitle);
+    const newCat = kwCat || m.category || null;
+    const catRaw = kwCat ? kwCat.toLowerCase() : null;
 
     const titleChanged    = newTitle !== m.title;
     const categoryChanged = newCat   !== m.category;

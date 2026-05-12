@@ -47,16 +47,27 @@ async function run() {
 
   console.log(`Seeding ${DEFAULT_MASHUP_CATEGORIES.length} mashup genre categories (dry-run: ${DRY_RUN})`);
 
+  if (!DRY_RUN) {
+    // Remove any docs with null slug left from a failed prior run
+    await MashupCategory.deleteMany({ slug: null });
+  }
+
   let created = 0;
   for (const cat of DEFAULT_MASHUP_CATEGORIES) {
     console.log(`  "${cat.name}" (${cat.color})`);
     if (!DRY_RUN) {
-      await MashupCategory.updateOne(
-        { name: cat.name },
-        { $setOnInsert: { ...cat, isActive: true } },
-        { upsert: true }
-      );
-      created++;
+      const exists = await MashupCategory.findOne({ name: cat.name });
+      if (!exists) {
+        // Use save() so the pre-validate hook generates the slug
+        await new MashupCategory({ ...cat, isActive: true }).save();
+        created++;
+      } else {
+        // Patch null slugs on existing docs
+        if (!exists.slug) {
+          exists.name = cat.name; // triggers isModified('name') in pre-validate
+          await exists.save();
+        }
+      }
     }
   }
 
