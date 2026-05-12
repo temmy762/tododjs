@@ -154,16 +154,15 @@ export default function AdminMashupCategories() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {categories.length === 0 && (
-            <button
-              onClick={handleSeed}
-              disabled={seeding}
-              className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/15 text-white text-sm rounded-lg transition-all"
-            >
-              {seeding ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
-              Seed Defaults
-            </button>
-          )}
+          <button
+            onClick={handleSeed}
+            disabled={seeding}
+            className="flex items-center gap-2 px-4 py-2 bg-white/10 hover:bg-white/15 text-white text-sm rounded-lg transition-all"
+            title="Seed the 9 default genre categories"
+          >
+            {seeding ? <Loader size={14} className="animate-spin" /> : <RefreshCw size={14} />}
+            Seed Defaults
+          </button>
           <button
             onClick={openCreate}
             className="flex items-center gap-2 px-4 py-2 bg-accent hover:bg-accent/80 text-white text-sm font-medium rounded-lg transition-all"
@@ -171,12 +170,6 @@ export default function AdminMashupCategories() {
             <Plus size={16} /> New Category
           </button>
         </div>
-      </div>
-
-      {/* Info banner */}
-      <div className="mb-5 p-3 bg-accent/10 border border-accent/20 rounded-xl text-xs text-accent/80">
-        <strong>9 default genres:</strong> Reggaeton · Old School Reggaeton · Dembow · Trap · House · EDM · Afro House · Remember · International.
-        Click <em>Seed Defaults</em> if the list is empty, then run <code className="bg-white/10 px-1 rounded">categorizeMashups.js --apply</code> on the VPS to tag existing mashups.
       </div>
 
       {/* Alerts */}
