@@ -86,7 +86,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
     if (!requireAuth('download')) return;
     const trackId = track.id || track._id;
     const token = localStorage.getItem('token');
-    window.location.href = `${API_URL}/downloads/track/${trackId}/file?token=${encodeURIComponent(token)}`;
+    window.open(`${API_URL}/downloads/track/${trackId}/file?token=${encodeURIComponent(token)}`, '_blank', 'noopener,noreferrer');
   }, [requireAuth]);
 
   const handleDownloadZip = useCallback(() => {
@@ -94,7 +94,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
     const albumId = album.id || album._id;
     if (!albumId) return;
     const token = localStorage.getItem('token');
-    window.location.href = `${API_URL}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`;
+    window.open(`${API_URL}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`, '_blank', 'noopener,noreferrer');
   }, [album, requireAuth]);
 
   const toggleLike = useCallback((track, e) => {

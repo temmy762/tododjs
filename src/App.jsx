@@ -463,7 +463,7 @@ function App() {
 
       const trackId = track.id || track._id;
       const token = localStorage.getItem('token');
-      window.location.href = `${API}/downloads/track/${trackId}/file?token=${encodeURIComponent(token)}`;
+      window.open(`${API}/downloads/track/${trackId}/file?token=${encodeURIComponent(token)}`, '_blank', 'noopener,noreferrer');
       return;
     }
   };
@@ -660,13 +660,8 @@ function App() {
       return;
     }
 
-    try {
-      const token = localStorage.getItem('token');
-      window.location.href = `${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`;
-    } catch (err) {
-      console.error('Album download failed:', err);
-      alert(err.message || 'Download failed. Please try again.');
-    }
+    const token = localStorage.getItem('token');
+    window.open(`${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`, '_blank', 'noopener,noreferrer');
   };
 
   const allTracks = useMemo(() => {

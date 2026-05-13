@@ -377,21 +377,22 @@ export const downloadAlbumFile = async (req, res) => {
 
     archive.pipe(res);
 
-    for (const track of tracks) {
-      const key = track.audioFile?.wasabiKey || track.audioFile?.key;
-      if (!key) continue;
-
-      try {
-        const cmd = new GetObjectCommand({
-          Bucket: process.env.WASABI_BUCKET_NAME,
-          Key: key
-        });
-        const s3Resp = await s3Client.send(cmd);
-        const trackFilename = buildSafeFilename(`${track.artist} - ${track.title}.mp3`);
-        archive.append(s3Resp.Body, { name: trackFilename });
-      } catch (err) {
-        console.error(`Failed to fetch track ${track._id} (${key}):`, err.message);
-      }
+    // Fetch up to 5 tracks concurrently from Wasabi then append to archive
+    const CONCURRENCY = 5;
+    for (let i = 0; i < tracks.length; i += CONCURRENCY) {
+      const batch = tracks.slice(i, i + CONCURRENCY);
+      await Promise.all(batch.map(async (track) => {
+        const key = track.audioFile?.wasabiKey || track.audioFile?.key;
+        if (!key) return;
+        try {
+          const cmd = new GetObjectCommand({ Bucket: process.env.WASABI_BUCKET_NAME, Key: key });
+          const s3Resp = await s3Client.send(cmd);
+          const trackFilename = buildSafeFilename(`${track.artist} - ${track.title}.mp3`);
+          archive.append(s3Resp.Body, { name: trackFilename });
+        } catch (err) {
+          console.error(`Failed to fetch track ${track._id} (${key}):`, err.message);
+        }
+      }));
     }
 
     await archive.finalize();
