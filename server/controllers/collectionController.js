@@ -269,7 +269,7 @@ function buildPreviewFromZipFile(zipPathOrBuffer, originalName, fileSize, depth 
   let motherFolderName = '';
   for (const entry of zipEntries) {
     const parts = entry.entryName.split('/').filter(p => p);
-    if (parts.length > 0) {
+    if (parts.length >= 2) {
       motherFolderName = parts[0];
       break;
     }
@@ -1332,6 +1332,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       if (totalTracksNested === 0 || innerZipEntries.length === 0) {
         collection.status = 'failed';
         collection.processingProgress = 0;
+        collection.errorMessage = 'No MP3 files found in nested ZIPs. Ensure each inner ZIP contains .mp3 files.';
         await collection.save();
         try { zipfile.close(); } catch { /* ignore */ }
         console.log(' Nested ZIP processing found no MP3 files. Marking collection as failed.');
@@ -1391,7 +1392,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       return (bestCount / total) >= 0.7 ? best : null;
     };
 
-    const motherFolderName = collection?.scanResult?.motherFolderName || guessMotherFolderName(entries);
+    const motherFolderName = guessMotherFolderName(entries) || collection?.scanResult?.motherFolderName || null;
 
     // Detect ambiguous 2-level layout for this ZIP (see buildPreviewFromZipFile)
     let twoLevelFolderCount = 0;
@@ -1402,8 +1403,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       if (entry.fileName.includes('__MACOSX')) continue;
       const rawParts = entry.fileName.split('/').filter(p => p);
       if (rawParts.length === 0) continue;
-      const rootFolder = motherFolderName || rawParts[0];
-      const parts = rawParts[0] === rootFolder ? rawParts.slice(1) : rawParts;
+      const parts = (motherFolderName && rawParts[0] === motherFolderName) ? rawParts.slice(1) : rawParts;
       if (parts.length !== 2) continue;
       twoLevelFolderCount++;
       if (isDateLikeFolderName(parts[0])) twoLevelDateLikeCount++;
@@ -1421,8 +1421,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       const rawParts = entry.fileName.split('/').filter(p => p);
       if (rawParts.length === 0) continue;
 
-      const rootFolder = motherFolderName || rawParts[0];
-      const parts = rawParts[0] === rootFolder ? rawParts.slice(1) : rawParts;
+      const fallbackName = motherFolderName || collection.name || 'Main';
+      const parts = (motherFolderName && rawParts[0] === motherFolderName) ? rawParts.slice(1) : rawParts;
       if (parts.length === 0) continue;
 
       let datePackName = null;
@@ -1432,15 +1432,15 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
         albumName = parts[1];
       } else if (parts.length === 2) {
         if (interpretTwoLevelAsAlbumsUnderRoot) {
-          datePackName = rootFolder || 'Main';
+          datePackName = fallbackName;
           albumName = parts[0];
         } else {
           datePackName = parts[0];
           albumName = parts[0];
         }
       } else {
-        datePackName = rootFolder || 'Main';
-        albumName = rootFolder || 'Main';
+        datePackName = fallbackName;
+        albumName = fallbackName;
       }
 
       if (!mp3FilesByDatePack.has(datePackName)) {
@@ -1544,6 +1544,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
     if (mp3FilesByDatePack.size === 0) {
       collection.status = 'failed';
       collection.processingProgress = 0;
+      collection.errorMessage = 'No MP3 files found in ZIP. Ensure the ZIP contains .mp3 files in a recognised folder structure.';
       await collection.save();
       try { zipfile.close(); } catch { /* ignore */ }
       console.log(' No MP3 files found in ZIP. Marking collection as failed.');
