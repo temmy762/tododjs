@@ -85,7 +85,9 @@ export default function MusicControlPanel({
   const isWithinPeriod = !!(user?.subscription?.endDate) && new Date(user.subscription.endDate) > new Date();
   const isPremium = user?.role === 'admin' || !!(
     (user?.subscription?.planId || (user?.subscription?.plan && user?.subscription?.plan !== 'free')) &&
-    (user?.subscription?.status === 'active' || (user?.subscription?.status === 'cancelled' && isWithinPeriod))
+    (user?.subscription?.status === 'active' ||
+     (user?.subscription?.status === 'cancelled' && isWithinPeriod) ||
+     (user?.subscription?.status === 'past_due' && isWithinPeriod))
   );
 
   const totalSeconds = audioDuration || track?.duration || 0;

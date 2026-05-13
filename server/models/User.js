@@ -217,13 +217,13 @@ userSchema.methods.canDownload = function() {
     pro: Infinity
   };
   
-  // If user has active subscription, allow unlimited downloads
+  // If user has active subscription, allow downloads
   if (hasActiveSubscription) {
     return true;
   }
   
-  // Otherwise apply free tier limits
-  return this.downloads.today < limits.free;
+  // Free / non-subscribed users cannot download at all
+  return false;
 };
 
 // Increment download count
