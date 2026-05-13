@@ -1814,10 +1814,9 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
           }
         }
 
-        // Skip track if artist is still unresolvable after all fallbacks
+        // If artist is still unknown after all fallbacks, keep 'Unknown Artist' and continue processing
         if (!metadata.artist || UNKNOWN_ARTIST_RE.test(metadata.artist)) {
-          console.log(`      Skipping ${mp3Name} — artist could not be determined`);
-          continue;
+          metadata.artist = 'Unknown Artist';
         }
 
         const trackCoverArt = albumCoverCache.get(album._id.toString())?.url || album.coverArt || collection.thumbnail;
