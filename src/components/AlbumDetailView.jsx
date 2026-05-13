@@ -4,18 +4,6 @@ import { Play, Download, Heart, Music, Archive, Share2, Pause, Check, ArrowLeft 
 import { useTranslation } from 'react-i18next';
 import PremiumPrompt from './PremiumPrompt';
 import API_URL from '../config/api';
-import { apiFetch, getDeviceId } from '../services/apiFetch';
-
-// Trigger a file download from a URL without navigating away from the current page
-const triggerDownload = (url) => {
-  const a = document.createElement('a');
-  a.href = url;
-  a.rel = 'noopener';
-  a.download = '';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-};
 
 const getTonalityColor = (tonality) => {
   const colors = {
@@ -93,75 +81,21 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
     return true;
   }, [user, isPremium]);
 
-  const handleDownloadTrack = useCallback(async (track, e) => {
+  const handleDownloadTrack = useCallback((track, e) => {
     e?.stopPropagation();
     if (!requireAuth('download')) return;
-
     const trackId = track.id || track._id;
-    setDownloadingTrackId(trackId);
-    try {
-      const res = await apiFetch(`${API_URL}/downloads/track/${trackId}/file`);
-      const data = await res.json().catch(() => null);
-      if (!res.ok) {
-        throw new Error(data?.message || 'Download failed');
-      }
-      if (data?.downloadUrl) {
-        triggerDownload(data.downloadUrl);
-      } else {
-        throw new Error('No download URL returned');
-      }
-    } catch (err) {
-      console.error('Download failed:', err);
-      alert(err.message || t('album.downloadFailed'));
-    } finally {
-      setDownloadingTrackId(null);
-    }
+    const token = localStorage.getItem('token');
+    window.location.href = `${API_URL}/downloads/track/${trackId}/file?token=${encodeURIComponent(token)}`;
   }, [requireAuth]);
 
-  const handleDownloadZip = useCallback(async () => {
+  const handleDownloadZip = useCallback(() => {
     if (!album || !requireAuth('downloadZip')) return;
-
     const albumId = album.id || album._id;
     if (!albumId) return;
-
-    setDownloadingZip(true);
-    try {
-      const response = await apiFetch(`${API_URL}/downloads/album/${albumId}/file`);
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.message || `Download failed (${response.status})`);
-      }
-
-      const contentType = response.headers.get('content-type') || '';
-
-      if (contentType.includes('application/json')) {
-        // Pre-built ZIP: server returns a signed Wasabi URL
-        const data = await response.json();
-        if (data?.downloadUrl) {
-          triggerDownload(data.downloadUrl);
-        } else {
-          throw new Error('No download URL returned');
-        }
-      } else {
-        // On-the-fly ZIP: server streams the archive directly
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = `${album.name || 'Album'}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-      }
-    } catch (err) {
-      console.error('ZIP download failed:', err);
-      alert(err.message || t('album.downloadFailed'));
-    } finally {
-      setDownloadingZip(false);
-    }
-  }, [album, requireAuth, t]);
+    const token = localStorage.getItem('token');
+    window.location.href = `${API_URL}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`;
+  }, [album, requireAuth]);
 
   const toggleLike = useCallback((track, e) => {
     e?.stopPropagation();

@@ -10,7 +10,7 @@ import ErrorBoundary from './components/ErrorBoundary';
 import { useUpload } from './context/UploadContext';
 import BulkUploadModal from './components/admin/BulkUploadModal';
 import { AlbumUploadModal } from './components/admin/AdminRecordPool';
-import { startTokenRefreshScheduler, stopTokenRefreshScheduler, apiFetch, getDeviceId } from './services/apiFetch';
+import { startTokenRefreshScheduler, stopTokenRefreshScheduler } from './services/apiFetch';
 import ArtistAlbumView from './components/ArtistAlbumView';
 import TonalityFilter from './components/TonalityFilter';
 import GenreFilterHorizontal from './components/GenreFilterHorizontal';
@@ -462,22 +462,8 @@ function App() {
       }
 
       const trackId = track.id || track._id;
-      apiFetch(`${API}/downloads/track/${trackId}/file`)
-        .then(async (res) => {
-          const data = await res.json().catch(() => null);
-          if (!res.ok) {
-            throw new Error(data?.message || 'Download failed. Please try again.');
-          }
-          if (data?.downloadUrl) {
-            const a = document.createElement('a');
-            a.href = data.downloadUrl;
-            a.download = '';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-          }
-        })
-        .catch(err => alert(err.message || 'Download failed. Please try again.'));
+      const token = localStorage.getItem('token');
+      window.location.href = `${API}/downloads/track/${trackId}/file?token=${encodeURIComponent(token)}`;
       return;
     }
   };
@@ -675,39 +661,8 @@ function App() {
     }
 
     try {
-      const response = await apiFetch(`${API}/downloads/album/${albumId}/file`);
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => null);
-        throw new Error(data?.message || `Download failed (${response.status})`);
-      }
-
-      const contentType = response.headers.get('content-type') || '';
-
-      if (contentType.includes('application/json')) {
-        const data = await response.json();
-        if (data?.downloadUrl) {
-          const a = document.createElement('a');
-          a.href = data.downloadUrl;
-          a.rel = 'noopener';
-          a.download = '';
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        } else {
-          throw new Error('No download URL returned');
-        }
-      } else {
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = `${album.name || 'Album'}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-      }
+      const token = localStorage.getItem('token');
+      window.location.href = `${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`;
     } catch (err) {
       console.error('Album download failed:', err);
       alert(err.message || 'Download failed. Please try again.');
