@@ -374,9 +374,11 @@ function App() {
   const handleTrackInteraction = (action, track) => {
     if (action === 'play') {
       // Capture queue from current page context for next/prev navigation
-      const contextQueue = (selectedAlbumDetail && !albumDetailLoading && albumDetailTracks.length)
-        ? albumDetailTracks
-        : liveTracks.length ? liveTracks : [track];
+      const contextQueue = searchOpen && searchResults.length
+        ? searchResults
+        : (selectedAlbumDetail && !albumDetailLoading && albumDetailTracks.length)
+          ? albumDetailTracks
+          : liveTracks.length ? liveTracks : [track];
       setPanelQueue(contextQueue);
       setPanelOpen(true);
       setPanelHidden(false);
