@@ -23,6 +23,11 @@ export const requireSubscription = async (req, res, next) => {
       return next();
     }
 
+    // Admin-granted subscriptions may not have a Stripe planId — allow them through
+    if (!user.subscription.planId && user.subscription.grantedByAdmin) {
+      return next();
+    }
+
     const hasPlan = user.subscription.planId || (user.subscription.plan && user.subscription.plan !== 'free');
 
     // Stripe fallback: if cancelled + stripeSubscriptionId still set + endDate missing/stale,

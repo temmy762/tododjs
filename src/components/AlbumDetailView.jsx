@@ -62,7 +62,9 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
   const isPremium = isAdmin || (
     user &&
     (user.subscription?.planId || (user.subscription?.plan && user.subscription.plan !== 'free')) &&
-    (user.subscription?.status === 'active' || (user.subscription?.status === 'cancelled' && isWithinPeriod))
+    (user.subscription?.status === 'active' ||
+     (user.subscription?.status === 'cancelled' && isWithinPeriod) ||
+     (user.subscription?.status === 'past_due' && isWithinPeriod))
   );
   const autoPlayTriggered = useRef(false);
 

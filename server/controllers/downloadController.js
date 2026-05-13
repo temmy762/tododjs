@@ -310,20 +310,6 @@ export const downloadAlbumFile = async (req, res) => {
     }
     const user = await User.findById(req.user.id);
 
-    // Admin bypasses all subscription checks
-    if (user.role !== 'admin') {
-      const hasPlan = user.subscription?.planId || (user.subscription?.plan && user.subscription.plan !== 'free');
-      const isWithinPeriod = !!user.subscription?.endDate && new Date() <= new Date(user.subscription.endDate);
-      const hasAccess = user.subscription?.status === 'active' || (user.subscription?.status === 'cancelled' && isWithinPeriod);
-      if (!hasPlan || !hasAccess) {
-        return res.status(403).json({
-          success: false,
-          message: 'Bulk album downloads require an active subscription',
-          upgradeRequired: true
-        });
-      }
-    }
-
     await Download.create({
       userId: user._id,
       albumId: album._id,
