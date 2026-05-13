@@ -424,7 +424,7 @@ export default function MusicControlPanel({
         onPlaying={() => setAudioLoading(false)}
       />
       {!hidden && (
-      <div className="fixed bottom-[60px] md:bottom-0 left-0 right-0 z-[45]">
+      <div className="fixed bottom-[60px] md:bottom-0 left-0 right-0 z-[55]">
       {/* Gradient top edge */}
       <div className="h-px bg-gradient-to-r from-transparent via-accent/40 to-transparent" />
       <div className="bg-dark-surface/[0.97] backdrop-blur-2xl shadow-2xl shadow-black/50">

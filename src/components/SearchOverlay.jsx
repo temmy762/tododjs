@@ -41,7 +41,7 @@ export default function SearchOverlay({ isOpen, onClose, results, onTrackInterac
       </div>
 
       {/* Search Results */}
-      <div className="overflow-y-auto" style={{ height: 'calc(100vh - 180px)' }}>
+      <div className="overflow-y-auto pb-28 md:pb-24" style={{ height: 'calc(100vh - 180px)' }}>
         {results.length > 0 ? (
           <TrackListView 
             tracks={results}
