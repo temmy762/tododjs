@@ -1,5 +1,6 @@
 import Download from '../models/Download.js';
 import Track from '../models/Track.js';
+import Mashup from '../models/Mashup.js';
 import Album from '../models/Album.js';
 import Source from '../models/Source.js';
 import User from '../models/User.js';
@@ -126,7 +127,7 @@ export const downloadTrack = async (req, res) => {
 // @access  Private
 export const downloadTrackFile = async (req, res) => {
   try {
-    const track = await Track.findById(req.params.id);
+    const track = await Track.findById(req.params.id) || await Mashup.findById(req.params.id);
 
     if (!track) {
       return res.status(404).json({
