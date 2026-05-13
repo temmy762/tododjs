@@ -104,7 +104,9 @@ export const checkDeviceLimit = async (req, res, next) => {
 
     const deviceId = req.headers['x-device-id'] || req.body.deviceId || req.query.deviceId;
 
+    // Direct download links (?token=) are browser navigations — no custom headers possible
     if (!deviceId) {
+      if (req.query.token) return next();
       return res.status(400).json({
         success: false,
         message: 'Device ID required'
