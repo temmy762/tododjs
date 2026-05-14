@@ -310,7 +310,7 @@ export default function AdminMashups() {
         formData.append('audio', file);
         if (coverFile) formData.append('coverArt', coverFile);
         formData.append('title', uploadForm.title || file.name.replace(/\.[^/.]+$/, ''));
-        formData.append('artist', uploadForm.artist || 'Unknown Artist');
+        formData.append('artist', uploadForm.artist || '');
         formData.append('category', uploadForm.category || 'Reggaeton');
         formData.append('genre', uploadForm.genre);
         if (uploadForm.bpm) formData.append('bpm', uploadForm.bpm);
