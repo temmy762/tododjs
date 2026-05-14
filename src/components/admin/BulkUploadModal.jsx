@@ -32,7 +32,8 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
   const [uploadPhase, setUploadPhase] = useState('upload'); // 'upload' | 'cards'
 
   useEffect(() => {
-    fetch(`${API_URL}/sources`)
+    const token = localStorage.getItem('token');
+    fetch(`${API_URL}/categories?all=true`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
       .then(r => r.json())
       .then(d => { if (d.success) setSources(d.data || []); })
       .catch(() => {});

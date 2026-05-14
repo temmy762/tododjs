@@ -439,8 +439,22 @@ export const createMashup = async (req, res) => {
     const rawTitle   = title || audioFile.originalname.replace(/\.[^/.]+$/, '');
     const cleanTitle = cleanMashupTitle(rawTitle);
 
+    // Extract artist from audio metadata if not supplied by the form
+    let resolvedArtist = artist || '';
+    if (!resolvedArtist) {
+      try {
+        const audiometa = await parseBuffer(audioFile.buffer, { mimeType: audioFile.mimetype });
+        const c = audiometa.common;
+        resolvedArtist =
+          c.artist ||
+          (c.artists?.length ? c.artists[0] : '') ||
+          (c.performers?.length ? c.performers[0] : '') ||
+          '';
+      } catch { /* metadata read is best-effort */ }
+    }
+
     // Detect mashup genre category (independent from Record Pool pool-brand categories)
-    const trackArtist = artist || 'Unknown Artist';
+    const trackArtist = resolvedArtist || 'Unknown Artist';
     let detectedCategory = category || null;
     let categoryRaw = null;
 
