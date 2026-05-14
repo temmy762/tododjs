@@ -428,30 +428,39 @@ export const createMashup = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Only MP3, WAV, and FLAC files are allowed' });
     }
 
-    // Upload audio to Wasabi
-    const audioExt = audioFile.originalname.split('.').pop() || 'mp3';
-    const audioKey = `mashups/audio/${Date.now()}-${audioFile.originalname.replace(/\s+/g, '_')}`;
-    const audioUpload = await uploadToWasabi(audioFile.buffer, audioKey, audioFile.mimetype);
-
     const formatMap = { mp3: 'MP3', wav: 'WAV', flac: 'FLAC' };
 
     // Clean title professionally (strip underscores, filename artifacts, apply Title Case)
     const rawTitle   = title || audioFile.originalname.replace(/\.[^/.]+$/, '');
     const cleanTitle = cleanMashupTitle(rawTitle);
 
-    // Extract artist from audio metadata if not supplied by the form
+    // Extract artist from audio metadata BEFORE upload (buffer must be intact)
     let resolvedArtist = artist || '';
     if (!resolvedArtist) {
       try {
-        const audiometa = await parseBuffer(audioFile.buffer, { mimeType: audioFile.mimetype });
+        // Normalize non-standard mimeType so music-metadata can sniff format correctly
+        const mimeHint = audioFile.mimetype === 'audio/mp3' ? 'audio/mpeg' : audioFile.mimetype;
+        const audiometa = await parseBuffer(audioFile.buffer, { mimeType: mimeHint });
         const c = audiometa.common;
-        resolvedArtist =
-          c.artist ||
-          (c.artists?.length ? c.artists[0] : '') ||
-          (c.performers?.length ? c.performers[0] : '') ||
-          '';
-      } catch { /* metadata read is best-effort */ }
+        resolvedArtist = c.artist || (c.artists?.length ? c.artists[0] : '') || '';
+        // Fallback: read TPE1 frame directly from native ID3 tags
+        if (!resolvedArtist) {
+          const id3frames =
+            audiometa.native?.['ID3v2.4'] ||
+            audiometa.native?.['ID3v2.3'] ||
+            audiometa.native?.['ID3v2.2'] || [];
+          const tpe1 = id3frames.find(f => f.id === 'TPE1');
+          if (tpe1?.value) resolvedArtist = tpe1.value;
+        }
+      } catch (err) {
+        console.error('[Mashup] Artist metadata extraction error:', err.message);
+      }
     }
+
+    // Upload audio to Wasabi
+    const audioExt = audioFile.originalname.split('.').pop() || 'mp3';
+    const audioKey = `mashups/audio/${Date.now()}-${audioFile.originalname.replace(/\s+/g, '_')}`;
+    const audioUpload = await uploadToWasabi(audioFile.buffer, audioKey, audioFile.mimetype);
 
     // Detect mashup genre category (independent from Record Pool pool-brand categories)
     const trackArtist = resolvedArtist || 'Unknown Artist';
