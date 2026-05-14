@@ -783,9 +783,9 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Assign to Pool (Source)</label>
-            <select value={poolCategory} onChange={e => setPoolCategory(e.target.value)} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-sm">
-              <option value="">— No pool assigned —</option>
-              {poolCategories.map(c => <option key={c._id} value={c.name}>{c.name}</option>)}
+            <select value={poolCategory} onChange={e => setPoolCategory(e.target.value)} className="w-full px-4 py-2 bg-white border border-white/10 rounded-lg focus:outline-none focus:border-accent text-sm text-gray-900">
+              <option value="" className="text-gray-900 bg-white">— No pool assigned —</option>
+              {poolCategories.map(c => <option key={c._id} value={c.name} className="text-gray-900 bg-white">{c.name}</option>)}
             </select>
             <p className="text-xs text-brand-text-tertiary mt-1">Albums will become visible under this pool&apos;s genre tab.</p>
           </div>
