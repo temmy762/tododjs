@@ -666,7 +666,8 @@ function extractEntryToBufferByName(zipPath, targetFileName, timeoutMs = 120000)
 // @access  Private/Admin
 export const uploadCollection = async (req, res) => {
   try {
-    const { name, year, month, thumbnail, scanResult, sourceId, category: categoryOverride } = req.body;
+    const { name, year, month, thumbnail, scanResult, sourceId, category: categoryOverride, poolCategory } = req.body;
+    const effectiveCategory = poolCategory || categoryOverride || '';
     const zipFile = req.files?.zipFile?.[0];
     const thumbnailFile = req.files?.thumbnailFile?.[0];
 
@@ -734,6 +735,7 @@ export const uploadCollection = async (req, res) => {
       } : null,
       collectionNameSource: name ? 'userEdited' : 'motherFolder',
       seriesName: detectedSeriesName,
+      poolCategory: effectiveCategory || '',
     });
     // Create DatePack and Album cards immediately based on scan result
     const createdDatePacks = [];
@@ -778,7 +780,7 @@ export const uploadCollection = async (req, res) => {
               status: 'pending',
               sourceFolderName: albumData.name,
               detectedGenre: detectedGenre,
-              ...(categoryOverride ? { category: categoryOverride } : {})
+              ...(effectiveCategory ? { category: effectiveCategory } : {})
             });
             createdAlbums.push({ 
               _id: album._id, 
@@ -820,7 +822,7 @@ export const uploadCollection = async (req, res) => {
 
     // Background: process the ZIP file via queue (prevents concurrent stalling)
     enqueueCollection(
-      () => processCollectionAsync(collection._id, zipFile.path, collection, createdDatePacks, createdAlbums, { categoryOverride: categoryOverride || null }),
+      () => processCollectionAsync(collection._id, zipFile.path, collection, createdDatePacks, createdAlbums, { categoryOverride: effectiveCategory || null }),
       collection._id
     );
   } catch (error) {
@@ -2244,7 +2246,7 @@ export const getCollection = async (req, res) => {
 // @access  Private/Admin
 export const updateCollection = async (req, res) => {
   try {
-    const { name, year, month, thumbnail, sourceId } = req.body;
+    const { name, year, month, thumbnail, sourceId, poolCategory } = req.body;
 
     const collection = await Collection.findById(req.params.id);
 
@@ -2269,6 +2271,14 @@ export const updateCollection = async (req, res) => {
       } else {
         await Album.updateMany({ collectionId: collection._id }, { $unset: { sourceId: '' } });
         await Track.updateMany({ collectionId: collection._id }, { $unset: { sourceId: '' } });
+      }
+    }
+    if (poolCategory !== undefined) {
+      collection.poolCategory = poolCategory || '';
+      // Cascade pool category name to all albums and tracks so they appear under the correct pool tab
+      if (poolCategory) {
+        await Album.updateMany({ collectionId: collection._id }, { $set: { category: poolCategory } });
+        await Track.updateMany({ collectionId: collection._id }, { $set: { category: poolCategory } });
       }
     }
     if (req.file) {

@@ -718,6 +718,7 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
   const [year, setYear] = useState(collection?.year || new Date().getFullYear());
   const [platform, setPlatform] = useState(collection?.platform || '');
   const [sourceId, setSourceId] = useState(collection?.sourceId?._id || collection?.sourceId || '');
+  const [poolCategory, setPoolCategory] = useState(collection?.poolCategory || '');
   const [poolCategories, setPoolCategories] = useState([]);
   const [thumbFile, setThumbFile] = useState(null);
   const [thumbUrl, setThumbUrl] = useState(collection?.thumbnail || '');
@@ -742,6 +743,7 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
       fd.append('year', year);
       fd.append('platform', platform);
       if (sourceId) fd.append('sourceId', sourceId);
+      if (poolCategory !== undefined) fd.append('poolCategory', poolCategory);
       if (thumbFile) fd.append('thumbnailFile', thumbFile);
       else if (thumbUrl) fd.append('thumbnail', thumbUrl);
       const res = await fetch(`${API}/collections/${collection._id}`, {
@@ -781,9 +783,9 @@ function CollectionEditModal({ collection, onClose, onSuccess }) {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Assign to Pool (Source)</label>
-            <select value={sourceId} onChange={e => setSourceId(e.target.value)} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-sm">
+            <select value={poolCategory} onChange={e => setPoolCategory(e.target.value)} className="w-full px-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent text-sm">
               <option value="">— No pool assigned —</option>
-              {poolCategories.map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
+              {poolCategories.map(c => <option key={c._id} value={c.name}>{c.name}</option>)}
             </select>
             <p className="text-xs text-brand-text-tertiary mt-1">Albums will become visible under this pool&apos;s genre tab.</p>
           </div>

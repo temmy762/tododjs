@@ -116,6 +116,11 @@ const collectionSchema = new mongoose.Schema({
     trim: true,
     index: true,
   },
+  poolCategory: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   missingThumbnail: {
     type: Boolean,
     default: false,
