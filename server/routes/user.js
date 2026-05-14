@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getAllUsers, updateUser, deleteUser, uploadAvatar, getDeviceOverview, revokeDevice, getSharingSuspects } from '../controllers/userController.js';
+import { getAllUsers, updateUser, deleteUser, uploadAvatar, getDeviceOverview, revokeDevice, getSharingSuspects, syncUserStripeSubscription } from '../controllers/userController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -25,5 +25,6 @@ router.route('/:id')
   .put(protect, authorize('admin'), updateUser)
   .delete(protect, authorize('admin'), deleteUser);
 router.delete('/:id/devices/:deviceId', protect, authorize('admin'), revokeDevice);
+router.post('/:id/sync-stripe', protect, authorize('admin'), syncUserStripeSubscription);
 
 export default router;

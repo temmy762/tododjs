@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, UserPlus, Edit, Trash2, Shield, Crown, User, Loader, X, ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import { Search, UserPlus, Edit, Trash2, Shield, Crown, User, Loader, X, ChevronLeft, ChevronRight, Users, RefreshCw } from 'lucide-react';
 import API_URL from '../../config/api';
 
 const API = API_URL;
@@ -361,6 +361,8 @@ export default function AdminUsers() {
 function EditUserModal({ user, onClose, onSave }) {
   const { t } = useTranslation();
   const [role, setRole] = useState(user.role || 'user');
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
 
   // Normalize any legacy/hyphenated planId to the canonical underscore form
   const normalizePlan = (raw) => {
@@ -388,6 +390,28 @@ function EditUserModal({ user, onClose, onSave }) {
     normalizePlan(user.subscription?.planId || user.subscription?.plan || 'free')
   );
   const [isActive, setIsActive] = useState(user.isActive !== false);
+
+  const handleSyncStripe = async () => {
+    setSyncLoading(true);
+    setSyncResult(null);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/users/${user._id}/sync-stripe`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setSyncResult({ ok: true, endDate: data.data.endDate, status: data.data.status });
+      } else {
+        setSyncResult({ ok: false, message: data.message });
+      }
+    } catch (err) {
+      setSyncResult({ ok: false, message: err.message });
+    } finally {
+      setSyncLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
@@ -431,6 +455,35 @@ function EditUserModal({ user, onClose, onSave }) {
               <div className={`w-5 h-5 bg-white rounded-full absolute top-0.5 transition-transform ${isActive ? 'translate-x-6' : 'translate-x-0.5'}`} />
             </button>
           </div>
+        </div>
+          {/* Stripe Sync — only for Stripe-managed subscriptions */}
+          {user.subscription?.stripeSubscriptionId && (
+            <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-blue-400">Stripe Subscription</span>
+                <button
+                  onClick={handleSyncStripe}
+                  disabled={syncLoading}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-xs font-medium transition-colors disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3 h-3 ${syncLoading ? 'animate-spin' : ''}`} />
+                  {syncLoading ? 'Syncing...' : 'Sync from Stripe'}
+                </button>
+              </div>
+              <p className="text-[10px] text-brand-text-tertiary">
+                Current endDate: {syncResult?.endDate
+                  ? new Date(syncResult.endDate).toLocaleDateString()
+                  : user.subscription?.endDate
+                    ? new Date(user.subscription.endDate).toLocaleDateString()
+                    : '— (missing)'}
+              </p>
+              {syncResult && (
+                <p className={`text-[10px] mt-1 font-semibold ${syncResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+                  {syncResult.ok ? `✓ Synced — status: ${syncResult.status}, expires: ${new Date(syncResult.endDate).toLocaleDateString()}` : `✗ ${syncResult.message}`}
+                </p>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex gap-3 mt-6">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white font-medium transition-colors">{t('common.cancel')}</button>

@@ -361,6 +361,52 @@ export const getSharingSuspects = async (req, res) => {
   }
 };
 
+// @desc    Sync a user's subscription endDate from Stripe
+// @route   POST /api/users/:id/sync-stripe
+// @access  Private/Admin
+export const syncUserStripeSubscription = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const stripeSubscriptionId = user.subscription?.stripeSubscriptionId;
+    if (!stripeSubscriptionId) {
+      return res.status(400).json({ success: false, message: 'This user has no Stripe subscription ID — nothing to sync.' });
+    }
+
+    const Stripe = (await import('stripe')).default;
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+    const stripeSub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+
+    const newEndDate = stripeSub.current_period_end
+      ? new Date(stripeSub.current_period_end * 1000)
+      : null;
+
+    const statusMap = { active: 'active', canceled: 'cancelled', past_due: 'past_due', unpaid: 'past_due', paused: 'inactive', trialing: 'active' };
+    const newStatus = statusMap[stripeSub.status] || user.subscription.status;
+
+    if (newEndDate) user.subscription.endDate = newEndDate;
+    user.subscription.status = newStatus;
+    user.subscription.cancelAtPeriodEnd = stripeSub.cancel_at_period_end || false;
+    await user.save();
+
+    console.log(`[Admin] Synced Stripe sub for user ${user._id}: status=${newStatus}, endDate=${newEndDate}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Subscription synced from Stripe.',
+      data: {
+        endDate: user.subscription.endDate,
+        status: user.subscription.status,
+        cancelAtPeriodEnd: user.subscription.cancelAtPeriodEnd
+      }
+    });
+  } catch (error) {
+    console.error('[syncUserStripeSubscription] Error:', error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Upload profile photo (avatar)
 // @route   PUT /api/users/avatar
 // @access  Private (authenticated user)
