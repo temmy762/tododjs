@@ -1,6 +1,7 @@
 import User from '../models/User.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import { uploadToWasabi, deleteFromWasabi, getSignedDownloadUrl } from '../config/wasabi.js';
+import stripe from '../config/stripe.js';
 
 // @desc    Get all users with search, pagination, stats
 // @route   GET /api/users
@@ -374,8 +375,6 @@ export const syncUserStripeSubscription = async (req, res) => {
       return res.status(400).json({ success: false, message: 'This user has no Stripe subscription ID — nothing to sync.' });
     }
 
-    const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
     const stripeSub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
 
     const newEndDate = stripeSub.current_period_end
