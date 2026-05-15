@@ -23,6 +23,8 @@ export default function AdminUsers() {
   const [stats, setStats] = useState({ totalUsers: 0, premiumCount: 0, proCount: 0, newThisMonth: 0 });
   const [editingUser, setEditingUser] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [bulkSyncing, setBulkSyncing] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
@@ -53,6 +55,24 @@ export default function AdminUsers() {
   }, [debouncedSearch]);
 
   useEffect(() => { fetchUsers(1); }, [fetchUsers]);
+
+  const handleBulkSync = async () => {
+    setBulkSyncing(true);
+    setBulkResult(null);
+    try {
+      const res = await fetch(`${API}/users/bulk-sync-stripe`, {
+        method: 'POST',
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      setBulkResult(data);
+      if (data.success) fetchUsers(pagination.page);
+    } catch (err) {
+      setBulkResult({ success: false, message: err.message });
+    } finally {
+      setBulkSyncing(false);
+    }
+  };
 
   const handleDelete = async (userId) => {
     try {
@@ -170,6 +190,23 @@ export default function AdminUsers() {
         <div>
           <h2 className="text-3xl font-bold text-white mb-2">{t('admin.memberManagement')}</h2>
           <p className="text-brand-text-tertiary">{t('admin.managePermissions')}</p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <button
+            onClick={handleBulkSync}
+            disabled={bulkSyncing}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-sm font-medium transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${bulkSyncing ? 'animate-spin' : ''}`} />
+            {bulkSyncing ? 'Syncing all...' : 'Sync All from Stripe'}
+          </button>
+          {bulkResult && (
+            <p className={`text-[11px] font-semibold ${bulkResult.success ? 'text-green-400' : 'text-red-400'}`}>
+              {bulkResult.success
+                ? `✓ ${bulkResult.data?.synced ?? 0} synced, ${bulkResult.data?.skipped ?? 0} skipped, ${bulkResult.data?.failed ?? 0} failed`
+                : `✗ ${bulkResult.message}`}
+            </p>
+          )}
         </div>
       </div>
 

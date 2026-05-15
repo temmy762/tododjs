@@ -415,6 +415,96 @@ export const syncUserStripeSubscription = async (req, res) => {
   }
 };
 
+// @desc    Bulk sync ALL paid users' subscription data from Stripe
+// @route   POST /api/users/bulk-sync-stripe
+// @access  Private/Admin
+export const bulkSyncStripeSubscriptions = async (req, res) => {
+  try {
+    // Target users who have a paid plan OR any Stripe ID stored
+    const users = await User.find({
+      $or: [
+        { 'subscription.stripeSubscriptionId': { $exists: true, $ne: null } },
+        { 'subscription.stripeCustomerId': { $exists: true, $ne: null } },
+        { 'subscription.planId': { $nin: [null, 'free', ''] } }
+      ]
+    });
+
+    let synced = 0, skipped = 0, failed = 0;
+    const results = [];
+
+    const statusMap = {
+      active: 'active', canceled: 'cancelled', cancelled: 'cancelled',
+      past_due: 'past_due', unpaid: 'past_due', paused: 'inactive', trialing: 'active'
+    };
+
+    for (const user of users) {
+      try {
+        let subId = user.subscription?.stripeSubscriptionId;
+        let customerId = user.subscription?.stripeCustomerId;
+
+        // Step 1: if no IDs at all, search Stripe by email
+        if (!subId && !customerId) {
+          const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+          if (customers.data.length) {
+            customerId = customers.data[0].id;
+            user.subscription.stripeCustomerId = customerId;
+          }
+        }
+
+        // Step 2: resolve the active subscription
+        let stripeSub = null;
+        if (subId) {
+          stripeSub = await stripe.subscriptions.retrieve(subId);
+        } else if (customerId) {
+          const subs = await stripe.subscriptions.list({ customer: customerId, limit: 5, status: 'all' });
+          stripeSub = subs.data.find(s => s.status === 'active') ||
+                      subs.data.find(s => s.status === 'trialing') ||
+                      subs.data[0] || null;
+          if (stripeSub) {
+            user.subscription.stripeSubscriptionId = stripeSub.id;
+          }
+        }
+
+        if (!stripeSub) {
+          skipped++;
+          results.push({ email: user.email, result: 'no_stripe_subscription_found' });
+          continue;
+        }
+
+        const newEndDate = stripeSub.current_period_end
+          ? new Date(stripeSub.current_period_end * 1000)
+          : null;
+        const newStatus = statusMap[stripeSub.status] || user.subscription.status;
+
+        if (newEndDate) user.subscription.endDate = newEndDate;
+        user.subscription.status = newStatus;
+        user.subscription.cancelAtPeriodEnd = stripeSub.cancel_at_period_end || false;
+        if (stripeSub.customer && !user.subscription.stripeCustomerId) {
+          user.subscription.stripeCustomerId = stripeSub.customer;
+        }
+        await user.save();
+
+        synced++;
+        results.push({ email: user.email, result: 'synced', status: newStatus, endDate: newEndDate });
+        console.log(`[BulkSync] ${user.email}: status=${newStatus}, endDate=${newEndDate}`);
+      } catch (err) {
+        failed++;
+        results.push({ email: user.email, result: 'error', error: err.message });
+        console.error(`[BulkSync] Failed for ${user.email}:`, err.message);
+      }
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `Bulk sync complete: ${synced} synced, ${skipped} skipped, ${failed} failed`,
+      data: { synced, skipped, failed, total: users.length, results }
+    });
+  } catch (error) {
+    console.error('[bulkSyncStripeSubscriptions] Error:', error.message);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Upload profile photo (avatar)
 // @route   PUT /api/users/avatar
 // @access  Private (authenticated user)
