@@ -370,12 +370,21 @@ export const syncUserStripeSubscription = async (req, res) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    const stripeSubscriptionId = user.subscription?.stripeSubscriptionId;
+    // Use stored ID or the one manually provided by the admin
+    const stripeSubscriptionId = user.subscription?.stripeSubscriptionId || req.body?.stripeSubscriptionId;
     if (!stripeSubscriptionId) {
-      return res.status(400).json({ success: false, message: 'This user has no Stripe subscription ID — nothing to sync.' });
+      return res.status(400).json({ success: false, message: 'No Stripe Subscription ID found. Paste it from the Stripe Dashboard.' });
     }
 
     const stripeSub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+
+    // Persist the subscription ID if it wasn't stored yet (e.g. webhook missed on first purchase)
+    if (!user.subscription.stripeSubscriptionId) {
+      user.subscription.stripeSubscriptionId = stripeSubscriptionId;
+    }
+    if (stripeSub.customer && !user.subscription.stripeCustomerId) {
+      user.subscription.stripeCustomerId = stripeSub.customer;
+    }
 
     const newEndDate = stripeSub.current_period_end
       ? new Date(stripeSub.current_period_end * 1000)

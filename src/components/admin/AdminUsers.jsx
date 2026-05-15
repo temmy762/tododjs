@@ -363,6 +363,7 @@ function EditUserModal({ user, onClose, onSave }) {
   const [role, setRole] = useState(user.role || 'user');
   const [syncLoading, setSyncLoading] = useState(false);
   const [syncResult, setSyncResult] = useState(null);
+  const [manualSubId, setManualSubId] = useState(user.subscription?.stripeSubscriptionId || '');
 
   // Normalize any legacy/hyphenated planId to the canonical underscore form
   const normalizePlan = (raw) => {
@@ -391,14 +392,21 @@ function EditUserModal({ user, onClose, onSave }) {
   );
   const [isActive, setIsActive] = useState(user.isActive !== false);
 
+  const hasPaidPlan = !!(user.subscription?.planId || (user.subscription?.plan && user.subscription?.plan !== 'free'));
+
   const handleSyncStripe = async () => {
+    if (!manualSubId.trim()) {
+      setSyncResult({ ok: false, message: 'Enter a Stripe Subscription ID (sub_...)' });
+      return;
+    }
     setSyncLoading(true);
     setSyncResult(null);
     try {
       const token = localStorage.getItem('token');
       const res = await fetch(`${API_URL}/users/${user._id}/sync-stripe`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stripeSubscriptionId: manualSubId.trim() })
       });
       const data = await res.json();
       if (data.success) {
@@ -456,26 +464,33 @@ function EditUserModal({ user, onClose, onSave }) {
             </button>
           </div>
         </div>
-          {/* Stripe Sync — only for Stripe-managed subscriptions */}
-          {user.subscription?.stripeSubscriptionId && (
-            <div className="p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold text-blue-400">Stripe Subscription</span>
+          {/* Stripe Sync — shown for all users with a paid plan */}
+          {hasPaidPlan && (
+            <div className="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold text-blue-400">Sync from Stripe</span>
                 <button
                   onClick={handleSyncStripe}
                   disabled={syncLoading}
                   className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-xs font-medium transition-colors disabled:opacity-50"
                 >
                   <RefreshCw className={`w-3 h-3 ${syncLoading ? 'animate-spin' : ''}`} />
-                  {syncLoading ? 'Syncing...' : 'Sync from Stripe'}
+                  {syncLoading ? 'Syncing...' : 'Sync'}
                 </button>
               </div>
+              <input
+                type="text"
+                value={manualSubId}
+                onChange={e => setManualSubId(e.target.value)}
+                placeholder="Stripe Subscription ID (sub_...)"
+                className="w-full px-3 py-1.5 bg-dark-elevated border border-white/10 rounded-lg text-white text-xs placeholder-brand-text-tertiary focus:outline-none focus:border-blue-400 mb-1"
+              />
               <p className="text-[10px] text-brand-text-tertiary">
-                Current endDate: {syncResult?.endDate
+                Current expiry: {syncResult?.endDate
                   ? new Date(syncResult.endDate).toLocaleDateString()
                   : user.subscription?.endDate
                     ? new Date(user.subscription.endDate).toLocaleDateString()
-                    : '— (missing)'}
+                    : '— (missing — paste Stripe sub ID above)'}
               </p>
               {syncResult && (
                 <p className={`text-[10px] mt-1 font-semibold ${syncResult.ok ? 'text-green-400' : 'text-red-400'}`}>
