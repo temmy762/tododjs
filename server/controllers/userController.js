@@ -454,8 +454,23 @@ export const bulkSyncStripeSubscriptions = async (req, res) => {
         // Step 2: resolve the active subscription
         let stripeSub = null;
         if (subId) {
-          stripeSub = await stripe.subscriptions.retrieve(subId);
-        } else if (customerId) {
+          try {
+            stripeSub = await stripe.subscriptions.retrieve(subId);
+          } catch (retrieveErr) {
+            // Invalid/deleted/mode-mismatched sub ID — clear it and fall back to email lookup
+            console.warn(`[BulkSync] sub ID invalid for ${user.email} (${retrieveErr.message}) — clearing and trying email lookup`);
+            user.subscription.stripeSubscriptionId = null;
+            subId = null;
+          }
+        }
+        if (!stripeSub && !customerId) {
+          const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+          if (customers.data.length) {
+            customerId = customers.data[0].id;
+            user.subscription.stripeCustomerId = customerId;
+          }
+        }
+        if (!stripeSub && customerId) {
           const subs = await stripe.subscriptions.list({ customer: customerId, limit: 5, status: 'all' });
           stripeSub = subs.data.find(s => s.status === 'active') ||
                       subs.data.find(s => s.status === 'trialing') ||
