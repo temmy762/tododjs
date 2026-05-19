@@ -37,6 +37,11 @@ const PricingPage = lazy(() => import('./components/PricingPage'));
 const SubscriptionDashboard = lazy(() => import('./components/SubscriptionDashboard'));
 const CategoryTrackSection = lazy(() => import('./components/CategoryTrackSection'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const LegalNoticePage = lazy(() => import('./pages/LegalNoticePage'));
+const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
+const CookiePolicyPage = lazy(() => import('./pages/CookiePolicyPage'));
+const TermsPage = lazy(() => import('./pages/TermsPage'));
+import Footer from './components/Footer';
 import API_URL from './config/api';
 
 const API = API_URL;
@@ -53,6 +58,10 @@ const PATH_TO_PAGE = {
   '/pricing': 'pricing',
   '/subscription': 'subscription',
   '/settings': 'settings',
+  '/aviso-legal': 'legal-notice',
+  '/privacidad': 'privacy',
+  '/cookies': 'cookies-policy',
+  '/terminos': 'terms',
 };
 // Prefer the first path registered for each page (so "library" → "/library", not "/biblioteca")
 const PAGE_TO_PATH = Object.entries(PATH_TO_PAGE).reduce((acc, [path, page]) => {
@@ -810,6 +819,14 @@ function App() {
           />
         ) : activePage === 'settings' ? (
           <SettingsPage user={user} onUserUpdate={setUser} onLogout={handleLogout} />
+        ) : activePage === 'legal-notice' ? (
+          <LegalNoticePage />
+        ) : activePage === 'privacy' ? (
+          <PrivacyPolicyPage />
+        ) : activePage === 'cookies-policy' ? (
+          <CookiePolicyPage />
+        ) : activePage === 'terms' ? (
+          <TermsPage />
         ) : activePage === 'home' ? (
           <>
             <div className="sticky top-14 md:top-16 z-20 bg-dark-bg/95 backdrop-blur-md border-b border-white/5">
@@ -865,6 +882,7 @@ function App() {
         </Suspense>
         </ErrorBoundary>
         </main>
+        <Footer />
       </div>
 
       <SearchOverlay 

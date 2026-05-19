@@ -1,11 +1,27 @@
-import { useState, useEffect } from 'react';
-import { Download, TrendingUp, Calendar, Database } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Download, TrendingUp, Calendar, Database, Search, Filter, FileDown, AlertTriangle, CheckCircle, Clock, Wifi } from 'lucide-react';
 import API_URL, { getAuthHeaders } from '../../config/api';
 
 export default function AdminDownloadStats() {
+  const [activeTab, setActiveTab] = useState('stats');
   const [stats, setStats] = useState(null);
   const [period, setPeriod] = useState('30d');
   const [loading, setLoading] = useState(false);
+
+  // Logs state
+  const [logs, setLogs]         = useState([]);
+  const [logsTotal, setLogsTotal] = useState(0);
+  const [logsPage, setLogsPage]   = useState(1);
+  const [logsPages, setLogsPages] = useState(1);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [search, setSearch]     = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo]     = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+
+  // Alerts state
+  const [alerts, setAlerts]     = useState([]);
+  const [alertsLoading, setAlertsLoading] = useState(false);
 
   const safeJson = async (response) => {
     const text = await response.text();
@@ -16,9 +32,64 @@ export default function AdminDownloadStats() {
     }
   };
 
+  useEffect(() => { fetchStats(); }, [period]);
+  useEffect(() => { if (activeTab === 'logs') fetchLogs(1); }, [activeTab]);
   useEffect(() => {
-    fetchStats();
-  }, [period]);
+    if (activeTab === 'logs') {
+      setLogsPage(1);
+      fetchLogs(1);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typeFilter, dateFrom, dateTo]);
+  useEffect(() => { if (activeTab === 'alerts') fetchAlerts(); }, [activeTab]);
+
+  const fetchLogs = useCallback(async (page = logsPage) => {
+    setLogsLoading(true);
+    try {
+      const params = new URLSearchParams({ page, limit: 50 });
+      if (search) params.set('search', search);
+      if (dateFrom) params.set('dateFrom', dateFrom);
+      if (dateTo) params.set('dateTo', dateTo);
+      if (typeFilter) params.set('fileType', typeFilter);
+      const url = `${API_URL}/downloads/admin/logs?${params}`;
+      const res = await fetch(url, { headers: getAuthHeaders(false) });
+      const data = await res.json();
+      console.log('[AdminLogs] status:', res.status, 'response:', data);
+      if (data.success) {
+        setLogs(data.data || []);
+        setLogsTotal(data.total || 0);
+        setLogsPage(data.page || 1);
+        setLogsPages(data.pages || 1);
+      } else {
+        console.error('[AdminLogs] API error:', data.message);
+        setLogs([]);
+      }
+    } catch (e) {
+      console.error('[AdminLogs] fetch error:', e);
+      setLogs([]);
+    }
+    finally { setLogsLoading(false); }
+  }, [search, dateFrom, dateTo, typeFilter, logsPage]);
+
+  const fetchAlerts = async () => {
+    setAlertsLoading(true);
+    try {
+      const res = await fetch(`${API_URL}/downloads/admin/alerts`, { headers: getAuthHeaders(false) });
+      const data = await res.json();
+      if (data.success) setAlerts(data.data || []);
+    } catch (e) { console.error(e); }
+    finally { setAlertsLoading(false); }
+  };
+
+  const handleExport = () => {
+    const token = localStorage.getItem('token');
+    const params = new URLSearchParams();
+    if (search) params.set('search', search);
+    if (dateFrom) params.set('dateFrom', dateFrom);
+    if (dateTo) params.set('dateTo', dateTo);
+    if (typeFilter) params.set('fileType', typeFilter);
+    window.open(`${API_URL}/downloads/admin/export?${params}&token=${encodeURIComponent(token)}`, '_blank');
+  };
 
   const fetchStats = async () => {
     try {
@@ -57,56 +128,50 @@ export default function AdminDownloadStats() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="p-8">
-        <div className="text-center py-12">
-          <div className="animate-spin w-8 h-8 border-4 border-accent border-t-transparent rounded-full mx-auto"></div>
-          <p className="text-brand-text-tertiary mt-4">Loading statistics...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!stats) {
-    return (
-      <div className="p-8">
-        <div className="text-center py-12">
-          <p className="text-brand-text-tertiary">No statistics available</p>
-        </div>
-      </div>
-    );
-  }
-
-  const singleDownloads = stats.downloadsByType?.find(d => d._id === 'single')?.count || 0;
-  const bulkDownloads = stats.downloadsByType?.find(d => d._id === 'bulk')?.count || 0;
-
-  const totalDownloads = stats.totalDownloads ?? 0;
+  const singleDownloads = stats?.downloadsByType?.find(d => d._id === 'single')?.count || 0;
+  const bulkDownloads   = stats?.downloadsByType?.find(d => d._id === 'bulk')?.count || 0;
+  const totalDownloads  = stats?.totalDownloads ?? 0;
 
   return (
     <div className="p-4 md:p-8">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Download Statistics</h1>
-          <p className="text-brand-text-tertiary">Track and analyze download activity</p>
+          <h1 className="text-3xl font-bold mb-2">Downloads</h1>
+          <p className="text-brand-text-tertiary">Track, audit and detect suspicious activity</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {['24h', '7d', '30d', '90d'].map((p) => (
-            <button
-              key={p}
-              onClick={() => setPeriod(p)}
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 mb-6 border-b border-white/10">
+        {[{id:'stats',label:'Statistics'},{id:'logs',label:'Download Logs'},{id:'alerts',label:'Piracy Alerts'}].map(t => (
+          <button key={t.id} onClick={() => setActiveTab(t.id)}
+            className={`px-5 py-2.5 text-sm font-semibold transition-colors border-b-2 ${
+              activeTab === t.id ? 'border-accent text-white' : 'border-transparent text-brand-text-tertiary hover:text-white'
+            }`}>
+            {t.label}
+            {t.id === 'alerts' && alerts.length > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 bg-red-500 text-white text-[10px] rounded-full">{alerts.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* STATS TAB */}
+      {activeTab === 'stats' && (
+      <div>
+        {loading && <div className="text-center py-12"><div className="animate-spin w-8 h-8 border-4 border-accent border-t-transparent rounded-full mx-auto" /></div>}
+        {!loading && !stats && <p className="text-center text-brand-text-tertiary py-12">No statistics available</p>}
+        {!loading && stats && (<>
+        <div className="flex flex-wrap gap-2 mb-6">
+          {['24h','7d','30d','90d'].map(p => (
+            <button key={p} onClick={() => setPeriod(p)}
               className={`px-4 py-2 rounded-lg font-medium transition-colors ${
-                period === p
-                  ? 'bg-accent text-white'
-                  : 'bg-white/5 text-brand-text-tertiary hover:text-white'
-              }`}
-            >
-              {p === '24h' ? '24 Hours' : p === '7d' ? '7 Days' : p === '30d' ? '30 Days' : '90 Days'}
+                period === p ? 'bg-accent text-white' : 'bg-white/5 text-brand-text-tertiary hover:text-white'
+              }`}>
+              {p==='24h'?'24 Hours':p==='7d'?'7 Days':p==='30d'?'30 Days':'90 Days'}
             </button>
           ))}
         </div>
-      </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -203,6 +268,132 @@ export default function AdminDownloadStats() {
         </div>
         </div>
       </div>
+      </>)}
+      </div>)}
+
+      {/* LOGS TAB */}
+      {activeTab === 'logs' && (
+        <div>
+          {/* Filters bar */}
+          <div className="flex flex-wrap gap-2 mb-4">
+            <div className="relative flex-1 min-w-[180px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-text-tertiary" />
+              <input value={search} onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchLogs(1)}
+                placeholder="Search user or file…" className="w-full pl-9 pr-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white placeholder-brand-text-tertiary focus:outline-none focus:border-accent" />
+            </div>
+            <input type="date" value={dateFrom} onChange={e => { setDateFrom(e.target.value); }}
+              className="px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent" />
+            <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); }}
+              className="px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent" />
+            <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} aria-label="Filter by type"
+              className="px-3 py-2 text-sm bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent">
+              <option value="" className="text-black bg-white">All types</option>
+              <option value="MP3" className="text-black bg-white">MP3</option>
+              <option value="ZIP" className="text-black bg-white">ZIP</option>
+            </select>
+            <button onClick={() => fetchLogs(1)} className="px-4 py-2 text-sm bg-accent hover:bg-accent-hover text-white rounded-lg font-semibold transition-colors">
+              <Filter className="w-4 h-4" />
+            </button>
+            <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 text-sm bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg font-semibold transition-colors">
+              <FileDown className="w-4 h-4" /> Export CSV
+            </button>
+          </div>
+
+          {/* Table */}
+          <div className="bg-white/5 rounded-xl border border-white/10 overflow-x-auto">
+            {logsLoading ? (
+              <div className="text-center py-12"><div className="animate-spin w-6 h-6 border-4 border-accent border-t-transparent rounded-full mx-auto" /></div>
+            ) : (
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-white/10 text-brand-text-tertiary">
+                    {['Date/Time','User','Email','File','Type','Section','Plan','IP','Browser','OS','Device'].map(h => (
+                      <th key={h} className="text-left px-3 py-2.5 font-semibold whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map(d => (
+                    <tr key={d._id} className="border-b border-white/5 hover:bg-white/5 transition-colors">
+                      <td className="px-3 py-2 whitespace-nowrap text-brand-text-tertiary">{new Date(d.createdAt).toLocaleString()}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-white font-medium">{d.userName}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-brand-text-secondary">{d.email}</td>
+                      <td className="px-3 py-2 max-w-[200px] truncate text-brand-text-secondary" title={d.fileName}>{d.fileName}</td>
+                      <td className="px-3 py-2">
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${d.fileType === 'ZIP' ? 'bg-purple-500/20 text-purple-300' : 'bg-blue-500/20 text-blue-300'}`}>{d.fileType}</span>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-brand-text-tertiary">{d.section}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-brand-text-tertiary">{d.planId}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-brand-text-tertiary font-mono">{d.ipAddress}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-brand-text-tertiary">{d.deviceBrowser}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-brand-text-tertiary">{d.deviceOS}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-brand-text-tertiary">{d.deviceName}</td>
+                    </tr>
+                  ))}
+                  {logs.length === 0 && (
+                    <tr><td colSpan={11} className="text-center py-12 text-brand-text-tertiary">No downloads found</td></tr>
+                  )}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* Pagination */}
+          {logsPages > 1 && (
+            <div className="flex items-center justify-between mt-4">
+              <p className="text-xs text-brand-text-tertiary">{logsTotal} total records</p>
+              <div className="flex gap-2">
+                <button disabled={logsPage <= 1} onClick={() => { setLogsPage(p => p - 1); fetchLogs(logsPage - 1); }}
+                  className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white disabled:opacity-30 transition-colors hover:bg-white/10">← Prev</button>
+                <span className="px-3 py-1.5 text-xs text-brand-text-tertiary">Page {logsPage} / {logsPages}</span>
+                <button disabled={logsPage >= logsPages} onClick={() => { setLogsPage(p => p + 1); fetchLogs(logsPage + 1); }}
+                  className="px-3 py-1.5 text-xs bg-white/5 border border-white/10 rounded-lg text-white disabled:opacity-30 transition-colors hover:bg-white/10">Next →</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ALERTS TAB */}
+      {activeTab === 'alerts' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-brand-text-tertiary">{alerts.length} active alert{alerts.length !== 1 ? 's' : ''}</p>
+            <button onClick={fetchAlerts} className="px-4 py-2 text-sm bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-lg transition-colors">Refresh</button>
+          </div>
+
+          {alertsLoading && <div className="text-center py-12"><div className="animate-spin w-6 h-6 border-4 border-accent border-t-transparent rounded-full mx-auto" /></div>}
+
+          {!alertsLoading && alerts.length === 0 && (
+            <div className="text-center py-16 bg-white/5 rounded-xl border border-white/10">
+              <CheckCircle className="w-10 h-10 text-green-400 mx-auto mb-3" />
+              <p className="text-white font-semibold">No suspicious activity detected</p>
+              <p className="text-brand-text-tertiary text-sm mt-1">All download patterns look normal.</p>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            {alerts.map((a, i) => {
+              const colors = { high: 'border-red-500/30 bg-red-500/10', medium: 'border-yellow-500/30 bg-yellow-500/10', low: 'border-blue-500/30 bg-blue-500/10' };
+              const textColors = { high: 'text-red-400', medium: 'text-yellow-400', low: 'text-blue-400' };
+              const icons = { bulk_spree: FileDown, multi_ip: Wifi, new_sub_mass_download: TrendingUp, unusual_hours: Clock, mass_download: AlertTriangle };
+              const Icon = icons[a.type] || AlertTriangle;
+              return (
+                <div key={i} className={`flex items-start gap-4 p-4 rounded-xl border ${colors[a.severity]}`}>
+                  <Icon className={`w-5 h-5 mt-0.5 flex-shrink-0 ${textColors[a.severity]}`} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white font-medium">{a.message}</p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className={`text-[10px] font-bold uppercase tracking-wider ${textColors[a.severity]}`}>{a.severity}</span>
+                      <span className="text-[10px] text-brand-text-tertiary">{a.type.replace(/_/g, ' ')}</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

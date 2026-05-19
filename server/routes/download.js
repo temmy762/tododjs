@@ -7,7 +7,10 @@ import {
   getDownloadHistory,
   getTrendingDownloads,
   getRecentUploads,
-  getDownloadStats
+  getDownloadStats,
+  getAdminDownloadLogs,
+  exportDownloadLogs,
+  getDownloadAlerts
 } from '../controllers/downloadController.js';
 import { protect, authorize } from '../middleware/auth.js';
 import { requireSubscription, checkDeviceLimit } from '../middleware/subscription.js';
@@ -26,6 +29,9 @@ router.get('/album/:id/file', protect, requireSubscription, checkDeviceLimit, do
 router.get('/history', protect, getDownloadHistory);
 
 // Admin routes
+router.get('/admin/logs', protect, authorize('admin'), getAdminDownloadLogs);
+router.get('/admin/export', protect, authorize('admin'), exportDownloadLogs);
+router.get('/admin/alerts', protect, authorize('admin'), getDownloadAlerts);
 router.get('/stats', protect, authorize('admin'), getDownloadStats);
 
 export default router;
