@@ -718,41 +718,52 @@ export const getDownloadStats = async (req, res) => {
 export const getAdminDownloadLogs = async (req, res) => {
   try {
     const { page = 1, limit = 50, search = '', dateFrom, dateTo, fileType, userId: filterUserId } = req.query;
-    const query = {};
-    if (search) query.$or = [{ email: { $regex: search, $options: 'i' } }, { fileName: { $regex: search, $options: 'i' } }];
+    const filters = [];
+    if (search) filters.push({ $or: [{ email: { $regex: search, $options: 'i' } }, { fileName: { $regex: search, $options: 'i' } }, { 'userId.name': { $regex: search, $options: 'i' } }] });
     if (dateFrom || dateTo) {
-      query.createdAt = {};
-      if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
-      if (dateTo) { const d = new Date(dateTo); d.setHours(23, 59, 59, 999); query.createdAt.$lte = d; }
+      const dateFilter = {};
+      if (dateFrom) dateFilter.$gte = new Date(dateFrom);
+      if (dateTo) { const d = new Date(dateTo); d.setHours(23, 59, 59, 999); dateFilter.$lte = d; }
+      filters.push({ createdAt: dateFilter });
     }
-    if (fileType === 'MP3' || fileType === 'ZIP') query.fileType = fileType;
-    if (filterUserId) query.userId = filterUserId;
+    if (fileType === 'MP3') {
+      // null / missing field = legacy record treated as MP3 (single track download)
+      filters.push({ $or: [{ fileType: 'MP3' }, { fileType: { $in: [null, ''] } }, { fileType: { $exists: false } }] });
+      filters.push({ type: { $ne: 'bulk' } });
+    } else if (fileType === 'ZIP') {
+      filters.push({ $or: [{ fileType: 'ZIP' }, { $and: [{ $or: [{ fileType: { $in: [null, ''] } }, { fileType: { $exists: false } }] }, { type: 'bulk' }] }] });
+    }
+    if (filterUserId) filters.push({ userId: filterUserId });
+    const query = filters.length > 0 ? { $and: filters } : {};
 
     const total = await Download.countDocuments(query);
     const logs = await Download.find(query)
       .sort({ createdAt: -1 })
       .skip((parseInt(page) - 1) * parseInt(limit))
       .limit(parseInt(limit))
-      .populate('userId', 'name email')
+      .populate('userId', 'name email subscription')
       .populate('trackId', 'title artist')
       .populate('albumId', 'name')
       .lean();
 
-    const data = logs.map(d => ({
-      _id: d._id,
-      userName: d.userId?.name || '—',
-      email: d.email || d.userId?.email || '—',
-      fileName: d.fileName || (d.trackId ? `${d.trackId.artist} - ${d.trackId.title}` : d.albumId?.name) || '—',
-      fileType: d.fileType || (d.type === 'bulk' ? 'ZIP' : 'MP3'),
-      section: d.section || '—',
-      planId: d.planId || '—',
-      ipAddress: d.ipAddress || '—',
-      deviceBrowser: d.deviceBrowser || '—',
-      deviceOS: d.deviceOS || '—',
-      deviceName: d.deviceName || '—',
-      fileSize: d.fileSize || 0,
-      createdAt: d.createdAt
-    }));
+    const data = logs.map(d => {
+      const ua = d.userAgent ? parseUA(d.userAgent) : {};
+      return {
+        _id: d._id,
+        userName: d.userId?.name || '—',
+        email: d.email || d.userId?.email || '—',
+        fileName: d.fileName || (d.trackId ? `${d.trackId.artist} - ${d.trackId.title}` : d.albumId?.name) || '—',
+        fileType: d.fileType || (d.type === 'bulk' ? 'ZIP' : 'MP3'),
+        section: d.section || '—',
+        planId: d.planId || d.userId?.subscription?.planId || d.userId?.subscription?.plan || '—',
+        ipAddress: d.ipAddress || '—',
+        deviceBrowser: d.deviceBrowser || ua.browser || '—',
+        deviceOS: d.deviceOS || ua.os || '—',
+        deviceName: d.deviceName || ua.device || '—',
+        fileSize: d.fileSize || 0,
+        createdAt: d.createdAt
+      };
+    });
 
     res.status(200).json({ success: true, total, page: parseInt(page), pages: Math.ceil(total / parseInt(limit)), data });
   } catch (error) {
@@ -766,29 +777,44 @@ export const getAdminDownloadLogs = async (req, res) => {
 export const exportDownloadLogs = async (req, res) => {
   try {
     const { search = '', dateFrom, dateTo, fileType } = req.query;
-    const query = {};
-    if (search) query.$or = [{ email: { $regex: search, $options: 'i' } }, { fileName: { $regex: search, $options: 'i' } }];
+    const exportFilters = [];
+    if (search) exportFilters.push({ $or: [{ email: { $regex: search, $options: 'i' } }, { fileName: { $regex: search, $options: 'i' } }] });
     if (dateFrom || dateTo) {
-      query.createdAt = {};
-      if (dateFrom) query.createdAt.$gte = new Date(dateFrom);
-      if (dateTo) { const d = new Date(dateTo); d.setHours(23, 59, 59, 999); query.createdAt.$lte = d; }
+      const dateFilter = {};
+      if (dateFrom) dateFilter.$gte = new Date(dateFrom);
+      if (dateTo) { const d = new Date(dateTo); d.setHours(23, 59, 59, 999); dateFilter.$lte = d; }
+      exportFilters.push({ createdAt: dateFilter });
     }
-    if (fileType === 'MP3' || fileType === 'ZIP') query.fileType = fileType;
+    if (fileType === 'MP3') {
+      exportFilters.push({ $or: [{ fileType: 'MP3' }, { fileType: { $in: [null, ''] } }, { fileType: { $exists: false } }] });
+      exportFilters.push({ type: { $ne: 'bulk' } });
+    } else if (fileType === 'ZIP') {
+      exportFilters.push({ $or: [{ fileType: 'ZIP' }, { $and: [{ $or: [{ fileType: { $in: [null, ''] } }, { fileType: { $exists: false } }] }, { type: 'bulk' }] }] });
+    }
+    const query = exportFilters.length > 0 ? { $and: exportFilters } : {};
 
     const logs = await Download.find(query).sort({ createdAt: -1 }).limit(10000)
-      .populate('userId', 'name email').populate('trackId', 'title artist').populate('albumId', 'name').lean();
+      .populate('userId', 'name email subscription').populate('trackId', 'title artist').populate('albumId', 'name').lean();
 
     const esc = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
     const headers = ['Date', 'User', 'Email', 'File', 'Type', 'Section', 'Plan', 'IP', 'Browser', 'OS', 'Device', 'Size (bytes)'];
-    const rows = logs.map(d => [
-      d.createdAt?.toISOString() ?? '',
-      d.userId?.name ?? '—',
-      d.email || d.userId?.email || '—',
-      d.fileName || (d.trackId ? `${d.trackId.artist} - ${d.trackId.title}` : d.albumId?.name) || '—',
-      d.fileType || (d.type === 'bulk' ? 'ZIP' : 'MP3'),
-      d.section || '—', d.planId || '—', d.ipAddress || '—',
-      d.deviceBrowser || '—', d.deviceOS || '—', d.deviceName || '—', d.fileSize ?? 0
-    ].map(esc).join(','));
+    const rows = logs.map(d => {
+      const ua = d.userAgent ? parseUA(d.userAgent) : {};
+      return [
+        d.createdAt?.toISOString() ?? '',
+        d.userId?.name ?? '—',
+        d.email || d.userId?.email || '—',
+        d.fileName || (d.trackId ? `${d.trackId.artist} - ${d.trackId.title}` : d.albumId?.name) || '—',
+        d.fileType || (d.type === 'bulk' ? 'ZIP' : 'MP3'),
+        d.section || '—',
+        d.planId || d.userId?.subscription?.planId || d.userId?.subscription?.plan || '—',
+        d.ipAddress || '—',
+        d.deviceBrowser || ua.browser || '—',
+        d.deviceOS || ua.os || '—',
+        d.deviceName || ua.device || '—',
+        d.fileSize ?? 0
+      ].map(esc).join(',');
+    });
 
     const csv = [headers.join(','), ...rows].join('\n');
     res.setHeader('Content-Type', 'text/csv');

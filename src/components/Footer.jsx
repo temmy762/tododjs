@@ -75,7 +75,15 @@ export default function Footer() {
             {isEs ? 'Todos los derechos reservados.' : 'All rights reserved.'}
           </p>
           <p className="text-xs text-brand-text-tertiary">
-            {isEs ? 'Hecho con ♥ en España' : 'Made with ♥ in Spain'}
+            {isEs ? 'Desarrollado por' : 'Developed by'}{' '}
+            <a
+              href="https://solvatree.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-accent hover:text-white transition-colors duration-150 font-medium"
+            >
+              SolvaTree
+            </a>
           </p>
         </div>
       </div>

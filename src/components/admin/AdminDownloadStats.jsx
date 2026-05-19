@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Download, TrendingUp, Calendar, Database, Search, Filter, FileDown, AlertTriangle, CheckCircle, Clock, Wifi } from 'lucide-react';
 import API_URL, { getAuthHeaders } from '../../config/api';
 
@@ -32,25 +32,18 @@ export default function AdminDownloadStats() {
     }
   };
 
-  useEffect(() => { fetchStats(); }, [period]);
-  useEffect(() => { if (activeTab === 'logs') fetchLogs(1); }, [activeTab]);
-  useEffect(() => {
-    if (activeTab === 'logs') {
-      setLogsPage(1);
-      fetchLogs(1);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [typeFilter, dateFrom, dateTo]);
-  useEffect(() => { if (activeTab === 'alerts') fetchAlerts(); }, [activeTab]);
+  const filtersRef = useRef({ search, dateFrom, dateTo, typeFilter });
+  useEffect(() => { filtersRef.current = { search, dateFrom, dateTo, typeFilter }; }, [search, dateFrom, dateTo, typeFilter]);
 
-  const fetchLogs = useCallback(async (page = logsPage) => {
+  const fetchLogs = useCallback(async (page = 1) => {
+    const { search: s, dateFrom: df, dateTo: dt, typeFilter: ft } = filtersRef.current;
     setLogsLoading(true);
     try {
       const params = new URLSearchParams({ page, limit: 50 });
-      if (search) params.set('search', search);
-      if (dateFrom) params.set('dateFrom', dateFrom);
-      if (dateTo) params.set('dateTo', dateTo);
-      if (typeFilter) params.set('fileType', typeFilter);
+      if (s) params.set('search', s);
+      if (df) params.set('dateFrom', df);
+      if (dt) params.set('dateTo', dt);
+      if (ft) params.set('fileType', ft);
       const url = `${API_URL}/downloads/admin/logs?${params}`;
       const res = await fetch(url, { headers: getAuthHeaders(false) });
       const data = await res.json();
@@ -67,9 +60,15 @@ export default function AdminDownloadStats() {
     } catch (e) {
       console.error('[AdminLogs] fetch error:', e);
       setLogs([]);
-    }
-    finally { setLogsLoading(false); }
-  }, [search, dateFrom, dateTo, typeFilter, logsPage]);
+    } finally { setLogsLoading(false); }
+  }, []);
+
+  useEffect(() => { fetchStats(); }, [period]);
+  useEffect(() => { if (activeTab === 'logs') fetchLogs(1); }, [activeTab, fetchLogs]);
+  useEffect(() => {
+    if (activeTab === 'logs') fetchLogs(1);
+  }, [typeFilter, dateFrom, dateTo, fetchLogs]);
+  useEffect(() => { if (activeTab === 'alerts') fetchAlerts(); }, [activeTab]);
 
   const fetchAlerts = async () => {
     setAlertsLoading(true);
