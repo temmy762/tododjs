@@ -12,7 +12,10 @@ import {
   shareSubscription,
   removeSharedUser,
   getSubscriptionHistory,
-  checkWhatsAppEligibility
+  checkWhatsAppEligibility,
+  getPaymentMethod,
+  createSetupIntent,
+  updatePaymentMethod
 } from '../controllers/subscriptionController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -35,6 +38,9 @@ router.delete('/devices/:deviceId', protect, removeDevice);
 router.post('/share', protect, shareSubscription);
 router.delete('/share/:userId', protect, removeSharedUser);
 router.get('/history', protect, getSubscriptionHistory);
+router.get('/payment-method', protect, getPaymentMethod);
+router.post('/setup-intent', protect, createSetupIntent);
+router.post('/payment-method', protect, updatePaymentMethod);
 router.get('/whatsapp-eligibility', protect, checkWhatsAppEligibility);
 
 export default router;

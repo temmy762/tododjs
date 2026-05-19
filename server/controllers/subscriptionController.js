@@ -547,6 +547,146 @@ export const updatePlan = async (req, res) => {
   }
 };
 
+// @desc    Get current payment method from Stripe
+// @route   GET /api/subscriptions/payment-method
+// @access  Private
+export const getPaymentMethod = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    const customerId = user.subscription?.stripeCustomerId;
+    const subscriptionId = user.subscription?.stripeSubscriptionId;
+
+    if (!customerId) {
+      return res.status(200).json({ success: true, data: null });
+    }
+
+    let pm = null;
+
+    // Try subscription's default_payment_method first
+    if (subscriptionId) {
+      try {
+        const sub = await stripe.subscriptions.retrieve(subscriptionId, {
+          expand: ['default_payment_method']
+        });
+        pm = sub.default_payment_method || null;
+      } catch (_) {}
+    }
+
+    // Fall back to customer's invoice default
+    if (!pm) {
+      const customer = await stripe.customers.retrieve(customerId, {
+        expand: ['invoice_settings.default_payment_method']
+      });
+      pm = customer.invoice_settings?.default_payment_method || null;
+    }
+
+    if (!pm || typeof pm === 'string') {
+      return res.status(200).json({ success: true, data: null });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: {
+        brand: pm.card?.brand || 'card',
+        last4: pm.card?.last4 || '????',
+        expMonth: pm.card?.exp_month,
+        expYear: pm.card?.exp_year,
+        id: pm.id
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Create Stripe SetupIntent to update payment method
+// @route   POST /api/subscriptions/setup-intent
+// @access  Private
+export const createSetupIntent = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    let customerId = user.subscription?.stripeCustomerId;
+
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: user.email,
+        name: user.name,
+        metadata: { userId: user._id.toString() }
+      });
+      customerId = customer.id;
+      user.subscription.stripeCustomerId = customerId;
+      await user.save();
+    }
+
+    const setupIntent = await stripe.setupIntents.create({
+      customer: customerId,
+      usage: 'off_session',
+      automatic_payment_methods: { enabled: true }
+    });
+
+    res.status(200).json({ success: true, clientSecret: setupIntent.client_secret });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Set new default payment method after SetupIntent confirmed
+// @route   POST /api/subscriptions/payment-method
+// @access  Private
+export const updatePaymentMethod = async (req, res) => {
+  try {
+    const { paymentMethodId } = req.body;
+    if (!paymentMethodId) {
+      return res.status(400).json({ success: false, message: 'paymentMethodId required' });
+    }
+
+    const user = await User.findById(req.user.id);
+    const customerId = user.subscription?.stripeCustomerId;
+    const subscriptionId = user.subscription?.stripeSubscriptionId;
+
+    if (!customerId) {
+      return res.status(400).json({ success: false, message: 'No Stripe customer found' });
+    }
+
+    // Attach to customer if not already attached
+    await stripe.paymentMethods.attach(paymentMethodId, { customer: customerId }).catch(() => {});
+
+    // Set as customer default
+    await stripe.customers.update(customerId, {
+      invoice_settings: { default_payment_method: paymentMethodId }
+    });
+
+    // Set as subscription default so next invoice uses this card
+    if (subscriptionId) {
+      await stripe.subscriptions.update(subscriptionId, {
+        default_payment_method: paymentMethodId
+      });
+
+      // If subscription is past_due, attempt to pay the outstanding invoice now
+      if (user.subscription.status === 'past_due') {
+        try {
+          const invoices = await stripe.invoices.list({
+            customer: customerId,
+            status: 'open',
+            limit: 1
+          });
+          if (invoices.data.length > 0) {
+            await stripe.invoices.pay(invoices.data[0].id, {
+              payment_method: paymentMethodId
+            });
+          }
+        } catch (retryErr) {
+          console.warn('Immediate retry after card update failed:', retryErr.message);
+        }
+      }
+    }
+
+    res.status(200).json({ success: true, message: 'Payment method updated' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get subscription history
 // @route   GET /api/subscriptions/history
 // @access  Private
