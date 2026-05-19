@@ -547,6 +547,74 @@ export const updatePlan = async (req, res) => {
   }
 };
 
+// @desc    List all saved payment methods for the Stripe customer
+// @route   GET /api/subscriptions/payment-methods
+// @access  Private
+export const listPaymentMethods = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id);
+    let customerId = user.subscription?.stripeCustomerId;
+
+    if (!customerId) {
+      return res.status(200).json({ success: true, data: { cards: [], defaultId: null } });
+    }
+
+    // Get all saved cards
+    const pms = await stripe.paymentMethods.list({ customer: customerId, type: 'card' });
+
+    // Determine the default payment method
+    let defaultId = null;
+    const subscriptionId = user.subscription?.stripeSubscriptionId;
+    if (subscriptionId) {
+      try {
+        const sub = await stripe.subscriptions.retrieve(subscriptionId, { expand: ['default_payment_method'] });
+        defaultId = typeof sub.default_payment_method === 'object'
+          ? sub.default_payment_method?.id
+          : sub.default_payment_method;
+      } catch (_) {}
+    }
+    if (!defaultId) {
+      const customer = await stripe.customers.retrieve(customerId, { expand: ['invoice_settings.default_payment_method'] });
+      const def = customer.invoice_settings?.default_payment_method;
+      defaultId = typeof def === 'object' ? def?.id : def;
+    }
+
+    const cards = pms.data.map(pm => ({
+      id: pm.id,
+      brand: pm.card?.brand || 'card',
+      last4: pm.card?.last4 || '????',
+      expMonth: pm.card?.exp_month,
+      expYear: pm.card?.exp_year,
+      isDefault: pm.id === defaultId
+    }));
+
+    res.status(200).json({ success: true, data: { cards, defaultId } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Remove (detach) a saved payment method
+// @route   DELETE /api/subscriptions/payment-method/:pmId
+// @access  Private
+export const detachPaymentMethod = async (req, res) => {
+  try {
+    const { pmId } = req.params;
+    const user = await User.findById(req.user.id);
+
+    // Safety: verify this card belongs to this customer before detaching
+    const pm = await stripe.paymentMethods.retrieve(pmId);
+    if (pm.customer !== user.subscription?.stripeCustomerId) {
+      return res.status(403).json({ success: false, message: 'Not your payment method' });
+    }
+
+    await stripe.paymentMethods.detach(pmId);
+    res.status(200).json({ success: true, message: 'Card removed' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get current payment method from Stripe
 // @route   GET /api/subscriptions/payment-method
 // @access  Private

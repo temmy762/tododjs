@@ -14,6 +14,8 @@ import {
   getSubscriptionHistory,
   checkWhatsAppEligibility,
   getPaymentMethod,
+  listPaymentMethods,
+  detachPaymentMethod,
   createSetupIntent,
   updatePaymentMethod
 } from '../controllers/subscriptionController.js';
@@ -38,6 +40,8 @@ router.delete('/devices/:deviceId', protect, removeDevice);
 router.post('/share', protect, shareSubscription);
 router.delete('/share/:userId', protect, removeSharedUser);
 router.get('/history', protect, getSubscriptionHistory);
+router.get('/payment-methods', protect, listPaymentMethods);
+router.delete('/payment-method/:pmId', protect, detachPaymentMethod);
 router.get('/payment-method', protect, getPaymentMethod);
 router.post('/setup-intent', protect, createSetupIntent);
 router.post('/payment-method', protect, updatePaymentMethod);

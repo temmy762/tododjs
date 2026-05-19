@@ -2,13 +2,14 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   X, User, Mail, Phone, Save, Camera, Lock, Eye, EyeOff,
   Download, Heart, Music, TrendingUp, CheckCircle, AlertCircle,
-  LogOut, Pencil, Shield, Play, Trash2, Settings
+  LogOut, Pencil, Shield, Play, Trash2, Settings, CreditCard
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import API_URL from '../config/api';
 import DeviceManagement from './DeviceManagement';
 import DownloadHistory from './DownloadHistory';
+import PaymentMethods from './PaymentMethods';
 
 const API = API_URL;
 
@@ -261,6 +262,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
     { id: 'overview', label: t('profile.overview') },
     { id: 'favorites', label: t('profile.favorites') },
     { id: 'downloads', label: t('profile.downloads') },
+    { id: 'payment', label: t('profile.payment', 'Payment') },
     { id: 'devices', label: t('profile.devices') },
     { id: 'edit', label: t('profile.editProfile') },
     { id: 'password', label: t('profile.changePassword') },
@@ -635,6 +637,11 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
             <div>
               <DownloadHistory onTrackInteraction={onTrackInteraction} />
             </div>
+          )}
+
+          {/* ── Payment Tab ── */}
+          {activeTab === 'payment' && (
+            <PaymentMethods user={user} />
           )}
 
           {/* ── Devices Tab ── */}
