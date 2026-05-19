@@ -122,7 +122,7 @@ export default function SettingsPage({ user, onUserUpdate, onLogout }) {
       const res = await fetch(`${API_URL}/subscriptions/cancel`, { method: 'PUT', headers: authHeaders });
       const data = await res.json();
       if (data.success) {
-        setSubStatus(prev => ({ ...prev, isActive: false, subscription: { ...prev?.subscription, status: 'cancelled' } }));
+        setSubStatus(prev => ({ ...prev, subscription: { ...prev?.subscription, cancelAtPeriodEnd: true } }));
         setSubMsg({ type: 'success', text: 'Subscription cancelled. Access continues until end of billing period.' });
         setShowCancelConfirm(false);
       } else { setSubMsg({ type: 'error', text: data.message || 'Failed to cancel subscription' }); }

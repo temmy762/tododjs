@@ -83,7 +83,7 @@ export const createCheckoutSession = async (req, res) => {
       metadata: {
         userId: req.user._id.toString(),
         planId: planDoc.planId,
-        plan: planDoc.planId
+        durationDays: planDoc.durationDays.toString()
       }
     });
 

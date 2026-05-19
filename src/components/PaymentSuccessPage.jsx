@@ -39,35 +39,57 @@ export default function PaymentSuccessPage() {
       const data = await res.json();
 
       if (data.success) {
-        setSuccess(true);
-        setSubscriptionData(data.data);
+        // Payment confirmed — now wait for the webhook to activate the subscription
+        await pollSubscriptionActivation(token);
+      } else {
+        setError(data.message || 'Payment verification failed');
+        setLoading(false);
+      }
+    } catch (err) {
+      console.error('Verification error:', err);
+      setError('An error occurred while verifying your payment');
+      setLoading(false);
+    }
+  };
 
-        // Refresh user session to sync cookie with localStorage token
-        // This ensures App.checkAuth() picks up the correct user
-        if (token) {
+  const pollSubscriptionActivation = async (token) => {
+    const MAX_ATTEMPTS = 15;
+    const INTERVAL_MS = 2000;
+
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      try {
+        const res = await fetch(`${API_URL}/subscriptions/status`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+        if (data.success && data.data?.isActive) {
+          // Subscription is live — trigger a full auth/me refresh then show success
           try {
             await fetch(`${API_URL}/auth/me`, {
               headers: { 'Authorization': `Bearer ${token}` },
               credentials: 'include'
             });
-          } catch (e) {
-            // Non-critical — App will still use localStorage token
-          }
+          } catch (_) {}
+          setSuccess(true);
+          setLoading(false);
+          setTimeout(() => navigate('/'), 5000);
+          return;
         }
-        
-        // Redirect to home after 5 seconds
-        setTimeout(() => {
-          navigate('/');
-        }, 5000);
-      } else {
-        setError(data.message || 'Payment verification failed');
-      }
-    } catch (err) {
-      console.error('Verification error:', err);
-      setError('An error occurred while verifying your payment');
-    } finally {
-      setLoading(false);
+      } catch (_) {}
+      // Wait before next attempt
+      await new Promise(resolve => setTimeout(resolve, INTERVAL_MS));
     }
+
+    // Webhook didn't fire within 30s — show success anyway (webhook may still arrive)
+    try {
+      await fetch(`${API_URL}/auth/me`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+        credentials: 'include'
+      });
+    } catch (_) {}
+    setSuccess(true);
+    setLoading(false);
+    setTimeout(() => navigate('/'), 5000);
   };
 
   if (loading) {

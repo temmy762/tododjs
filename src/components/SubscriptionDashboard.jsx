@@ -15,7 +15,7 @@ const CARD_BRANDS = {
   discover: '💳',
 };
 
-function UpdateCardForm({ onSuccess, onCancel }) {
+function UpdateCardForm({ onSuccess, onCancel, isSpanish }) {
   const stripe = useStripe();
   const elements = useElements();
   const [saving, setSaving] = useState(false);
@@ -62,11 +62,11 @@ function UpdateCardForm({ onSuccess, onCancel }) {
         <button type="submit" disabled={!stripe || saving}
           className="flex-1 py-2.5 bg-accent hover:bg-accent-hover text-white font-semibold rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
           {saving && <Loader className="w-4 h-4 animate-spin" />}
-          {saving ? 'Saving…' : 'Save card'}
+          {saving ? (isSpanish ? 'Guardando…' : 'Saving…') : (isSpanish ? 'Guardar tarjeta' : 'Save card')}
         </button>
         <button type="button" onClick={onCancel}
           className="px-4 py-2.5 border border-white/10 text-brand-text-tertiary hover:text-white rounded-lg transition-colors">
-          Cancel
+          {isSpanish ? 'Cancelar' : 'Cancel'}
         </button>
       </div>
     </form>
@@ -490,6 +490,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
                 <UpdateCardForm
                   onSuccess={handleCardUpdated}
                   onCancel={() => { setShowUpdateCard(false); setSetupClientSecret(''); }}
+                  isSpanish={isSpanish}
                 />
               </Elements>
             )}
