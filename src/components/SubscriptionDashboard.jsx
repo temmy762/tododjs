@@ -5,8 +5,8 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-stripe-js';
 import API_URL from '../config/api';
 
-const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
-const stripePromise = STRIPE_KEY ? loadStripe(STRIPE_KEY) : null;
+// Stripe promise loaded dynamically from backend to avoid placeholder env var issues
+let cachedStripePromise = null;
 
 const CARD_BRANDS = {
   visa: '💳',
@@ -88,6 +88,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
   const [setupClientSecret, setSetupClientSecret] = useState('');
   const [setupLoading, setSetupLoading] = useState(false);
   const [cardUpdated, setCardUpdated] = useState(false);
+  const [stripePromise, setStripePromise] = useState(null);
 
   const token = localStorage.getItem('token');
   const authHeaders = { Authorization: `Bearer ${token}` };
@@ -119,12 +120,24 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
     setSetupLoading(true);
     setShowUpdateCard(true);
     try {
-      const res = await fetch(`${API_URL}/subscriptions/setup-intent`, {
-        method: 'POST', headers: authHeaders
-      });
-      const data = await res.json();
-      if (data.success) setSetupClientSecret(data.clientSecret);
-      else { setShowUpdateCard(false); alert(data.message); }
+      const [intentRes, configRes] = await Promise.all([
+        fetch(`${API_URL}/subscriptions/setup-intent`, { method: 'POST', headers: authHeaders }),
+        fetch(`${API_URL}/stripe/config`)
+      ]);
+      const [intentData, configData] = await Promise.all([intentRes.json(), configRes.json()]);
+
+      if (!intentData.success) {
+        setShowUpdateCard(false);
+        setError(isSpanish ? 'Error al conectar con Stripe' : 'Failed to connect to Stripe');
+        return;
+      }
+
+      const publishableKey = configData.publishableKey || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+      if (!cachedStripePromise && publishableKey) {
+        cachedStripePromise = loadStripe(publishableKey);
+      }
+      setStripePromise(cachedStripePromise);
+      setSetupClientSecret(intentData.clientSecret);
     } catch {
       setShowUpdateCard(false);
     } finally {

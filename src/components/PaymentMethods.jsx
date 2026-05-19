@@ -5,8 +5,8 @@ import { Elements, PaymentElement, useStripe, useElements } from '@stripe/react-
 import { useTranslation } from 'react-i18next';
 import API_URL from '../config/api';
 
-const STRIPE_KEY = import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
-const stripePromise = STRIPE_KEY ? loadStripe(STRIPE_KEY) : null;
+// Stripe promise is loaded dynamically from the backend to avoid placeholder env var issues
+let cachedStripePromise = null;
 
 function AddCardForm({ onSuccess, onCancel, isSpanish }) {
   const stripe = useStripe();
@@ -98,6 +98,7 @@ export default function PaymentMethods({ user }) {
   const [showAddCard, setShowAddCard] = useState(false);
   const [setupClientSecret, setSetupClientSecret] = useState('');
   const [setupLoading, setSetupLoading] = useState(false);
+  const [stripePromise, setStripePromise] = useState(null);
 
   const [removingId, setRemovingId] = useState(null);
   const [settingDefaultId, setSettingDefaultId] = useState(null);
@@ -128,12 +129,32 @@ export default function PaymentMethods({ user }) {
     setShowAddCard(true);
     setSuccess('');
     try {
-      const res = await fetch(`${API_URL}/subscriptions/setup-intent`, {
-        method: 'POST', headers: authHeaders
-      });
-      const data = await res.json();
-      if (data.success) setSetupClientSecret(data.clientSecret);
-      else { setShowAddCard(false); setError(data.message); }
+      // Fetch setup-intent and Stripe publishable key in parallel
+      const [intentRes, configRes] = await Promise.all([
+        fetch(`${API_URL}/subscriptions/setup-intent`, { method: 'POST', headers: authHeaders }),
+        fetch(`${API_URL}/stripe/config`)
+      ]);
+      const [intentData, configData] = await Promise.all([intentRes.json(), configRes.json()]);
+
+      if (!intentData.success) {
+        setShowAddCard(false);
+        setError(intentData.message || (isSpanish ? 'Error al conectar con Stripe' : 'Failed to connect to Stripe'));
+        return;
+      }
+
+      // Load Stripe with the key from the backend (bypasses placeholder env vars)
+      const publishableKey = configData.publishableKey || import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || '';
+      if (!publishableKey) {
+        setShowAddCard(false);
+        setError(isSpanish ? 'Stripe no está configurado. Contacta con soporte.' : 'Stripe is not configured. Please contact support.');
+        return;
+      }
+
+      if (!cachedStripePromise) {
+        cachedStripePromise = loadStripe(publishableKey);
+      }
+      setStripePromise(cachedStripePromise);
+      setSetupClientSecret(intentData.clientSecret);
     } catch {
       setShowAddCard(false);
       setError(isSpanish ? 'Error al conectar con Stripe' : 'Failed to connect to Stripe');
