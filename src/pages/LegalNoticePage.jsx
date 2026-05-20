@@ -19,125 +19,131 @@ export default function LegalNoticePage() {
         </button>
 
         <h1 className="text-3xl font-bold text-white mb-2">{isEs ? 'Aviso Legal' : 'Legal Notice'}</h1>
-        <p className="text-sm text-brand-text-tertiary mb-10">{isEs ? 'Última actualización: enero de 2025' : 'Last updated: January 2025'}</p>
+        <p className="text-sm text-brand-text-tertiary mb-10">{isEs ? 'Última actualización: enero de 2026' : 'Last updated: January 2026'}</p>
 
         <div className="prose prose-invert max-w-none space-y-8 text-sm text-brand-text-secondary leading-relaxed">
 
           <section>
-            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '1. Datos Identificativos del Titular' : '1. Identifying Information'}</h2>
-            <p>
-              {isEs
-                ? 'En cumplimiento con el artículo 10 de la Ley 34/2002, de 11 de julio, de Servicios de la Sociedad de la Información y de Comercio Electrónico (LSSICE), se informa de los datos identificativos del titular del presente sitio web:'
-                : 'In compliance with Article 10 of Law 34/2002 of 11 July on Information Society Services and Electronic Commerce (LSSICE), the identifying details of the website owner are provided below:'}
-            </p>
-            <ul className="mt-3 space-y-1 pl-4 list-disc list-inside">
-              <li><strong className="text-white">Denominación social:</strong> TodoDJS</li>
-              <li><strong className="text-white">NIF/CIF:</strong> [INDICAR NIF O CIF]</li>
-              <li><strong className="text-white">Domicilio:</strong> [INDICAR DIRECCIÓN COMPLETA], España</li>
-              <li><strong className="text-white">Correo electrónico:</strong> contacto.tododjs@gmail.com</li>
-              <li><strong className="text-white">Sitio web:</strong> www.tododjs.com</li>
+            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '1. Datos Identificativos del Titular' : '1. Identifying Data of the Owner'}</h2>
+            <ul className="space-y-1 pl-4 list-disc list-inside">
+              <li><strong className="text-white">{isEs ? 'Titular del sitio web:' : 'Website Owner:'}</strong> TODODJS LLC</li>
+              <li><strong className="text-white">{isEs ? 'Dirección:' : 'Address:'}</strong> 4111 Hollowtrail Dr, Tampa, FL, United States</li>
+              <li><strong className="text-white">{isEs ? 'Correo electrónico:' : 'Email:'}</strong> contacto.tododjs@gmail.com</li>
+              <li><strong className="text-white">{isEs ? 'Sitio web:' : 'Website:'}</strong> www.tododjs.com</li>
             </ul>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '2. Objeto y Ámbito de Aplicación' : '2. Purpose and Scope'}</h2>
+            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '2. Objeto y Ámbito de Aplicación' : '2. Object and Scope of Application'}</h2>
             <p>
               {isEs
-                ? 'El presente Aviso Legal regula el acceso y uso de la plataforma TodoDJS, disponible en el dominio www.tododjs.com, cuya titularidad corresponde a TodoDJS. El acceso al sitio web implica la aceptación plena y sin reservas de las presentes condiciones.'
-                : 'This Legal Notice governs access to and use of the TodoDJS platform, available at www.tododjs.com, owned by TodoDJS. Accessing the website implies full and unconditional acceptance of these terms.'}
+                ? 'El presente Aviso Legal regula el acceso y uso de la plataforma TodoDJS, disponible en el dominio www.tododjs.com.'
+                : 'This Legal Notice regulates the access and use of the TodoDJS platform, available at the domain www.tododjs.com.'}
             </p>
             <p className="mt-2">
               {isEs
-                ? 'TodoDJS es una plataforma digital destinada a DJs profesionales que ofrece acceso a recursos musicales, mashups y pistas de audio bajo distintos planes de suscripción.'
-                : 'TodoDJS is a digital platform aimed at professional DJs, offering access to music resources, mashups and audio tracks under various subscription plans.'}
+                ? 'El acceso y uso del sitio web implica la aceptación plena y sin reservas de estas condiciones.'
+                : 'The access and use of the website implies full and unreserved acceptance of these conditions.'}
+            </p>
+            <p className="mt-2">
+              {isEs
+                ? 'TodoDJS es una plataforma digital dirigida a DJs y usuarios relacionados con la industria musical, que ofrece acceso a contenidos digitales y recursos disponibles a través de diferentes planes de suscripción.'
+                : 'TodoDJS is a digital platform aimed at DJs and users related to the music industry, offering access to digital content and resources available through various subscription plans.'}
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '3. Propiedad Intelectual e Industrial' : '3. Intellectual and Industrial Property'}</h2>
+            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '3. Propiedad Intelectual y Uso del Servicio' : '3. Intellectual Property and Use of the Service'}</h2>
             <p>
               {isEs
-                ? 'Todos los contenidos del sitio web (textos, imágenes, logotipos, código fuente, diseño gráfico, base de datos, etc.) son propiedad exclusiva de TodoDJS o de sus legítimos licenciatarios, y están protegidos por la legislación vigente en materia de propiedad intelectual e industrial.'
-                : 'All website content (texts, images, logos, source code, graphic design, database, etc.) is the exclusive property of TodoDJS or its legitimate licensors, and is protected by applicable intellectual and industrial property law.'}
+                ? 'Todos los elementos de la plataforma, incluidos el diseño, la interfaz, los logotipos, los textos y la estructura del sitio web, pertenecen a TodoDJS o a sus respectivos titulares.'
+                : 'All elements of the platform, including design, interface, logos, texts, and website structure, belong to TodoDJS or its respective owners.'}
             </p>
             <p className="mt-2">
               {isEs
-                ? 'Queda expresamente prohibida la reproducción total o parcial, distribución, comunicación pública, transformación o cualquier otro acto de explotación de dichos contenidos sin autorización expresa y por escrito de TodoDJS, salvo para uso personal y no comercial.'
-                : 'Any total or partial reproduction, distribution, public communication, transformation or any other exploitation of such content without the express written authorisation of TodoDJS is strictly prohibited, except for personal non-commercial use.'}
+                ? 'El acceso a la plataforma y a sus contenidos está limitado exclusivamente a los usuarios registrados dentro de los términos de la suscripción contratada.'
+                : 'Access to the platform and its contents is limited exclusively to registered users within the terms of the contracted subscription.'}
             </p>
-            <p className="mt-2">
+            <p className="mt-3">{isEs ? 'Está prohibido:' : 'It is prohibited to:'}</p>
+            <ul className="mt-2 space-y-1 pl-4 list-disc list-inside">
+              {isEs ? (
+                <>
+                  <li>Redistribuir o compartir contenido descargado con terceros</li>
+                  <li>Revender archivos obtenidos de la plataforma</li>
+                  <li>Usar sistemas automatizados o herramientas de descarga masiva</li>
+                  <li>Compartir cuentas o accesos fuera de los límites permitidos por el plan contratado</li>
+                </>
+              ) : (
+                <>
+                  <li>Redistribute or share downloaded content with third parties</li>
+                  <li>Resell files obtained from the platform</li>
+                  <li>Use automated systems or bulk download tools</li>
+                  <li>Share accounts or access outside the limits permitted by the contracted plan</li>
+                </>
+              )}
+            </ul>
+            <p className="mt-3">
               {isEs
-                ? 'En cuanto al contenido musical disponible en la plataforma, TodoDJS actúa como distribuidor autorizado o bajo los acuerdos de licencia correspondientes. El usuario se obliga a respetar dichos derechos y a no redistribuir, compartir ni explotar comercialmente las obras musicales accedidas a través del servicio.'
-                : 'Regarding the musical content available on the platform, TodoDJS acts as an authorised distributor or under the corresponding licence agreements. Users must respect these rights and must not redistribute, share or commercially exploit any musical works accessed through the service.'}
+                ? 'TodoDJS podrá suspender o cancelar cuentas en las que se detecte actividad abusiva, uso indebido del servicio o incumplimiento de estos términos. Los usuarios son responsables del uso que hagan de los contenidos y recursos accesibles a través de la plataforma.'
+                : 'TodoDJS may suspend or cancel accounts that detect abusive activity, misuse of the service, or non-compliance with these terms. Users are responsible for the use they make of the content and resources accessible through the platform.'}
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '4. Condiciones de Acceso y Uso' : '4. Access and Use Conditions'}</h2>
+            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '4. Condiciones de Acceso y Uso' : '4. Conditions of Access and Use'}</h2>
             <p>
               {isEs
-                ? 'El acceso a determinadas funcionalidades de TodoDJS requiere la creación de una cuenta de usuario y la contratación de un plan de suscripción de pago. El usuario se compromete a:'
-                : 'Access to certain TodoDJS features requires creating a user account and subscribing to a paid plan. The user agrees to:'}
+                ? 'El acceso a determinadas funciones de TodoDJS requiere la creación de una cuenta de usuario y la contratación de un plan de suscripción. El usuario se compromete a:'
+                : 'Access to certain functions of TodoDJS requires the creation of a user account and the contracting of a subscription plan. The user undertakes to:'}
             </p>
             <ul className="mt-3 space-y-1 pl-4 list-disc list-inside">
               {isEs ? (
                 <>
-                  <li>Facilitar datos verídicos, actualizados y completos en el proceso de registro.</li>
-                  <li>Mantener la confidencialidad de sus credenciales de acceso.</li>
-                  <li>No ceder su cuenta a terceros ni permitir su uso simultáneo en más dispositivos de los permitidos por su plan.</li>
-                  <li>No utilizar los recursos musicales para fines distintos a los autorizados por la suscripción contratada.</li>
-                  <li>No realizar ninguna actividad que pueda dañar, sobrecargar o inutilizar los sistemas de TodoDJS.</li>
+                  <li>Proporcionar información veraz y actualizada</li>
+                  <li>Mantener la confidencialidad de sus credenciales de acceso</li>
+                  <li>No compartir cuentas fuera de los límites permitidos por el plan contratado</li>
+                  <li>No realizar actividades que puedan afectar al normal funcionamiento de la plataforma</li>
                 </>
               ) : (
                 <>
-                  <li>Provide truthful, up-to-date and complete data during registration.</li>
-                  <li>Keep their access credentials confidential.</li>
-                  <li>Not share their account with third parties or allow simultaneous use on more devices than permitted by their plan.</li>
-                  <li>Not use musical resources for purposes other than those authorised by the contracted subscription.</li>
-                  <li>Not carry out any activity that may damage, overload or disable TodoDJS systems.</li>
+                  <li>Provide truthful and up-to-date information</li>
+                  <li>Maintain the confidentiality of their access credentials</li>
+                  <li>Not share accounts outside the limits permitted by the contracted plan</li>
+                  <li>Not engage in activities that may affect the normal operation of the platform</li>
                 </>
               )}
             </ul>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '5. Exclusión de Responsabilidad' : '5. Disclaimer of Liability'}</h2>
+            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '5. Exclusión de Responsabilidad' : '5. Exclusion of Liability'}</h2>
             <p>
               {isEs
-                ? 'TodoDJS no se hace responsable de los daños o perjuicios que puedan derivarse del uso incorrecto del sitio web o de la imposibilidad de acceso al mismo por causas ajenas a su voluntad, tales como fallos en las redes de comunicación, interrupciones en el suministro eléctrico, ataques informáticos u otras circunstancias de fuerza mayor.'
-                : 'TodoDJS is not liable for any damages arising from improper use of the website or inability to access it due to causes beyond its control, such as communication network failures, power outages, cyberattacks or other force majeure circumstances.'}
-            </p>
-            <p className="mt-2">
-              {isEs
-                ? 'Asimismo, TodoDJS no garantiza la ausencia de virus u otros elementos en los contenidos que puedan producir alteraciones en los sistemas informáticos de los usuarios.'
-                : 'TodoDJS does not guarantee that the content is free from viruses or other elements that could cause damage to users\' computer systems.'}
+                ? 'TodoDJS no se responsabilizará de los daños o pérdidas derivados del uso incorrecto de la plataforma ni de las interrupciones ajenas a su control razonable, incluidos fallos técnicos, incidencias de red, mantenimiento o causas de fuerza mayor.'
+                : 'TodoDJS will not be liable for damages or losses arising from the incorrect use of the platform or from interruptions beyond its reasonable control, including technical failures, network incidents, maintenance, or force majeure causes.'}
             </p>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '6. Legislación Aplicable y Jurisdicción' : '6. Applicable Law and Jurisdiction'}</h2>
+            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '6. Legislación Aplicable y Jurisdicción' : '6. Applicable Legislation and Jurisdiction'}</h2>
             <p>
               {isEs
-                ? 'Las presentes condiciones se rigen e interpretan conforme a la legislación española. Para la resolución de cualquier controversia que pudiera surgir en relación con el acceso o uso del sitio web, las partes se someten expresamente a los Juzgados y Tribunales de España, con renuncia a cualquier otro fuero que pudiera corresponderles.'
-                : 'These conditions are governed by and construed in accordance with Spanish law. For the resolution of any dispute arising from access to or use of the website, the parties expressly submit to the Courts and Tribunals of Spain, waiving any other jurisdiction that may apply.'}
+                ? 'Estas condiciones se regirán e interpretarán de conformidad con la legislación aplicable en el estado de Florida, Estados Unidos.'
+                : 'These conditions will be governed and interpreted in accordance with the applicable legislation in the state of Florida, United States.'}
             </p>
             <p className="mt-2">
-              {isEs ? 'Normativa de referencia aplicable:' : 'Applicable reference legislation:'}
+              {isEs
+                ? 'Cualquier controversia relacionada con el acceso o uso de la plataforma quedará sujeta a la jurisdicción competente correspondiente al domicilio legal de TODODJS LLC, salvo que sean de aplicación disposiciones legales obligatorias.'
+                : 'Any dispute related to the access or use of the platform will be subject to the competent jurisdiction corresponding to the legal address of TODODJS LLC, unless applicable mandatory legal provisions apply.'}
             </p>
-            <ul className="mt-2 space-y-1 pl-4 list-disc list-inside">
-              <li>Ley 34/2002, de 11 de julio, LSSICE</li>
-              <li>Real Decreto Legislativo 1/1996, de 12 de abril, Ley de Propiedad Intelectual</li>
-              <li>Reglamento (UE) 2016/679 (RGPD)</li>
-              <li>Ley Orgánica 3/2018, de 5 de diciembre, LOPDGDD</li>
-            </ul>
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '7. Modificaciones' : '7. Amendments'}</h2>
+            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '7. Modificaciones' : '7. Modifications'}</h2>
             <p>
               {isEs
-                ? 'TodoDJS se reserva el derecho de modificar el presente Aviso Legal en cualquier momento. Las modificaciones entrarán en vigor desde el momento de su publicación en el sitio web. Se recomienda al usuario revisar periódicamente este documento.'
-                : 'TodoDJS reserves the right to amend this Legal Notice at any time. Amendments take effect upon publication on the website. Users are advised to review this document periodically.'}
+                ? 'TodoDJS se reserva el derecho de modificar este Aviso Legal en cualquier momento. Las modificaciones entrarán en vigor desde su publicación en el sitio web.'
+                : 'TodoDJS reserves the right to modify this Legal Notice at any time. The modifications will come into effect from their publication on the website.'}
             </p>
           </section>
 

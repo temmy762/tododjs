@@ -19,7 +19,7 @@ export default function CookiePolicyPage() {
         </button>
 
         <h1 className="text-3xl font-bold text-white mb-2">{isEs ? 'Política de Cookies' : 'Cookie Policy'}</h1>
-        <p className="text-sm text-brand-text-tertiary mb-10">{isEs ? 'Última actualización: enero de 2025' : 'Last updated: January 2025'}</p>
+        <p className="text-sm text-brand-text-tertiary mb-10">{isEs ? 'Última actualización: enero de 2026' : 'Last updated: January 2026'}</p>
 
         <div className="space-y-8 text-sm text-brand-text-secondary leading-relaxed">
 
@@ -29,11 +29,6 @@ export default function CookiePolicyPage() {
               {isEs
                 ? 'Las cookies son pequeños ficheros de texto que se almacenan en el dispositivo del usuario cuando visita un sitio web. Su función es recordar preferencias, mantener sesiones activas y recopilar información estadística sobre el uso del sitio, entre otras finalidades.'
                 : 'Cookies are small text files stored on the user\'s device when visiting a website. They are used to remember preferences, keep sessions active and collect statistical information about site usage, among other purposes.'}
-            </p>
-            <p className="mt-2">
-              {isEs
-                ? 'La presente Política de Cookies se aplica al sitio web www.tododjs.com y se rige por el Reglamento (UE) 2016/679 (RGPD), la Ley Orgánica 3/2018 (LOPDGDD) y la Ley 34/2002 (LSSICE).'
-                : 'This Cookie Policy applies to www.tododjs.com and is governed by Regulation (EU) 2016/679 (GDPR), Organic Law 3/2018 (LOPDGDD) and Law 34/2002 (LSSICE).'}
             </p>
           </section>
 
