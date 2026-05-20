@@ -515,7 +515,8 @@
     "role": "Rol",
     "totalFavorites": "Total de Favoritos",
     "totalDownloads": "Total de Descargas",
-    "plan": "Plan"
+    "plan": "Plan",
+    "payment": "PAGOS"
   },
   "dashboard": {
     "overview": "Resumen",
@@ -627,6 +628,9 @@
   "albumsSection": {
     "title": "Últimas subidas de Record Pools y Packs Premium",
     "subtitle": "Accede con un solo clic a nuestras últimas novedades."
+  },
+  "pricing": {
+    "billingNotice": "Las suscripciones no son reembolsables. Puedes cancelar en cualquier momento para detener la renovación automática y mantendrás el acceso hasta el final de tu período de facturación actual."
   },
   "home": {
     "featured": "Destacado",
