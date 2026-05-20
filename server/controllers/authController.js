@@ -240,13 +240,19 @@ export const getMe = async (req, res) => {
     const user = await User.findById(req.user.id);
 
     // Auto-expire subscription if endDate has passed
+    // Stripe-managed subs get a 48h grace window to allow renewal webhook delivery
     if (
       user.subscription?.endDate &&
       new Date() > user.subscription.endDate &&
       user.subscription.status === 'active'
     ) {
-      user.subscription.status = 'expired';
-      await user.save();
+      const hoursSinceExpiry = (Date.now() - new Date(user.subscription.endDate).getTime()) / (1000 * 60 * 60);
+      const hasStripeSub = !!user.subscription.stripeSubscriptionId;
+      const shouldExpire = !hasStripeSub || hoursSinceExpiry > 48;
+      if (shouldExpire) {
+        user.subscription.status = 'expired';
+        await user.save();
+      }
     }
 
     const avatar = await signAvatarUrl(user);

@@ -101,7 +101,7 @@ export const getSubscriptionStatus = async (req, res) => {
     //     → user cancelled their renewal but is still within the paid billing period
     // NOTE: isWithinPeriod is false when endDate is null — no paid period to retain.
     const isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
-    const isActive = status === 'active' || (status === 'cancelled' && isWithinPeriod);
+    const isActive = status === 'active' || (status === 'cancelled' && isWithinPeriod) || (status === 'past_due' && isWithinPeriod);
 
     res.status(200).json({
       success: true,
