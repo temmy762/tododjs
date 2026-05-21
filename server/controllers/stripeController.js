@@ -274,12 +274,19 @@ async function handleCheckoutCompleted(session) {
 // Helper function to handle payment failures
 async function handlePaymentFailed(paymentIntent) {
   console.warn('Payment failed for customer:', paymentIntent.customer);
-  
+
+  // If this payment intent is tied to an invoice (subscription payment),
+  // invoice.payment_failed will fire too and handles email + status update.
+  // Only send email here for standalone (non-subscription) payment failures.
+  if (paymentIntent.invoice) {
+    console.log(`payment_intent.payment_failed skipped: invoice-based failure handled by invoice.payment_failed (pi=${paymentIntent.id})`);
+    return;
+  }
+
   if (paymentIntent.customer) {
     try {
       const user = await User.findOne({ 'subscription.stripeCustomerId': paymentIntent.customer });
       if (user) {
-        // Notify user of payment failure (non-blocking)
         sendPaymentFailedEmail(user)
           .catch(err => console.error('User payment failed email failed:', err));
       }
