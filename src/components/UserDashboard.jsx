@@ -262,7 +262,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
     { id: 'overview', label: t('profile.overview') },
     { id: 'favorites', label: t('profile.favorites') },
     { id: 'downloads', label: t('profile.downloads') },
-    { id: 'payment', label: t('profile.payment', 'Payment') },
+    ...(!isAdmin ? [{ id: 'payment', label: t('profile.payment', 'Payment') }] : []),
     { id: 'devices', label: t('profile.devices') },
     { id: 'edit', label: t('profile.editProfile') },
     { id: 'password', label: t('profile.changePassword') },
@@ -640,7 +640,7 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
           )}
 
           {/* ── Payment Tab ── */}
-          {activeTab === 'payment' && (
+          {activeTab === 'payment' && !isAdmin && (
             <PaymentMethods user={user} />
           )}
 
