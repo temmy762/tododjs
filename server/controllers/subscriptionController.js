@@ -206,8 +206,27 @@ export const cancelSubscription = async (req, res) => {
       });
     }
     
-    // Cancel on Stripe if this is a recurring subscription
-    const stripeSubscriptionId = user.subscription.stripeSubscriptionId;
+    // Cancel on Stripe if this is a recurring subscription.
+    // Recovery: if stripeSubscriptionId is missing in DB but we have a customerId,
+    // fetch the live active subscription from Stripe and sync it back to DB.
+    let stripeSubscriptionId = user.subscription.stripeSubscriptionId;
+    if (!stripeSubscriptionId && user.subscription.stripeCustomerId) {
+      try {
+        const subs = await stripe.subscriptions.list({
+          customer: user.subscription.stripeCustomerId,
+          status: 'active',
+          limit: 1
+        });
+        if (subs.data.length > 0) {
+          stripeSubscriptionId = subs.data[0].id;
+          user.subscription.stripeSubscriptionId = stripeSubscriptionId;
+          console.log(`[cancelSubscription] Recovered stripeSubscriptionId ${stripeSubscriptionId} from Stripe for user ${user._id}`);
+        }
+      } catch (e) {
+        console.warn('[cancelSubscription] Could not recover stripeSubscriptionId from Stripe:', e.message);
+      }
+    }
+
     if (stripeSubscriptionId) {
       let stripeSubscription;
       try {

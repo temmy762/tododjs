@@ -123,7 +123,11 @@ export default function SettingsPage({ user, onUserUpdate, onLogout }) {
       const data = await res.json();
       if (data.success) {
         setSubStatus(prev => ({ ...prev, subscription: { ...prev?.subscription, cancelAtPeriodEnd: true } }));
-        setSubMsg({ type: 'success', text: 'Subscription cancelled. Access continues until end of billing period.' });
+        if (data.stripeConfirmed === false) {
+          setSubMsg({ type: 'warning', text: 'Cancelled locally but Stripe could not be reached. Please contact support to confirm the cancellation.' });
+        } else {
+          setSubMsg({ type: 'success', text: 'Subscription cancelled. Access continues until end of billing period.' });
+        }
         setShowCancelConfirm(false);
       } else { setSubMsg({ type: 'error', text: data.message || 'Failed to cancel subscription' }); }
     } catch { setSubMsg({ type: 'error', text: 'Network error. Please try again.' }); }
@@ -139,7 +143,10 @@ export default function SettingsPage({ user, onUserUpdate, onLogout }) {
   );
 
   const MsgBanner = ({ msg }) => !msg ? null : (
-    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium mt-2 ${msg.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
+    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium mt-2 ${
+      msg.type === 'success' ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+      : msg.type === 'warning' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/20'
+      : 'bg-red-500/10 text-red-400 border border-red-500/20'}`}>
       {msg.type === 'success' ? <Check className="w-3.5 h-3.5 flex-shrink-0" /> : <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />}
       {msg.text}
     </div>
