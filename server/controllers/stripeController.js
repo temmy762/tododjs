@@ -172,6 +172,17 @@ async function handleCheckoutCompleted(session) {
         ? new Date(stripeSubscription.current_period_end * 1000)
         : null;
       stripeSubscriptionId = stripeSubscription.id;
+
+      // Auto-save the payment method used at checkout as the customer default
+      // so it immediately appears in the PAGOS / payment methods section
+      const pmId = typeof stripeSubscription.default_payment_method === 'object'
+        ? stripeSubscription.default_payment_method?.id
+        : stripeSubscription.default_payment_method;
+      if (pmId && session.customer) {
+        stripe.customers.update(session.customer, {
+          invoice_settings: { default_payment_method: pmId }
+        }).catch(e => console.warn('Auto-save PM after checkout failed:', e.message));
+      }
     } catch (e) {
       console.error('Failed to retrieve Stripe subscription:', e.message);
     }

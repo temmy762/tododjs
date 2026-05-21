@@ -4,6 +4,124 @@ import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentRec
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 
 
+// @desc    Subscribe using saved default payment method (skips hosted checkout form)
+// @route   POST /api/payment/subscribe-with-saved-card
+// @access  Private
+export const subscribeWithSavedCard = async (req, res) => {
+  try {
+    const { planId } = req.body;
+    if (!planId) {
+      return res.status(400).json({ success: false, message: 'planId is required' });
+    }
+
+    const plan = await SubscriptionPlan.findOne({ planId, isActive: true });
+    if (!plan) {
+      return res.status(400).json({ success: false, message: 'Invalid subscription plan' });
+    }
+    if (!plan.stripePriceId) {
+      return res.status(400).json({ success: false, message: 'Plan not configured for online payment' });
+    }
+
+    const user = await User.findById(req.user.id);
+    const customerId = user.subscription?.stripeCustomerId;
+    if (!customerId) {
+      return res.status(400).json({ success: false, message: 'No saved payment method found. Please use the checkout form.' });
+    }
+
+    // Verify customer exists (guards against live→test mode switch)
+    let customer;
+    try {
+      customer = await stripe.customers.retrieve(customerId, {
+        expand: ['invoice_settings.default_payment_method']
+      });
+    } catch (e) {
+      if (e.code === 'resource_missing') {
+        return res.status(400).json({ success: false, message: 'No saved payment method found. Please use the checkout form.' });
+      }
+      throw e;
+    }
+
+    const defaultPm = customer.invoice_settings?.default_payment_method;
+    const pmId = typeof defaultPm === 'object' ? defaultPm?.id : defaultPm;
+
+    if (!pmId) {
+      return res.status(400).json({ success: false, message: 'No default payment method on file. Please add a card first.' });
+    }
+
+    // Create Stripe subscription directly using saved card
+    let subscription;
+    try {
+      subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{ price: plan.stripePriceId }],
+        default_payment_method: pmId,
+        payment_behavior: 'error_if_incomplete',
+        metadata: {
+          userId: user._id.toString(),
+          planId: plan.planId,
+          durationDays: plan.durationDays.toString()
+        }
+      });
+    } catch (stripeErr) {
+      console.error('Direct subscription creation failed:', stripeErr.message);
+      return res.status(400).json({ success: false, message: stripeErr.message });
+    }
+
+    if (subscription.status !== 'active' && subscription.status !== 'trialing') {
+      return res.status(400).json({ success: false, message: 'Payment could not be completed. Please try a different card.' });
+    }
+
+    // Activate subscription in DB immediately (invoice.paid for subscription_create is skipped by webhook)
+    const startDate = new Date();
+    const endDate = subscription.current_period_end
+      ? new Date(subscription.current_period_end * 1000)
+      : (() => { const d = new Date(); d.setDate(d.getDate() + plan.durationDays); return d; })();
+
+    user.subscription.planId = planId;
+    user.subscription.plan = planId;
+    user.subscription.status = 'active';
+    user.subscription.startDate = startDate;
+    user.subscription.endDate = endDate;
+    user.subscription.stripeCustomerId = customerId;
+    user.subscription.stripeSubscriptionId = subscription.id;
+    user.subscription.paymentMethod = 'card';
+    user.subscription.autoRenew = true;
+    user.subscription.cancelAtPeriodEnd = false;
+    user.maxDevices = plan.features?.maxDevices || (plan.type === 'shared' ? 2 : 1);
+
+    // Dedup history entry (use subscription.id as key)
+    const alreadyRecorded = user.subscriptionHistory?.some(h => h.stripePaymentIntentId === subscription.id);
+    if (!alreadyRecorded) {
+      user.subscriptionHistory.push({
+        planId,
+        startDate,
+        endDate,
+        amount: plan.price,
+        currency: plan.currency,
+        status: 'completed',
+        stripePaymentIntentId: subscription.id
+      });
+    }
+
+    await user.save();
+    console.log(`Direct subscription activated for user ${user._id}, plan ${planId}`);
+
+    sendPaymentReceiptEmail(user, plan.name, plan.price, plan.currency, endDate)
+      .catch(err => console.error('Receipt email failed:', err));
+    notifyAdminNewPayment(user, plan.name, plan.price, plan.currency)
+      .catch(err => console.error('Admin notification failed:', err));
+
+    res.status(200).json({
+      success: true,
+      message: 'Subscription activated',
+      data: { subscriptionId: subscription.id, endDate }
+    });
+  } catch (error) {
+    console.error('subscribeWithSavedCard error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Create checkout session
 // @route   POST /api/payment/create-checkout-session
 // @access  Private
