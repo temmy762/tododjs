@@ -350,6 +350,19 @@ async function handleInvoicePaid(invoice) {
     user.subscription.endDate = newEndDate;
   }
 
+  // Recovery: sync stripeSubscriptionId if user was found by customerId and ID is missing
+  if (!user.subscription.stripeSubscriptionId && subscriptionId) {
+    user.subscription.stripeSubscriptionId = subscriptionId;
+    console.log(`[handleInvoicePaid] Recovered stripeSubscriptionId ${subscriptionId} for user ${user._id}`);
+  }
+
+  // A successful cycle renewal means the user is NOT cancelling — reset the flag.
+  // handleSubscriptionUpdated normally syncs this, but reset here as a safety net
+  // in case that webhook is delayed or retried out of order.
+  if (invoice.billing_reason === 'subscription_cycle') {
+    user.subscription.cancelAtPeriodEnd = false;
+  }
+
   // Record renewal in history
   const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
   if (plan) {
