@@ -199,11 +199,11 @@ export const createCheckoutSession = async (req, res) => {
       await req.user.save();
     }
 
-    // Create recurring subscription checkout session
-    // automatic_payment_methods lets Stripe show Google Pay, Apple Pay, Link, etc.
+    // Create recurring subscription checkout session.
+    // Omitting payment_method_types lets Stripe Checkout show all methods enabled
+    // in the Dashboard (Google Pay, Apple Pay, Link, card, etc.) automatically.
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
-      automatic_payment_methods: { enabled: true },
       line_items: [
         {
           price: planDoc.stripePriceId,
