@@ -174,7 +174,9 @@ export default function CheckoutModal({ isOpen, onClose, plan, user }) {
                         {savedCard.brand} •••• {savedCard.last4}
                       </p>
                       <p className="text-xs text-brand-text-tertiary">
-                        {isSpanish ? 'Vence' : 'Expires'} {String(savedCard.expMonth).padStart(2, '0')} / {savedCard.expYear}
+                        {savedCard.last4
+                      ? `${isSpanish ? 'Vence' : 'Expires'} ${String(savedCard.expMonth).padStart(2, '0')} / ${savedCard.expYear}`
+                      : (isSpanish ? 'Cartera digital guardada' : 'Saved digital wallet')}
                       </p>
                     </div>
                     {loading
@@ -189,7 +191,7 @@ export default function CheckoutModal({ isOpen, onClose, plan, user }) {
                     className="w-full flex items-center gap-3 p-3 rounded-xl border border-white/10 hover:bg-white/5 transition-all disabled:opacity-50 text-sm text-brand-text-tertiary hover:text-white"
                   >
                     <CreditCard className="w-4 h-4 shrink-0" />
-                    {isSpanish ? 'Usar otra tarjeta' : 'Use a different card'}
+                    {isSpanish ? 'Usar otro método de pago' : 'Use a different payment method'}
                   </button>
 
                   <button onClick={onClose} disabled={loading} className="w-full py-2.5 text-sm text-brand-text-tertiary hover:text-white transition-colors disabled:opacity-50">

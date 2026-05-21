@@ -57,7 +57,7 @@ function AddCardForm({ onSuccess, onCancel, isSpanish }) {
           {saving && <Loader className="w-4 h-4 animate-spin" />}
           {saving
             ? (isSpanish ? 'Guardando…' : 'Saving…')
-            : (isSpanish ? 'Guardar tarjeta' : 'Save card')}
+            : (isSpanish ? 'Guardar método' : 'Save method')}
         </button>
         <button type="button" onClick={onCancel}
           className="px-4 py-2.5 border border-white/10 text-brand-text-tertiary hover:text-white rounded-lg transition-colors text-sm">
@@ -116,7 +116,7 @@ export default function PaymentMethods({ user }) {
         setDefaultId(data.data.defaultId);
       }
     } catch {
-      setError(isSpanish ? 'Error al cargar las tarjetas' : 'Failed to load cards');
+      setError(isSpanish ? 'Error al cargar los métodos de pago' : 'Failed to load payment methods');
     } finally {
       setLoading(false);
     }
@@ -167,7 +167,7 @@ export default function PaymentMethods({ user }) {
     setShowAddCard(false);
     setSetupClientSecret('');
     await fetchCards();
-    showSuccess(isSpanish ? 'Tarjeta añadida correctamente.' : 'Card added successfully.');
+    showSuccess(isSpanish ? 'Método de pago añadido correctamente.' : 'Payment method added successfully.');
   };
 
   const handleSetDefault = async (pmId) => {
@@ -251,7 +251,7 @@ export default function PaymentMethods({ user }) {
           <button onClick={openAddCard} disabled={setupLoading || showAddCard}
             className="flex items-center gap-1.5 text-xs font-semibold text-accent hover:text-white transition-colors disabled:opacity-50">
             <Plus className="w-3.5 h-3.5" />
-            {isSpanish ? 'Añadir tarjeta' : 'Add card'}
+            {isSpanish ? 'Añadir método de pago' : 'Add payment method'}
           </button>
         </div>
 
@@ -263,12 +263,12 @@ export default function PaymentMethods({ user }) {
           <div className="text-center py-8 px-4">
             <CreditCard className="w-8 h-8 text-brand-text-tertiary mx-auto mb-2" />
             <p className="text-sm text-brand-text-tertiary mb-3">
-              {isSpanish ? 'No tienes ninguna tarjeta guardada.' : 'No saved cards yet.'}
+              {isSpanish ? 'No tienes ningún método de pago guardado.' : 'No saved payment methods yet.'}
             </p>
             <button onClick={openAddCard}
               className="text-sm text-accent hover:text-white font-semibold transition-colors flex items-center gap-1.5 mx-auto">
               <Plus className="w-4 h-4" />
-              {isSpanish ? 'Añadir tarjeta' : 'Add a card'}
+              {isSpanish ? 'Añadir método de pago' : 'Add a payment method'}
             </button>
           </div>
         ) : (
@@ -313,7 +313,7 @@ export default function PaymentMethods({ user }) {
         {showAddCard && (
           <div className="px-4 py-4 border-t border-white/5">
             <p className="text-sm font-semibold text-white mb-3">
-              {isSpanish ? 'Nueva tarjeta' : 'New card'}
+              {isSpanish ? 'Nuevo método de pago' : 'New payment method'}
             </p>
             {setupLoading || !setupClientSecret ? (
               <div className="flex items-center justify-center py-8">
@@ -334,8 +334,8 @@ export default function PaymentMethods({ user }) {
 
       <p className="text-xs text-brand-text-tertiary px-1">
         {isSpanish
-          ? 'Tus datos de pago están protegidos por Stripe. No almacenamos información de tarjetas.'
-          : 'Your payment details are secured by Stripe. We never store card data.'}
+          ? 'Tus datos de pago están protegidos por Stripe. No almacenamos información de tarjetas ni carteras digitales.'
+          : 'Your payment details are secured by Stripe. We never store card or wallet data.'}
       </p>
     </div>
   );
