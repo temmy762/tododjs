@@ -9,6 +9,7 @@ export default function CheckoutModal({ isOpen, onClose, plan, user }) {
   const [error, setError] = useState('');
 
   const isSpanish = i18n.language === 'es';
+  const fmtEur = (n) => new Intl.NumberFormat(isSpanish ? 'es-ES' : 'en-US', { style: 'currency', currency: 'EUR' }).format(parseFloat(n));
   const planName = isSpanish ? plan?.nameEs : plan?.name;
 
   const handleCheckout = async () => {
@@ -83,7 +84,7 @@ export default function CheckoutModal({ isOpen, onClose, plan, user }) {
                 </p>
               </div>
               <div className="text-right">
-                <div className="text-2xl font-bold text-white">€{plan.price}</div>
+                <div className="text-2xl font-bold text-white">{fmtEur(plan.price)}</div>
                 <div className="text-xs text-brand-text-tertiary">
                   {plan.duration === 'monthly' ? t('subscription.perMonth') : t('subscription.per3Months')}
                 </div>

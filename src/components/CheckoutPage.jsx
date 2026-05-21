@@ -4,7 +4,9 @@ import { Check, X, CreditCard, Shield, Zap, Download, Music, Crown, Users } from
 import API_URL from '../config/api';
 
 export default function CheckoutPage({ onClose, selectedPlan }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const isSpanish = i18n.language?.startsWith('es');
+  const fmtEur = (n) => new Intl.NumberFormat(isSpanish ? 'es-ES' : 'en-US', { style: 'currency', currency: 'EUR' }).format(parseFloat(n));
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
   const [fetchingPlan, setFetchingPlan] = useState(true);
@@ -143,7 +145,7 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
               </div>
 
               <div className="flex items-baseline gap-2 mb-2">
-                <span className="text-5xl font-bold text-white">€{price}</span>
+                <span className="text-5xl font-bold text-white">{fmtEur(price)}</span>
                 <span className="text-white/80">/ {t('checkout.daysCount', { count: plan.durationDays })}</span>
               </div>
               {plan.duration === 'quarterly' && (
@@ -193,7 +195,7 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
               <div className="flex items-center justify-between mb-6">
                 <span className="text-lg font-bold text-white">{t('checkout.total')}</span>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-white">€{price}</div>
+                  <div className="text-2xl font-bold text-white">{fmtEur(price)}</div>
                   <div className="text-xs text-brand-text-tertiary">
                     {t('checkout.oneTimePayment')}
                   </div>

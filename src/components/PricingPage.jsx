@@ -151,6 +151,7 @@ export default function PricingPage({ onSelectPlan, user }) {
 
 function PlanCard({ plan, features, icon, onSelect, isSelected, t, i18n }) {
   const isSpanish = i18n.language === 'es';
+  const fmtEur = (n) => new Intl.NumberFormat(isSpanish ? 'es-ES' : 'en-US', { style: 'currency', currency: 'EUR' }).format(parseFloat(n));
   const planName = isSpanish ? plan.nameEs : plan.name;
   const badge = isSpanish ? plan.badgeEs : plan.badge;
   const periodText = plan.duration === 'monthly' ? t('subscription.perMonth') : t('subscription.per3Months');
@@ -190,7 +191,7 @@ function PlanCard({ plan, features, icon, onSelect, isSelected, t, i18n }) {
         {/* Price */}
         <div className="mb-6">
           <div className="flex items-baseline gap-1 flex-wrap">
-            <span className="text-4xl font-bold text-white">€{plan.price}</span>
+            <span className="text-4xl font-bold text-white">{fmtEur(plan.price)}</span>
             <span className="text-brand-text-tertiary whitespace-nowrap">{periodText}</span>
           </div>
           {plan.duration === 'quarterly' && (

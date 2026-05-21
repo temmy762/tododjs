@@ -76,6 +76,7 @@ function UpdateCardForm({ onSuccess, onCancel, isSpanish }) {
 export default function SubscriptionDashboard({ user, onUpdate }) {
   const { t, i18n } = useTranslation();
   const isSpanish = i18n.language?.startsWith('es');
+  const fmtEur = (n) => new Intl.NumberFormat(isSpanish ? 'es-ES' : 'en-US', { style: 'currency', currency: 'EUR' }).format(parseFloat(n));
 
   const [subscriptionData, setSubscriptionData] = useState(null);
   const [paymentMethod, setPaymentMethod] = useState(null);
@@ -362,7 +363,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
               </td>
               <td className="px-6 py-4 text-sm text-white">
                 {plan?.price && !isCancelled && !isPastDue
-                  ? `${plan.price}${plan.currency === 'eur' ? '€' : '$'} ${isSpanish ? 'el' : 'on'} ${nextPaymentDate}`
+                  ? `${fmtEur(plan.price)} ${isSpanish ? 'el' : 'on'} ${nextPaymentDate}`
                   : nextPaymentDate}
               </td>
             </tr>
