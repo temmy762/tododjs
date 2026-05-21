@@ -318,8 +318,28 @@ async function handleInvoicePaid(invoice) {
     user.subscription.endDate = newEndDate;
   }
 
+  // Record renewal in history
+  const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
+  if (plan) {
+    user.subscriptionHistory.push({
+      planId: user.subscription.planId,
+      startDate: new Date(),
+      endDate: newEndDate,
+      amount: plan.price,
+      currency: plan.currency,
+      status: 'completed',
+      stripePaymentIntentId: invoice.id
+    });
+  }
+
   await user.save();
   console.log(`Subscription renewed for user ${user._id}, new endDate: ${newEndDate}`);
+
+  // Send renewal receipt email (covers both normal renewals and retry successes)
+  if (plan) {
+    sendPaymentReceiptEmail(user, plan.name, plan.price, plan.currency, newEndDate)
+      .catch(err => console.error('Renewal receipt email failed:', err));
+  }
 }
 
 // Helper: handle invoice.payment_failed — marks subscription as past_due
@@ -390,7 +410,7 @@ async function handleSubscriptionDeleted(subscription) {
     await user.save();
     console.log(`Subscription deleted for user ${user._id}`);
 
-    sendSubscriptionCancelledEmail(user, planId, null)
+    sendSubscriptionCancelledEmail(user, planId, user.subscription.endDate || null)
       .catch(err => console.error('User cancellation email failed:', err));
     notifyAdminCancelledSubscription(user, planId)
       .catch(err => console.error('Admin cancellation notification failed:', err));
