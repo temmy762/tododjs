@@ -209,19 +209,28 @@ export const cancelSubscription = async (req, res) => {
     // Cancel on Stripe if this is a recurring subscription
     const stripeSubscriptionId = user.subscription.stripeSubscriptionId;
     if (stripeSubscriptionId) {
+      let stripeSubscription;
       try {
-        const stripeSubscription = await stripe.subscriptions.update(stripeSubscriptionId, {
+        stripeSubscription = await stripe.subscriptions.update(stripeSubscriptionId, {
           cancel_at_period_end: true
         });
-        user.subscription.cancelAtPeriodEnd = true;
-        // Sync endDate so isWithinPeriod check works correctly after cancellation
-        if (stripeSubscription.current_period_end) {
-          user.subscription.endDate = new Date(stripeSubscription.current_period_end * 1000);
-        }
       } catch (err) {
         console.error('[cancelSubscription] Stripe cancel failed:', err.message);
-        // Proceed with local update even if Stripe call fails
+        // Hard fail — do NOT silently proceed. If Stripe wasn't updated, the subscription
+        // would keep auto-renewing and the user would be charged against their intent.
+        return res.status(502).json({
+          success: false,
+          message: 'Could not reach Stripe to cancel your subscription. Please try again or contact support.',
+          stripeError: err.message
+        });
       }
+
+      user.subscription.cancelAtPeriodEnd = true;
+      // Sync endDate so isWithinPeriod check works correctly after cancellation
+      if (stripeSubscription.current_period_end) {
+        user.subscription.endDate = new Date(stripeSubscription.current_period_end * 1000);
+      }
+      console.log(`[cancelSubscription] Stripe confirmed cancel_at_period_end for sub ${stripeSubscriptionId}, user ${user._id}`);
     }
 
     // For Stripe subscriptions: keep status 'active' — access continues until period end.
@@ -237,6 +246,7 @@ export const cancelSubscription = async (req, res) => {
     res.status(200).json({
       success: true,
       message: 'Subscription cancelled. Access will continue until end date.',
+      stripeConfirmed: !!stripeSubscriptionId,
       data: {
         subscription: user.subscription
       }

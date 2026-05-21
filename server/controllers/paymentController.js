@@ -238,6 +238,8 @@ export const cancelSubscription = async (req, res) => {
       cancel_at_period_end: true
     });
 
+    console.log(`[cancelSubscription] Stripe confirmed cancel_at_period_end=true for sub ${stripeSubscriptionId}, user ${req.user._id}`);
+
     // Update user — sync endDate from Stripe so isWithinPeriod works correctly after cancel
     req.user.subscription.cancelAtPeriodEnd = true;
     if (subscription.current_period_end) {
