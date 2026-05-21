@@ -675,22 +675,41 @@ export const createSetupIntent = async (req, res) => {
     const user = await User.findById(req.user.id);
     let customerId = user.subscription?.stripeCustomerId;
 
-    if (!customerId) {
+    const createCustomer = async () => {
       const customer = await stripe.customers.create({
         email: user.email,
         name: user.name,
         metadata: { userId: user._id.toString() }
       });
-      customerId = customer.id;
-      user.subscription.stripeCustomerId = customerId;
+      user.subscription.stripeCustomerId = customer.id;
       await user.save();
+      return customer.id;
+    };
+
+    if (!customerId) {
+      customerId = await createCustomer();
     }
 
-    const setupIntent = await stripe.setupIntents.create({
-      customer: customerId,
-      usage: 'off_session',
-      payment_method_types: ['card']
-    });
+    let setupIntent;
+    try {
+      setupIntent = await stripe.setupIntents.create({
+        customer: customerId,
+        usage: 'off_session',
+        payment_method_types: ['card']
+      });
+    } catch (stripeErr) {
+      // Stale customer ID (e.g. live→test mode switch) — create a fresh one
+      if (stripeErr.code === 'resource_missing') {
+        customerId = await createCustomer();
+        setupIntent = await stripe.setupIntents.create({
+          customer: customerId,
+          usage: 'off_session',
+          payment_method_types: ['card']
+        });
+      } else {
+        throw stripeErr;
+      }
+    }
 
     res.status(200).json({ success: true, clientSecret: setupIntent.client_secret });
   } catch (error) {
