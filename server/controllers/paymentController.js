@@ -23,6 +23,12 @@ export const subscribeWithSavedCard = async (req, res) => {
     }
 
     const user = await User.findById(req.user.id);
+
+    // Guard: block if user already has an active Stripe subscription (prevents double-billing)
+    if (user.subscription?.stripeSubscriptionId && user.subscription?.status === 'active') {
+      return res.status(400).json({ success: false, message: 'You already have an active subscription.' });
+    }
+
     const customerId = user.subscription?.stripeCustomerId;
     if (!customerId) {
       return res.status(400).json({ success: false, message: 'No saved payment method found. Please use the checkout form.' });
@@ -149,6 +155,14 @@ export const createCheckoutSession = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'This plan is not configured for online payment. Please contact support.'
+      });
+    }
+
+    // Guard: block if user already has an active Stripe subscription (prevents double-billing)
+    if (req.user.subscription?.stripeSubscriptionId && req.user.subscription?.status === 'active') {
+      return res.status(400).json({
+        success: false,
+        message: 'You already have an active subscription.'
       });
     }
 

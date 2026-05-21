@@ -167,17 +167,24 @@ async function handleCheckoutCompleted(session) {
   // For subscription mode, get endDate from Stripe subscription's current_period_end
   if (session.subscription) {
     try {
-      const stripeSubscription = await stripe.subscriptions.retrieve(session.subscription);
+      const stripeSubscription = await stripe.subscriptions.retrieve(session.subscription, {
+        expand: ['default_payment_method', 'latest_invoice.payment_intent']
+      });
       endDate = stripeSubscription.current_period_end
         ? new Date(stripeSubscription.current_period_end * 1000)
         : null;
       stripeSubscriptionId = stripeSubscription.id;
 
       // Auto-save the payment method used at checkout as the customer default
-      // so it immediately appears in the PAGOS / payment methods section
-      const pmId = typeof stripeSubscription.default_payment_method === 'object'
-        ? stripeSubscription.default_payment_method?.id
-        : stripeSubscription.default_payment_method;
+      // so it immediately appears in the PAGOS / payment methods section.
+      // Primary: subscription's default_payment_method
+      // Fallback: latest_invoice.payment_intent.payment_method
+      const pmId =
+        (typeof stripeSubscription.default_payment_method === 'object'
+          ? stripeSubscription.default_payment_method?.id
+          : stripeSubscription.default_payment_method) ||
+        stripeSubscription.latest_invoice?.payment_intent?.payment_method ||
+        null;
       if (pmId && session.customer) {
         stripe.customers.update(session.customer, {
           invoice_settings: { default_payment_method: pmId }
