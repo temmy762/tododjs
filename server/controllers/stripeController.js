@@ -312,6 +312,13 @@ async function handleInvoicePaid(invoice) {
     }
   }
 
+  // Dedup check before any writes — if this invoice was already processed, skip entirely
+  const alreadyRecorded = user.subscriptionHistory?.some(h => h.stripePaymentIntentId === invoice.id);
+  if (alreadyRecorded) {
+    console.log(`invoice.paid dedup: invoice ${invoice.id} already recorded for user ${user._id}`);
+    return;
+  }
+
   user.subscription.status = 'active';
   user.subscription.autoRenew = true;
   if (newEndDate) {
