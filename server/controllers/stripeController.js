@@ -434,16 +434,24 @@ async function handleSubscriptionDeleted(subscription) {
 
   if (user) {
     const planId = user.subscription.planId;
+    // Capture before clearing — true means user explicitly cancelled (already emailed)
+    const wasUserInitiatedCancel = user.subscription.cancelAtPeriodEnd === true;
+    const accessEndDate = user.subscription.endDate || null;
+
     user.subscription.status = 'cancelled';
     user.subscription.autoRenew = false;
     user.subscription.stripeSubscriptionId = null;
     user.subscription.stripePaymentIntentId = null;
     user.subscription.cancelAtPeriodEnd = false;
     await user.save();
-    console.log(`Subscription deleted for user ${user._id}`);
+    console.log(`Subscription deleted for user ${user._id} (userInitiated=${wasUserInitiatedCancel})`);
 
-    sendSubscriptionCancelledEmail(user, planId, user.subscription.endDate || null)
-      .catch(err => console.error('User cancellation email failed:', err));
+    // Only send final cancellation email for Stripe-forced cancellations (failed payment retries).
+    // User-initiated cancels already received an email at the time they clicked cancel.
+    if (!wasUserInitiatedCancel) {
+      sendSubscriptionCancelledEmail(user, planId, accessEndDate)
+        .catch(err => console.error('User cancellation email failed:', err));
+    }
     notifyAdminCancelledSubscription(user, planId)
       .catch(err => console.error('Admin cancellation notification failed:', err));
   }
@@ -496,6 +504,17 @@ async function handleSubscriptionUpdated(subscription) {
 
   if (typeof subscription.cancel_at_period_end === 'boolean') {
     user.subscription.cancelAtPeriodEnd = subscription.cancel_at_period_end;
+    changed = true;
+  }
+
+  // Recovery: if stripeSubscriptionId is missing (e.g. DB save failed in subscribeWithSavedCard),
+  // sync it now so cancel / renewal lookups work correctly going forward.
+  if (!user.subscription.stripeSubscriptionId && subscription.id) {
+    user.subscription.stripeSubscriptionId = subscription.id;
+    if (!user.subscription.planId && subscription.metadata?.planId) {
+      user.subscription.planId = subscription.metadata.planId;
+      user.subscription.plan = subscription.metadata.planId;
+    }
     changed = true;
   }
 
