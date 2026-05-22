@@ -18,6 +18,7 @@ import AlbumsSection from './components/AlbumsSection';
 import PlaylistsSection from './components/PlaylistsSection';
 import TrackListView from './components/TrackListView';
 import AlbumDetailView from './components/AlbumDetailView';
+import FloatingContact from './components/FloatingContact';
 
 // Lazy-loaded pages for code splitting
 const LibraryPage = lazy(() => import('./components/LibraryPage'));
@@ -1014,6 +1015,8 @@ function App() {
         />
       )}
       {upload && <ResumedUploadWidget upload={upload} />}
+
+      <FloatingContact />
     </div>
     </PlayerContext.Provider>
   );
