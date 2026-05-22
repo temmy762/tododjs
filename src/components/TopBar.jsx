@@ -35,8 +35,10 @@ export default function TopBar({ onSearchFocus, onSearchChange, searchQuery, onS
   const daysRemaining = subEndDate
     ? Math.max(0, Math.ceil((subEndDate - now) / (1000 * 60 * 60 * 24)))
     : -1;
-  const subscriptionStatus = sub?.planId
-    ? { isActive, hasSubscription: true, daysRemaining, subscription: sub, plan: sub }
+  const hasPlan = sub?.planId || (sub?.plan && sub?.plan !== 'free');
+  const isSharedPlan = sub?.planId?.includes('shared') || sub?.plan?.includes('shared');
+  const subscriptionStatus = hasPlan
+    ? { isActive, hasSubscription: true, daysRemaining, subscription: sub, isShared: isSharedPlan }
     : null;
 
   return (
@@ -110,7 +112,7 @@ export default function TopBar({ onSearchFocus, onSearchChange, searchQuery, onS
               title={t('subscription.manageSubscription')}
             >
               <Crown className="w-3.5 h-3.5 md:w-4 md:h-4" strokeWidth={2} />
-              <span className="hidden sm:inline">{subscriptionStatus.plan?.type === 'shared' ? '👥' : '👤'}</span>
+              <span className="hidden sm:inline">{subscriptionStatus.isShared ? '👥' : '👤'}</span>
               {subscriptionStatus.daysRemaining !== -1 && (
                 <span className="hidden md:inline text-xs">{subscriptionStatus.daysRemaining}d</span>
               )}

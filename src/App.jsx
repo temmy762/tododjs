@@ -276,8 +276,9 @@ function App() {
           const planChanged = prev?.subscription?.plan !== fresh.subscription?.plan;
           const statusChanged = prev?.subscription?.status !== fresh.subscription?.status;
           const activeChanged = prev?.isActive !== fresh.isActive;
-          console.debug('[sync] prev role:', prev?.role, '| changed:', { roleChanged, planIdChanged, planChanged, statusChanged, activeChanged });
-          if (roleChanged || planIdChanged || planChanged || statusChanged || activeChanged) {
+          const endDateChanged = String(prev?.subscription?.endDate) !== String(fresh.subscription?.endDate);
+          console.debug('[sync] prev role:', prev?.role, '| changed:', { roleChanged, planIdChanged, planChanged, statusChanged, activeChanged, endDateChanged });
+          if (roleChanged || planIdChanged || planChanged || statusChanged || activeChanged || endDateChanged) {
             return fresh;
           }
           return prev;
