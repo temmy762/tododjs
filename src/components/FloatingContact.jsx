@@ -1,10 +1,12 @@
 import { useState, useRef, useCallback } from 'react';
 import { Mail, X, Send, Upload, Loader, CheckCircle, Paperclip } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import API_URL from '../config/api';
 
 const INITIAL_FORM = { name: '', email: '', phone: '', subject: '', message: '', privacy: false };
 
 export default function FloatingContact() {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(INITIAL_FORM);
   const [files, setFiles] = useState([]);
@@ -31,7 +33,7 @@ export default function FloatingContact() {
       }
     });
     if (rejected.length) {
-      setErrorMsg(`Archivo(s) demasiado grande(s) (máx. 10 MB): ${rejected.join(', ')}`);
+      setErrorMsg(`${t('contact.fileTooLarge')} ${rejected.join(', ')}`);
     }
     if (valid.length) setFiles(prev => [...prev, ...valid]);
   };
@@ -54,7 +56,7 @@ export default function FloatingContact() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!form.privacy) {
-      setErrorMsg('Debes aceptar la política de privacidad.');
+      setErrorMsg(t('contact.privacyRequired'));
       return;
     }
     setStatus('submitting');
@@ -82,11 +84,11 @@ export default function FloatingContact() {
         }, 3000);
       } else {
         setStatus('error');
-        setErrorMsg(data.message || 'Error al enviar. Inténtalo de nuevo.');
+        setErrorMsg(data.message || t('contact.errorGeneric'));
       }
     } catch {
       setStatus('error');
-      setErrorMsg('Error de red. Inténtalo de nuevo.');
+      setErrorMsg(t('contact.errorNetwork'));
     }
   };
 
@@ -100,10 +102,10 @@ export default function FloatingContact() {
         <button
           onClick={() => setOpen(true)}
           className="fixed bottom-28 md:bottom-8 right-4 md:right-6 z-40 flex items-center gap-2 px-4 py-3 bg-red-600 hover:bg-red-700 active:scale-95 text-white rounded-full shadow-xl shadow-red-600/40 transition-all duration-200 hover:scale-105 font-semibold text-sm select-none"
-          aria-label="Abrir formulario de contacto"
+          aria-label={t('contact.buttonLabel')}
         >
           <Mail className="w-4 h-4 flex-shrink-0" />
-          <span>Contacto</span>
+          <span>{t('contact.buttonLabel')}</span>
         </button>
       )}
 
@@ -124,7 +126,7 @@ export default function FloatingContact() {
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 flex-shrink-0">
-          <h2 className="text-base font-bold text-white">Formulario de Contacto</h2>
+          <h2 className="text-base font-bold text-white">{t('contact.title')}</h2>
           <button
             onClick={handleClose}
             disabled={status === 'submitting'}
@@ -138,8 +140,8 @@ export default function FloatingContact() {
         {status === 'success' ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 p-8 text-center">
             <CheckCircle className="w-16 h-16 text-green-400" />
-            <h3 className="text-lg font-bold text-white">¡Mensaje enviado!</h3>
-            <p className="text-sm text-white/60">Nos pondremos en contacto contigo a la brevedad.</p>
+            <h3 className="text-lg font-bold text-white">{t('contact.successTitle')}</h3>
+            <p className="text-sm text-white/60">{t('contact.successMsg')}</p>
           </div>
         ) : (
           /* Form */
@@ -147,75 +149,75 @@ export default function FloatingContact() {
 
             {/* Name */}
             <div>
-              <label className="block text-xs font-semibold text-red-400 mb-1.5">Nombre Completo</label>
+              <label className="block text-xs font-semibold text-red-400 mb-1.5">{t('contact.name')}</label>
               <input
                 type="text"
                 name="name"
                 required
                 value={form.name}
                 onChange={handleChange}
-                placeholder="Juan Perez"
+                placeholder={t('contact.namePlaceholder')}
                 className={inputClass}
               />
             </div>
 
             {/* Email */}
             <div>
-              <label className="block text-xs font-semibold text-red-400 mb-1.5">Correo Electrónico</label>
+              <label className="block text-xs font-semibold text-red-400 mb-1.5">{t('contact.email')}</label>
               <input
                 type="email"
                 name="email"
                 required
                 value={form.email}
                 onChange={handleChange}
-                placeholder="you@example.com"
+                placeholder={t('contact.emailPlaceholder')}
                 className={inputClass}
               />
             </div>
 
             {/* Phone */}
             <div>
-              <label className="block text-xs font-semibold text-red-400 mb-1.5">Teléfono / Whatsapp</label>
+              <label className="block text-xs font-semibold text-red-400 mb-1.5">{t('contact.phone')}</label>
               <input
                 type="tel"
                 name="phone"
                 value={form.phone}
                 onChange={handleChange}
-                placeholder="555-123-4567"
+                placeholder={t('contact.phonePlaceholder')}
                 className={inputClass}
               />
             </div>
 
             {/* Subject */}
             <div>
-              <label className="block text-xs font-semibold text-red-400 mb-1.5">Asunto</label>
+              <label className="block text-xs font-semibold text-red-400 mb-1.5">{t('contact.subject')}</label>
               <select
                 name="subject"
                 value={form.subject}
                 onChange={handleChange}
                 className={`${inputClass} cursor-pointer`}
               >
-                <option value="" disabled>Selecciona un asunto</option>
-                <option value="Soporte técnico">Soporte técnico</option>
-                <option value="Facturación / Pagos">Facturación / Pagos</option>
-                <option value="Gestión de suscripción">Gestión de suscripción</option>
-                <option value="Problema con descarga">Problema con descarga</option>
-                <option value="Solicitud de música">Solicitud de música</option>
-                <option value="Consulta general">Consulta general</option>
-                <option value="Reportar un error">Reportar un error</option>
-                <option value="Otro">Otro</option>
+                <option value="" disabled>{t('contact.subjectPlaceholder')}</option>
+                <option value="technical_support">{t('contact.subjectTechSupport')}</option>
+                <option value="billing">{t('contact.subjectBilling')}</option>
+                <option value="subscription">{t('contact.subjectSubscription')}</option>
+                <option value="download_issue">{t('contact.subjectDownload')}</option>
+                <option value="music_request">{t('contact.subjectMusicRequest')}</option>
+                <option value="general">{t('contact.subjectGeneral')}</option>
+                <option value="bug_report">{t('contact.subjectBugReport')}</option>
+                <option value="other">{t('contact.subjectOther')}</option>
               </select>
             </div>
 
             {/* Message */}
             <div>
-              <label className="block text-xs font-semibold text-red-400 mb-1.5">Mensaje</label>
+              <label className="block text-xs font-semibold text-red-400 mb-1.5">{t('contact.message')}</label>
               <textarea
                 name="message"
                 required
                 value={form.message}
                 onChange={handleChange}
-                placeholder="Escribe tu mensaje aquí..."
+                placeholder={t('contact.messagePlaceholder')}
                 rows={4}
                 className={`${inputClass} resize-none`}
               />
@@ -235,8 +237,8 @@ export default function FloatingContact() {
                 }`}
               >
                 <Upload className="w-6 h-6 mx-auto mb-2 text-white/40" />
-                <p className="text-xs text-white/40">Haz clic para adjuntar o arrastra y suelta</p>
-                <p className="text-[10px] text-white/25 mt-1">PDF, imágenes o audio · Máx. 10 MB por archivo</p>
+                <p className="text-xs text-white/40">{t('contact.dropZone')}</p>
+                <p className="text-[10px] text-white/25 mt-1">{t('contact.dropZoneHint')}</p>
                 <input
                   ref={fileRef}
                   type="file"
@@ -277,7 +279,7 @@ export default function FloatingContact() {
                 className="mt-0.5 w-3.5 h-3.5 accent-red-500 flex-shrink-0 cursor-pointer"
               />
               <span className="text-xs text-white/50 leading-relaxed">
-                He leído y acepto la{' '}
+                {t('contact.privacyText')}{' '}
                 <a
                   href="/privacy"
                   target="_blank"
@@ -285,7 +287,7 @@ export default function FloatingContact() {
                   className="text-red-400 hover:underline"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  política de privacidad
+                  {t('contact.privacyLink')}
                 </a>
               </span>
             </label>
@@ -304,9 +306,9 @@ export default function FloatingContact() {
               className="w-full py-3 bg-red-600 hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm mb-2"
             >
               {status === 'submitting' ? (
-                <><Loader className="w-4 h-4 animate-spin" /> Enviando...</>
+                <><Loader className="w-4 h-4 animate-spin" /> {t('contact.sending')}</>
               ) : (
-                <><Send className="w-4 h-4" /> Enviar</>
+                <><Send className="w-4 h-4" /> {t('contact.send')}</>
               )}
             </button>
           </form>
