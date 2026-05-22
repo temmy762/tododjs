@@ -281,7 +281,7 @@ export default function FloatingContact() {
               <span className="text-xs text-white/50 leading-relaxed">
                 {t('contact.privacyText')}{' '}
                 <a
-                  href="/privacy"
+                  href="/privacidad"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-red-400 hover:underline"
