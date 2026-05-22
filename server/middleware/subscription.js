@@ -62,16 +62,21 @@ export const requireSubscription = async (req, res, next) => {
     // - 'active'     → always allowed (includes cancel_at_period_end while Stripe still shows active)
     // - 'cancelled'  → allowed ONLY if a concrete endDate exists AND it hasn't passed yet
     //                  (user cancelled renewal but is still within their paid period)
-    // - 'past_due'   → DENIED — payment failed; access cut until payment succeeds
-    //                  Stripe smart retries will restore 'active' via invoice.paid webhook
+    // - 'past_due'   → allowed for 10 days after endDate (Stripe retries over ~10 days)
+    //                  Stripe smart retries will restore 'active' via invoice.paid webhook.
+    //                  If retries are exhausted, customer.subscription.deleted fires → 'cancelled'.
     // - anything else (expired, inactive, etc.) → denied
     //
     // NOTE: isWithinPeriod intentionally returns false when endDate is null/missing.
     // A cancelled subscription with no endDate has no paid period to honour.
     const isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
+    const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000; // 10 days — matches Stripe's default retry window
+    const isWithinGrace = !!user.subscription.endDate &&
+      (Date.now() - new Date(user.subscription.endDate).getTime()) < PAST_DUE_GRACE_MS;
     const hasAccess =
       user.subscription.status === 'active' ||
-      (user.subscription.status === 'cancelled' && isWithinPeriod);
+      (user.subscription.status === 'cancelled' && isWithinPeriod) ||
+      (user.subscription.status === 'past_due' && (isWithinPeriod || isWithinGrace));
 
     if (!hasPlan || !hasAccess) {
       return res.status(403).json({
