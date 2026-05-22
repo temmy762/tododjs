@@ -380,6 +380,14 @@ async function handleInvoicePaid(invoice) {
   await user.save();
   console.log(`Subscription renewed for user ${user._id}, new endDate: ${newEndDate}`);
 
+  // Extend shared users' endDate so they don't lose access at the old period end
+  if (newEndDate && user.subscription.sharedWith?.length > 0) {
+    await User.updateMany(
+      { _id: { $in: user.subscription.sharedWith } },
+      { $set: { 'subscription.endDate': newEndDate, 'subscription.status': 'active' } }
+    ).catch(e => console.error('Failed to extend shared users endDate on renewal:', e.message));
+  }
+
   // Send renewal receipt email (covers both normal renewals and retry successes)
   if (plan) {
     sendPaymentReceiptEmail(user, plan.name, plan.price, plan.currency, newEndDate)

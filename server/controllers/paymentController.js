@@ -24,8 +24,9 @@ export const subscribeWithSavedCard = async (req, res) => {
 
     const user = await User.findById(req.user.id);
 
-    // Guard: block if user already has an active Stripe subscription (prevents double-billing)
-    if (user.subscription?.stripeSubscriptionId && user.subscription?.status === 'active') {
+    // Guard: block if user already has a Stripe subscription (active or past_due — prevents double-billing)
+    const blockedStatuses = ['active', 'past_due'];
+    if (user.subscription?.stripeSubscriptionId && blockedStatuses.includes(user.subscription?.status)) {
       return res.status(400).json({ success: false, message: 'You already have an active subscription.' });
     }
 
@@ -158,8 +159,9 @@ export const createCheckoutSession = async (req, res) => {
       });
     }
 
-    // Guard: block if user already has an active Stripe subscription (prevents double-billing)
-    if (req.user.subscription?.stripeSubscriptionId && req.user.subscription?.status === 'active') {
+    // Guard: block if user already has a Stripe subscription (active or past_due — prevents double-billing)
+    const blockedStatuses = ['active', 'past_due'];
+    if (req.user.subscription?.stripeSubscriptionId && blockedStatuses.includes(req.user.subscription?.status)) {
       return res.status(400).json({
         success: false,
         message: 'You already have an active subscription.'
@@ -307,6 +309,7 @@ export const reactivateSubscription = async (req, res) => {
 
     // Update user
     req.user.subscription.cancelAtPeriodEnd = false;
+    req.user.subscription.autoRenew = true;
     await req.user.save();
 
     res.status(200).json({

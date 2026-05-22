@@ -1,6 +1,7 @@
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import User from '../models/User.js';
 import stripe from '../config/stripe.js';
+import { sendSubscriptionCancelledEmail, notifyAdminCancelledSubscription } from '../services/emailService.js';
 
 // @desc    Get all subscription plans
 // @route   GET /api/subscriptions/plans
@@ -199,7 +200,8 @@ export const cancelSubscription = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
     
-    if (!user.subscription.planId || user.subscription.status !== 'active') {
+    const cancelableStatuses = ['active', 'past_due'];
+    if (!user.subscription.planId || !cancelableStatuses.includes(user.subscription.status)) {
       return res.status(400).json({
         success: false,
         message: 'No active subscription to cancel'
@@ -250,6 +252,15 @@ export const cancelSubscription = async (req, res) => {
         user.subscription.endDate = new Date(stripeSubscription.current_period_end * 1000);
       }
       console.log(`[cancelSubscription] Stripe confirmed cancel_at_period_end for sub ${stripeSubscriptionId}, user ${user._id}`);
+
+      // Send cancellation confirmation email now (before period ends)
+      const accessUntil = stripeSubscription?.current_period_end
+        ? new Date(stripeSubscription.current_period_end * 1000)
+        : user.subscription.endDate;
+      sendSubscriptionCancelledEmail(user, user.subscription.planId || 'N/A', accessUntil)
+        .catch(err => console.error('[cancelSubscription] Cancellation email failed:', err));
+      notifyAdminCancelledSubscription(user, user.subscription.planId || 'N/A')
+        .catch(err => console.error('[cancelSubscription] Admin cancel notification failed:', err));
     }
 
     // For Stripe subscriptions: keep status 'active' — access continues until period end.
