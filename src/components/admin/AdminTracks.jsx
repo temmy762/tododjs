@@ -30,6 +30,8 @@ export default function AdminTracks() {
   const [editingTrack, setEditingTrack] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [saveError, setSaveError] = useState(null);
+  const [selectedTracks, setSelectedTracks] = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   const [uploadState, setUploadState] = useState({
     status: 'idle', // idle, uploading, success, error
@@ -77,6 +79,25 @@ export default function AdminTracks() {
   }, [debouncedSearch]);
 
   useEffect(() => { fetchTracks(1); }, [fetchTracks]);
+
+  const handleBulkDelete = async () => {
+    if (!selectedTracks.size || bulkDeleting) return;
+    if (!confirm(`Delete ${selectedTracks.size} track(s)? This cannot be undone.`)) return;
+    setBulkDeleting(true);
+    let deleted = 0;
+    for (const id of selectedTracks) {
+      try {
+        const res = await fetch(`${API}/tracks/${id}`, { method: 'DELETE', headers: authHeaders() });
+        const data = await res.json();
+        if (data.success) deleted++;
+      } catch {}
+    }
+    setBulkDeleting(false);
+    setSelectedTracks(new Set());
+    fetchTracks(pagination.page);
+  };
+
+  const toggleTrack = (id) => setSelectedTracks(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const handleDelete = async (trackId) => {
     try {
@@ -287,6 +308,31 @@ export default function AdminTracks() {
           </div>
         </div>
       </div>
+
+      {/* Bulk Action Bar */}
+      {selectedTracks.size > 0 && (
+        <div className="flex items-center gap-3 mb-4 p-3 rounded-lg bg-accent/10 border border-accent/20">
+          <span className="text-xs text-accent font-medium flex-shrink-0">{selectedTracks.size} selected</span>
+          <button
+            onClick={() => setSelectedTracks(new Set(tracks.map(t => t._id)))}
+            className="text-[10px] text-brand-text-tertiary hover:text-white transition-colors"
+          >
+            Select page ({tracks.length})
+          </button>
+          <div className="flex-1" />
+          <button
+            onClick={handleBulkDelete}
+            disabled={bulkDeleting}
+            className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 disabled:opacity-50 rounded-lg text-xs font-medium text-red-400 transition-colors flex items-center gap-1.5"
+          >
+            {bulkDeleting ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
+            Delete {selectedTracks.size}
+          </button>
+          <button onClick={() => setSelectedTracks(new Set())} className="p-1.5 text-brand-text-tertiary hover:text-white transition-colors">
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* Upload Panel */}
       {showUploadPanel && !isMinimized && (
@@ -531,6 +577,13 @@ export default function AdminTracks() {
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-white/10 bg-dark-surface">
+                    <th className="px-4 py-4 w-10">
+                      <input type="checkbox"
+                        checked={tracks.length > 0 && tracks.every(t => selectedTracks.has(t._id))}
+                        onChange={e => setSelectedTracks(e.target.checked ? new Set(tracks.map(t => t._id)) : new Set())}
+                        className="w-3.5 h-3.5 accent-accent cursor-pointer"
+                      />
+                    </th>
                     <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('tracks.track')}</th>
                     <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('tracks.album')}</th>
                     <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('common.genre')}</th>
@@ -543,7 +596,14 @@ export default function AdminTracks() {
                 </thead>
                 <tbody className="divide-y divide-white/5">
                   {tracks.map((track) => (
-                    <tr key={track._id} className="hover:bg-dark-surface transition-colors">
+                    <tr key={track._id} className={`hover:bg-dark-surface transition-colors ${selectedTracks.has(track._id) ? 'bg-accent/5' : ''}`}>
+                      <td className="px-4 py-4 w-10" onClick={e => e.stopPropagation()}>
+                        <input type="checkbox"
+                          checked={selectedTracks.has(track._id)}
+                          onChange={() => toggleTrack(track._id)}
+                          className="w-3.5 h-3.5 accent-accent cursor-pointer"
+                        />
+                      </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 bg-dark-surface">
@@ -620,8 +680,15 @@ export default function AdminTracks() {
           {viewMode === 'grid' && (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 md:gap-4">
             {tracks.map((track) => (
-              <div key={track._id} className="bg-dark-elevated rounded-xl border border-white/10 overflow-hidden group hover:border-white/20 transition-all duration-200">
+              <div key={track._id} className={`bg-dark-elevated rounded-xl border overflow-hidden group transition-all duration-200 ${selectedTracks.has(track._id) ? 'border-accent/50 bg-accent/5' : 'border-white/10 hover:border-white/20'}`}>
                 <div className="aspect-square bg-dark-surface relative">
+                  <div className="absolute top-2 left-2 z-10" onClick={e => e.stopPropagation()}>
+                    <input type="checkbox"
+                      checked={selectedTracks.has(track._id)}
+                      onChange={() => toggleTrack(track._id)}
+                      className="w-4 h-4 accent-accent cursor-pointer"
+                    />
+                  </div>
                   {getTrackCover(track) ? (
                     <>
                       <img 
@@ -684,8 +751,15 @@ export default function AdminTracks() {
           {viewMode === 'list' && (
           <div className="md:hidden space-y-3">
             {tracks.map((track) => (
-              <div key={track._id} className="bg-dark-elevated rounded-xl border border-white/10 p-3">
+              <div key={track._id} className={`bg-dark-elevated rounded-xl border p-3 ${selectedTracks.has(track._id) ? 'border-accent/50 bg-accent/5' : 'border-white/10'}`}>
                 <div className="flex items-start gap-3">
+                  <div className="flex-shrink-0 pt-1" onClick={e => e.stopPropagation()}>
+                    <input type="checkbox"
+                      checked={selectedTracks.has(track._id)}
+                      onChange={() => toggleTrack(track._id)}
+                      className="w-4 h-4 accent-accent cursor-pointer"
+                    />
+                  </div>
                   <div className="w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-dark-surface">
                     {getTrackCover(track) ? (
                       <>

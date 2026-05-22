@@ -22,6 +22,33 @@ export default function AdminRecordPool() {
   const [selectedAlbum, setSelectedAlbum] = useState(null);
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState(null);
+  const [selectedCollIds, setSelectedCollIds] = useState(new Set());
+  const [selectedSrcIds, setSelectedSrcIds] = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const totalSelected = selectedCollIds.size + selectedSrcIds.size;
+
+  const handleBulkDeletePool = async () => {
+    if (!totalSelected || bulkDeleting) return;
+    if (!confirm(`Delete ${totalSelected} item(s)? This will remove all albums and tracks inside them.`)) return;
+    setBulkDeleting(true);
+    for (const id of selectedCollIds) {
+      try {
+        const res = await fetch(`${API}/collections/${id}`, { method: 'DELETE', headers: authHeaders() });
+        await res.json();
+      } catch {}
+    }
+    for (const id of selectedSrcIds) {
+      try {
+        const res = await fetch(`${API}/sources/${id}`, { method: 'DELETE', headers: authHeaders() });
+        await res.json();
+      } catch {}
+    }
+    setBulkDeleting(false);
+    setSelectedCollIds(new Set());
+    setSelectedSrcIds(new Set());
+    fetchAll();
+  };
 
   const openBulkUpload = () => {
     upload.openBulkUpload(() => fetchCollections());
@@ -241,6 +268,24 @@ export default function AdminRecordPool() {
                   <Upload size={18} /> Bulk Upload ZIP
                 </button>
               </div>
+
+              {totalSelected > 0 && (
+                <div className="flex items-center gap-3 mb-5 p-3 rounded-lg bg-accent/10 border border-accent/20">
+                  <span className="text-xs text-accent font-medium flex-shrink-0">{totalSelected} selected</span>
+                  <div className="flex-1" />
+                  <button
+                    onClick={handleBulkDeletePool}
+                    disabled={bulkDeleting}
+                    className="px-4 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 disabled:opacity-50 rounded-lg text-xs font-medium text-red-400 transition-colors flex items-center gap-1.5"
+                  >
+                    {bulkDeleting ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    Delete {totalSelected}
+                  </button>
+                  <button onClick={() => { setSelectedCollIds(new Set()); setSelectedSrcIds(new Set()); }} className="p-1.5 text-brand-text-tertiary hover:text-white transition-colors">
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
               {loading ? <LoadingSpinner /> : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {collections.map(c => (
@@ -249,6 +294,8 @@ export default function AdminRecordPool() {
                       onEdit={(col) => { setEditItem(col); setModal('editCollection'); }}
                       onDelete={(col) => handleDeleteCollection(col)}
                       onReprocess={handleReprocess}
+                      selected={selectedCollIds.has(c._id)}
+                      onSelect={() => setSelectedCollIds(prev => { const n = new Set(prev); n.has(c._id) ? n.delete(c._id) : n.add(c._id); return n; })}
                     />
                   ))}
                   {sources.map(s => (
@@ -256,6 +303,8 @@ export default function AdminRecordPool() {
                       onView={navigateToSource}
                       onEdit={(src) => { setEditItem(src); setModal('editSource'); }}
                       onDelete={handleDeleteSource}
+                      selected={selectedSrcIds.has(s._id)}
+                      onSelect={() => setSelectedSrcIds(prev => { const n = new Set(prev); n.has(s._id) ? n.delete(s._id) : n.add(s._id); return n; })}
                     />
                   ))}
                   {collections.length === 0 && sources.length === 0 && (
@@ -397,13 +446,24 @@ function LoadingSpinner() {
 }
 
 // Source Card — matches CollectionCard UI style
-function SourceCard({ source, onView, onEdit, onDelete }) {
+function SourceCard({ source, onView, onEdit, onDelete, selected = false, onSelect }) {
   return (
-    <div className="bg-white/5 rounded-lg border border-white/10 overflow-hidden hover:border-accent/50 transition-all group">
+    <div className={`bg-white/5 rounded-lg border overflow-hidden hover:border-accent/50 transition-all group ${selected ? 'border-accent/60 bg-accent/5' : 'border-white/10'}`}>
       <div
         onClick={() => onView(source)}
         className="relative aspect-video bg-gradient-to-br from-accent/20 to-purple-500/20 cursor-pointer"
       >
+        {onSelect && (
+          <div className="absolute top-2 left-2 z-20" onClick={e => { e.stopPropagation(); onSelect(); }}>
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onSelect}
+              onClick={e => e.stopPropagation()}
+              className="w-4 h-4 accent-accent cursor-pointer"
+            />
+          </div>
+        )}
         {source.thumbnail ? (
           <img src={source.thumbnail} alt={source.name} className="w-full h-full object-cover" />
         ) : (

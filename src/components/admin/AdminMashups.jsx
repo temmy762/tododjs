@@ -166,6 +166,24 @@ export default function AdminMashups() {
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (!selectedMashups.size) return;
+    if (!confirm(`Delete ${selectedMashups.size} mashup(s)? This cannot be undone.`)) return;
+    const token = localStorage.getItem('token');
+    let deleted = 0;
+    for (const id of selectedMashups) {
+      try {
+        const res = await fetch(`${API}/mashups/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+        const data = await res.json();
+        if (data.success) deleted++;
+      } catch {}
+    }
+    setMessage({ type: 'success', text: `Deleted ${deleted} of ${selectedMashups.size} mashup(s)` });
+    setSelectedMashups(new Set());
+    fetchMashups();
+    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
+  };
+
   const handleBulkAssign = async () => {
     if (!selectedMashups.size || !bulkCategory) return;
     setBulkAssigning(true);
@@ -1190,6 +1208,12 @@ export default function AdminMashups() {
             >
               {bulkAssigning ? <Loader size={12} className="animate-spin" /> : <Check size={12} />}
               Assign
+            </button>
+            <button
+              onClick={handleBulkDelete}
+              className="px-4 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 rounded-lg text-xs font-medium text-red-400 transition-colors flex items-center gap-1.5 flex-shrink-0"
+            >
+              <Trash2 size={12} /> Delete
             </button>
             <button
               onClick={() => setSelectedMashups(new Set())}

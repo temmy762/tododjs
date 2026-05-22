@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { FolderOpen, Calendar, Music, HardDrive, Download, Edit2, Trash2, Loader, AlertCircle, RotateCcw } from 'lucide-react';
 
-export default function CollectionCard({ collection, onView, onEdit, onDelete, onReprocess }) {
+export default function CollectionCard({ collection, onView, onEdit, onDelete, onReprocess, selected = false, onSelect }) {
   const formatSize = (bytes) => {
     if (!bytes) return '0 GB';
     return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
@@ -44,11 +44,22 @@ export default function CollectionCard({ collection, onView, onEdit, onDelete, o
   const isFailed = collection.status === 'failed' ||
     (collection.status === 'completed' && (collection.totalTracks ?? 0) === 0);
   return (
-    <div className="bg-white/5 rounded-lg overflow-hidden transition-all group border border-white/10 hover:border-accent/50">
+    <div className={`bg-white/5 rounded-lg overflow-hidden transition-all group border hover:border-accent/50 ${selected ? 'border-accent/60 bg-accent/5' : 'border-white/10'}`}>
       <div 
         onClick={() => collection.status === 'completed' && onView(collection)}
         className={`relative aspect-video bg-gradient-to-br from-accent/20 to-purple-500/20 ${collection.status === 'completed' ? 'cursor-pointer' : ''}`}
       >
+        {onSelect && (
+          <div className="absolute top-2 left-2 z-20" onClick={e => { e.stopPropagation(); onSelect(); }}>
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onSelect}
+              onClick={e => e.stopPropagation()}
+              className="w-4 h-4 accent-accent cursor-pointer"
+            />
+          </div>
+        )}
         <img
           src={collection.thumbnail || FALLBACK_IMG}
           alt={collection.name}
