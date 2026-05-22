@@ -18,8 +18,22 @@ export default function FloatingContact() {
     setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
   };
 
+  const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
   const addFiles = (newFiles) => {
-    setFiles(prev => [...prev, ...Array.from(newFiles)]);
+    const valid = [];
+    const rejected = [];
+    Array.from(newFiles).forEach(f => {
+      if (f.size > MAX_FILE_SIZE) {
+        rejected.push(f.name);
+      } else {
+        valid.push(f);
+      }
+    });
+    if (rejected.length) {
+      setErrorMsg(`Archivo(s) demasiado grande(s) (máx. 10 MB): ${rejected.join(', ')}`);
+    }
+    if (valid.length) setFiles(prev => [...prev, ...valid]);
   };
 
   const handleDrop = useCallback((e) => {
@@ -77,7 +91,7 @@ export default function FloatingContact() {
   };
 
   const inputClass =
-    'w-full bg-white/5 border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-red-500/60 transition-colors';
+    'w-full bg-[#1a1a1a] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white placeholder-white/30 focus:outline-none focus:border-red-500/60 transition-colors';
 
   return (
     <>
@@ -175,14 +189,22 @@ export default function FloatingContact() {
             {/* Subject */}
             <div>
               <label className="block text-xs font-semibold text-red-400 mb-1.5">Asunto</label>
-              <input
-                type="text"
+              <select
                 name="subject"
                 value={form.subject}
                 onChange={handleChange}
-                placeholder="Asunto del mensaje"
-                className={inputClass}
-              />
+                className={`${inputClass} cursor-pointer`}
+              >
+                <option value="" disabled>Selecciona un asunto</option>
+                <option value="Soporte técnico">Soporte técnico</option>
+                <option value="Facturación / Pagos">Facturación / Pagos</option>
+                <option value="Gestión de suscripción">Gestión de suscripción</option>
+                <option value="Problema con descarga">Problema con descarga</option>
+                <option value="Solicitud de música">Solicitud de música</option>
+                <option value="Consulta general">Consulta general</option>
+                <option value="Reportar un error">Reportar un error</option>
+                <option value="Otro">Otro</option>
+              </select>
             </div>
 
             {/* Message */}
@@ -213,11 +235,13 @@ export default function FloatingContact() {
                 }`}
               >
                 <Upload className="w-6 h-6 mx-auto mb-2 text-white/40" />
-                <p className="text-xs text-white/40">Click to browse or drag &amp; drop</p>
+                <p className="text-xs text-white/40">Haz clic para adjuntar o arrastra y suelta</p>
+                <p className="text-[10px] text-white/25 mt-1">PDF, imágenes o audio · Máx. 10 MB por archivo</p>
                 <input
                   ref={fileRef}
                   type="file"
                   multiple
+                  accept="image/*,audio/*,.pdf,.doc,.docx"
                   onChange={(e) => addFiles(e.target.files)}
                   className="hidden"
                 />

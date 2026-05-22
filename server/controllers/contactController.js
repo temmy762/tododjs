@@ -1,6 +1,6 @@
 import { sendEmail } from '../services/emailService.js';
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || process.env.RESEND_REPLY_TO || 'support@tododjs.com';
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'contacto.tododjs@gmail.com';
 
 // @desc    Submit contact form
 // @route   POST /api/contact
