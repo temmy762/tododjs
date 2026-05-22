@@ -472,9 +472,11 @@ async function handleSubscriptionDeleted(subscription) {
     if (!wasUserInitiatedCancel) {
       sendSubscriptionCancelledEmail(user, planId, accessEndDate)
         .catch(err => console.error('User cancellation email failed:', err));
+      // Admin was already notified at cancel-click time for user-initiated cancels.
+      // Only notify here for Stripe-forced cancellations (payment retries exhausted).
+      notifyAdminCancelledSubscription(user, planId)
+        .catch(err => console.error('Admin cancellation notification failed:', err));
     }
-    notifyAdminCancelledSubscription(user, planId)
-      .catch(err => console.error('Admin cancellation notification failed:', err));
   }
 }
 

@@ -216,11 +216,11 @@ export const cancelSubscription = async (req, res) => {
       try {
         const subs = await stripe.subscriptions.list({
           customer: user.subscription.stripeCustomerId,
-          status: 'active',
-          limit: 1
+          limit: 10
         });
-        if (subs.data.length > 0) {
-          stripeSubscriptionId = subs.data[0].id;
+        const liveSub = subs.data.find(s => ['active', 'past_due', 'trialing'].includes(s.status));
+        if (liveSub) {
+          stripeSubscriptionId = liveSub.id;
           user.subscription.stripeSubscriptionId = stripeSubscriptionId;
           console.log(`[cancelSubscription] Recovered stripeSubscriptionId ${stripeSubscriptionId} from Stripe for user ${user._id}`);
         }
@@ -259,8 +259,8 @@ export const cancelSubscription = async (req, res) => {
         : user.subscription.endDate;
       sendSubscriptionCancelledEmail(user, user.subscription.planId || 'N/A', accessUntil)
         .catch(err => console.error('[cancelSubscription] Cancellation email failed:', err));
-      notifyAdminCancelledSubscription(user, user.subscription.planId || 'N/A')
-        .catch(err => console.error('[cancelSubscription] Admin cancel notification failed:', err));
+      // Admin will be notified by handleSubscriptionDeleted webhook at actual period end.
+      // Avoid double-notifying for Stripe-managed subscriptions.
     }
 
     // For Stripe subscriptions: keep status 'active' — access continues until period end.
@@ -268,6 +268,10 @@ export const cancelSubscription = async (req, res) => {
     // For non-Stripe (admin-granted) subscriptions: cancel immediately in DB.
     if (!stripeSubscriptionId) {
       user.subscription.status = 'cancelled';
+      console.log(`[cancelSubscription] Skipping Stripe cancel for user ${user._id}: no stripeSubscriptionId found.`);
+      // Non-Stripe (admin-granted) cancel: notify admin immediately since no webhook will fire
+      notifyAdminCancelledSubscription(user, user.subscription.planId || 'N/A')
+        .catch(err => console.error('[cancelSubscription] Admin cancel notification failed:', err));
     }
     user.subscription.autoRenew = false;
 
