@@ -1,16 +1,14 @@
 import { Search, User, Music2, Crown } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import LanguageSwitcher from './LanguageSwitcher';
-import API_URL from '../config/api';
 
 const tonalities = ['1A', '2A', '3A', '4A', '5A', '6A', '7A', '8A', '9A', '10A', '11A', '12A', '1B', '2B', '3B', '4B', '5B', '6B', '7B', '8B', '9B', '10B', '11B', '12B'];
 
 export default function TopBar({ onSearchFocus, onSearchChange, searchQuery, onSubscribe, showTonalityButton, activeTonality, onTonalityChange, user, onLoginClick }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const [subscriptionStatus, setSubscriptionStatus] = useState(null);
   const [isFocused, setIsFocused] = useState(false);
 
   const handleFocus = () => {
@@ -26,27 +24,20 @@ export default function TopBar({ onSearchFocus, onSearchChange, searchQuery, onS
     onSearchChange?.(e.target.value);
   };
 
-  useEffect(() => {
-    setSubscriptionStatus(null); // Clear stale data immediately before fetching
-    if (user) {
-      fetchSubscriptionStatus();
-    }
-  }, [user]);
-
-  const fetchSubscriptionStatus = async () => {
-    try {
-      const token = localStorage.getItem('token');
-      const res = await fetch(`${API_URL}/subscriptions/status`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success && data.data.hasSubscription) {
-        setSubscriptionStatus(data.data);
-      }
-    } catch (error) {
-      console.error('Error fetching subscription:', error);
-    }
-  };
+  // Derive subscription display values directly from the user prop
+  // (App.jsx already syncs user every 10s — no extra API call needed)
+  const sub = user?.subscription;
+  const subStatus = sub?.status;
+  const subEndDate = sub?.endDate ? new Date(sub.endDate) : null;
+  const now = new Date();
+  const isWithinPeriod = subEndDate && now <= subEndDate;
+  const isActive = subStatus === 'active' || (subStatus === 'cancelled' && isWithinPeriod) || (subStatus === 'past_due' && isWithinPeriod);
+  const daysRemaining = subEndDate
+    ? Math.max(0, Math.ceil((subEndDate - now) / (1000 * 60 * 60 * 24)))
+    : -1;
+  const subscriptionStatus = sub?.planId
+    ? { isActive, hasSubscription: true, daysRemaining, subscription: sub, plan: sub }
+    : null;
 
   return (
     <div className="fixed top-0 left-0 right-0 z-40 bg-black border-b border-white/10">
