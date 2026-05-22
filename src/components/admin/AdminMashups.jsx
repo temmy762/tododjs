@@ -50,6 +50,7 @@ export default function AdminMashups() {
   const [editForm, setEditForm] = useState({});
   const [showUploadPanel, setShowUploadPanel] = useState(false);
   const [selectedMashups, setSelectedMashups] = useState(new Set());
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
   const [bulkCategory, setBulkCategory] = useState('');
   const [bulkAssigning, setBulkAssigning] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -168,7 +169,12 @@ export default function AdminMashups() {
 
   const handleBulkDelete = async () => {
     if (!selectedMashups.size) return;
-    if (!confirm(`Delete ${selectedMashups.size} mashup(s)? This cannot be undone.`)) return;
+    if (!bulkDeleteConfirm) {
+      setBulkDeleteConfirm(true);
+      setTimeout(() => setBulkDeleteConfirm(false), 4000);
+      return;
+    }
+    setBulkDeleteConfirm(false);
     const token = localStorage.getItem('token');
     let deleted = 0;
     for (const id of selectedMashups) {
@@ -1211,9 +1217,13 @@ export default function AdminMashups() {
             </button>
             <button
               onClick={handleBulkDelete}
-              className="px-4 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 rounded-lg text-xs font-medium text-red-400 transition-colors flex items-center gap-1.5 flex-shrink-0"
+              className={`px-4 py-1.5 border rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 flex-shrink-0 ${
+                bulkDeleteConfirm
+                  ? 'bg-red-600 hover:bg-red-700 border-red-500 text-white animate-pulse'
+                  : 'bg-red-500/20 hover:bg-red-500/30 border-red-500/40 text-red-400'
+              }`}
             >
-              <Trash2 size={12} /> Delete
+              <Trash2 size={12} /> {bulkDeleteConfirm ? 'Confirm Delete?' : 'Delete'}
             </button>
             <button
               onClick={() => setSelectedMashups(new Set())}
@@ -1224,17 +1234,17 @@ export default function AdminMashups() {
           </div>
         )}
 
-        <div className="text-[10px] text-brand-text-tertiary mb-3 flex items-center gap-3">
-          {(() => {
-            const filtered = mashups.filter(m => {
-              const catOk = categoryFilter === 'all' || (categoryFilter === 'Others' ? (!m.category || m.category === 'Others') : m.category === categoryFilter);
-              if (!searchQuery.trim()) return catOk;
-              const q = searchQuery.toLowerCase();
-              return catOk && (m.title?.toLowerCase().includes(q) || m.artist?.toLowerCase().includes(q));
-            });
-            if (!filtered.length) return null;
-            const allSelected = filtered.every(m => selectedMashups.has(m._id));
-            return (
+        {(() => {
+          const filtered = mashups.filter(m => {
+            const catOk = categoryFilter === 'all' || (categoryFilter === 'Others' ? (!m.category || m.category === 'Others') : m.category === categoryFilter);
+            if (!searchQuery.trim()) return catOk;
+            const q = searchQuery.toLowerCase();
+            return catOk && (m.title?.toLowerCase().includes(q) || m.artist?.toLowerCase().includes(q));
+          });
+          if (!filtered.length) return null;
+          const allSelected = filtered.length > 0 && filtered.every(m => selectedMashups.has(m._id));
+          return (
+            <div className="flex items-center justify-between mb-3">
               <button
                 onClick={() => {
                   if (allSelected) {
@@ -1243,13 +1253,17 @@ export default function AdminMashups() {
                     setSelectedMashups(prev => { const n = new Set(prev); filtered.forEach(m => n.add(m._id)); return n; });
                   }
                 }}
-                className="hover:text-white transition-colors"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors bg-white/5 border-white/10 hover:border-accent/50 hover:text-accent text-brand-text-tertiary"
               >
-                {allSelected ? 'Deselect all visible' : `Select all ${filtered.length} visible`}
+                <input type="checkbox" checked={allSelected} onChange={() => {}} className="w-3 h-3 accent-accent pointer-events-none" />
+                {allSelected ? `Deselect all (${filtered.length})` : `Select all (${filtered.length})`}
               </button>
-            );
-          })()}
-        </div>
+              {selectedMashups.size > 0 && (
+                <span className="text-xs text-brand-text-tertiary">{selectedMashups.size} selected — click Delete above to remove</span>
+              )}
+            </div>
+          );
+        })()}
 
         {loading ? (
           <div className="space-y-2">
