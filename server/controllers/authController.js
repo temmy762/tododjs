@@ -47,9 +47,14 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
     let maxDevices = 0; // Free accounts get 0 devices (no downloads)
     
     const _isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
+    const _GRACE_MS = 10 * 24 * 60 * 60 * 1000;
+    const _isPastDueInGrace = user.subscription.status === 'past_due' &&
+      !!user.subscription.endDate &&
+      (Date.now() - new Date(user.subscription.endDate).getTime()) < _GRACE_MS;
     const _hasValidSub = user.subscription.planId && (
       user.subscription.status === 'active' ||
-      (user.subscription.status === 'cancelled' && _isWithinPeriod)
+      (user.subscription.status === 'cancelled' && _isWithinPeriod) ||
+      _isPastDueInGrace
     );
     if (_hasValidSub) {
       const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });

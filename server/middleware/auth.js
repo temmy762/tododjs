@@ -109,7 +109,13 @@ export const checkSubscription = (...plans) => {
   return (req, res, next) => {
     if (req.user.role === 'admin') return next();
     const _isWithinPeriod = !!req.user.subscription?.endDate && new Date() <= new Date(req.user.subscription.endDate);
-    const _hasAccess = req.user.subscription?.status === 'active' || (req.user.subscription?.status === 'cancelled' && _isWithinPeriod);
+    const _GRACE_MS = 10 * 24 * 60 * 60 * 1000;
+    const _isPastDueInGrace = req.user.subscription?.status === 'past_due' &&
+      !!req.user.subscription?.endDate &&
+      (Date.now() - new Date(req.user.subscription.endDate).getTime()) < _GRACE_MS;
+    const _hasAccess = req.user.subscription?.status === 'active' ||
+      (req.user.subscription?.status === 'cancelled' && _isWithinPeriod) ||
+      _isPastDueInGrace;
     if (!_hasAccess) {
       return res.status(403).json({
         success: false,
@@ -132,7 +138,13 @@ export const checkSubscription = (...plans) => {
 export const checkSubscriptionActive = (req, res, next) => {
   if (req.user.role === 'admin') return next();
   const isWithinPeriod = !!req.user.subscription?.endDate && new Date() <= new Date(req.user.subscription.endDate);
-  const hasAccess = req.user.subscription?.status === 'active' || (req.user.subscription?.status === 'cancelled' && isWithinPeriod);
+  const GRACE_MS = 10 * 24 * 60 * 60 * 1000;
+  const isPastDueInGrace = req.user.subscription?.status === 'past_due' &&
+    !!req.user.subscription?.endDate &&
+    (Date.now() - new Date(req.user.subscription.endDate).getTime()) < GRACE_MS;
+  const hasAccess = req.user.subscription?.status === 'active' ||
+    (req.user.subscription?.status === 'cancelled' && isWithinPeriod) ||
+    isPastDueInGrace;
   if (!hasAccess) {
     return res.status(403).json({
       success: false,
