@@ -204,11 +204,16 @@ userSchema.methods.canDownload = function() {
   
   // Check if user has active subscription (admin-granted plans may have no planId)
   // Also treat cancelled-but-within-period as active (cancel_at_period_end retention)
+  // past_due grace: Stripe retries over ~10 days — allow downloads during that window
   const isWithinPeriod = !!this.subscription.endDate && new Date() <= new Date(this.subscription.endDate);
+  const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000; // 10 days
+  const isPastDueInGrace = this.subscription.status === 'past_due' &&
+    !!this.subscription.endDate &&
+    (Date.now() - new Date(this.subscription.endDate).getTime()) < PAST_DUE_GRACE_MS;
   const hasActiveSubscription =
     (this.subscription.status === 'active' ||
      (this.subscription.status === 'cancelled' && isWithinPeriod) ||
-     (this.subscription.status === 'past_due' && isWithinPeriod)) &&
+     isPastDueInGrace) &&
     (this.subscription.planId || (this.subscription.plan && this.subscription.plan !== 'free'));
   
   const limits = {

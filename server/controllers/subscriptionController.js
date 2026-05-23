@@ -77,8 +77,16 @@ export const getSubscriptionStatus = async (req, res) => {
       ? await SubscriptionPlan.findOne({ planId: user.subscription.planId })
       : null;
 
-    // Check if subscription expired (past endDate)
-    if (user.subscription.endDate && new Date() > user.subscription.endDate) {
+    // past_due grace: compute BEFORE the expired check so it can bypass it.
+    // Stripe retries failed renewals over ~10 days — keep isActive true during that window.
+    const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000; // 10 days
+    const isPastDueInGrace = user.subscription.status === 'past_due' &&
+      !!user.subscription.endDate &&
+      (Date.now() - new Date(user.subscription.endDate).getTime()) < PAST_DUE_GRACE_MS;
+
+    // Check if subscription expired (past endDate).
+    // Skip for past_due users still within the retry grace window — do NOT overwrite their status.
+    if (!isPastDueInGrace && user.subscription.endDate && new Date() > user.subscription.endDate) {
       const hoursSinceExpiry = (Date.now() - new Date(user.subscription.endDate).getTime()) / (1000 * 60 * 60);
       // For Stripe-managed subscriptions give a 48h grace window for webhook delivery
       // before marking expired locally — avoids locking out users due to webhook delays
@@ -99,10 +107,10 @@ export const getSubscriptionStatus = async (req, res) => {
     // isActive = true when:
     //   - status is 'active' (normal case, or cancel_at_period_end still pending)
     //   - status is 'cancelled' AND a concrete future endDate exists
-    //     → user cancelled their renewal but is still within the paid billing period
+    //   - status is 'past_due' AND within the 10-day retry grace window
     // NOTE: isWithinPeriod is false when endDate is null — no paid period to retain.
     const isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
-    const isActive = status === 'active' || (status === 'cancelled' && isWithinPeriod) || (status === 'past_due' && isWithinPeriod);
+    const isActive = status === 'active' || (status === 'cancelled' && isWithinPeriod) || isPastDueInGrace;
 
     res.status(200).json({
       success: true,

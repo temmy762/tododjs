@@ -415,10 +415,14 @@ async function handleInvoicePaymentFailed(invoice) {
   // Mark past_due — do NOT cancel; Stripe will retry automatically
   user.subscription.status = 'past_due';
   await user.save();
-  console.log(`Subscription marked past_due for user ${user._id}`);
+  console.log(`Subscription marked past_due for user ${user._id} (attempt ${invoice.attempt_count})`);
 
-  sendPaymentFailedEmail(user)
-    .catch(err => console.error('Payment failed email error:', err));
+  // Only email on the first failure — Stripe retries up to 4 times over 10 days.
+  // Subsequent retries are silent to avoid flooding the user with failure emails.
+  if (invoice.attempt_count === 1) {
+    sendPaymentFailedEmail(user)
+      .catch(err => console.error('Payment failed email error:', err));
+  }
 }
 
 // Helper: handle Stripe charge refunded (one-time payment model cancellation)
