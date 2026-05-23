@@ -669,11 +669,14 @@ function App() {
       // isWithinPeriod: true only when a concrete future endDate exists.
       // Intentionally false for null endDate — cancelled with no period has no access to retain.
       const isWithinPeriod = !!sub?.endDate && new Date(sub.endDate) > new Date();
+      const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000; // 10 days
+      const isWithinGrace = !!sub?.endDate &&
+        (new Date() - new Date(sub.endDate)) < PAST_DUE_GRACE_MS;
       // Cancelled users keep access until their paid period expires (cancel_at_period_end retention)
       const isActive = sub && (
         sub.status === 'active' ||
         (sub.status === 'cancelled' && isWithinPeriod) ||
-        (sub.status === 'past_due' && isWithinPeriod)
+        (sub.status === 'past_due' && (isWithinPeriod || isWithinGrace))
       );
       if (!isPaid || !isActive) {
         navigate('/pricing');
