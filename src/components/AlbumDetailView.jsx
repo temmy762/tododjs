@@ -47,12 +47,16 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
 
   const isAdmin = user?.role === 'admin';
   const isWithinPeriod = !!(user?.subscription?.endDate) && new Date(user.subscription.endDate) > new Date();
+  const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000;
+  const isPastDueInGrace = user?.subscription?.status === 'past_due' &&
+    !!user?.subscription?.endDate &&
+    (Date.now() - new Date(user.subscription.endDate).getTime()) < PAST_DUE_GRACE_MS;
   const isPremium = isAdmin || (
     user &&
     (user.subscription?.planId || (user.subscription?.plan && user.subscription.plan !== 'free')) &&
     (user.subscription?.status === 'active' ||
      (user.subscription?.status === 'cancelled' && isWithinPeriod) ||
-     (user.subscription?.status === 'past_due' && isWithinPeriod))
+     isPastDueInGrace)
   );
   const autoPlayTriggered = useRef(false);
 

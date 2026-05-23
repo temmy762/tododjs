@@ -31,7 +31,10 @@ export default function TopBar({ onSearchFocus, onSearchChange, searchQuery, onS
   const subEndDate = sub?.endDate ? new Date(sub.endDate) : null;
   const now = new Date();
   const isWithinPeriod = subEndDate && now <= subEndDate;
-  const isActive = subStatus === 'active' || (subStatus === 'cancelled' && isWithinPeriod) || (subStatus === 'past_due' && isWithinPeriod);
+  const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000;
+  const isPastDueInGrace = subStatus === 'past_due' && subEndDate &&
+    (now - subEndDate) < PAST_DUE_GRACE_MS;
+  const isActive = subStatus === 'active' || (subStatus === 'cancelled' && isWithinPeriod) || isPastDueInGrace;
   const daysRemaining = subEndDate
     ? Math.max(0, Math.ceil((subEndDate - now) / (1000 * 60 * 60 * 24)))
     : -1;
