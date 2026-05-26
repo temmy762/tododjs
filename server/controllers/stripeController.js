@@ -208,6 +208,17 @@ async function handleCheckoutCompleted(session) {
     endDate.setDate(endDate.getDate() + 30);
   }
 
+  // Dedup: use session.id as the canonical key (payment_intent is null in subscription mode).
+  // Check BEFORE any writes — Stripe retries webhooks on 5xx, so a re-delivery must be idempotent.
+  const historyKey = session.id;
+  const alreadyRecorded = user.subscriptionHistory?.some(
+    h => h.stripePaymentIntentId === historyKey
+  );
+  if (alreadyRecorded) {
+    console.log(`checkout.session.completed dedup: session ${historyKey} already processed for user ${user._id} — skipping`);
+    return;
+  }
+
   user.subscription.planId = planId;
   user.subscription.plan = planId; // Add legacy plan field for compatibility
   user.subscription.status = 'active';
@@ -222,22 +233,15 @@ async function handleCheckoutCompleted(session) {
   // Set maxDevices based on plan type
   user.maxDevices = plan.features.maxDevices || (plan.type === 'shared' ? 2 : 1);
 
-  // Dedup: use session.id as the canonical key (payment_intent is null in subscription mode)
-  const historyKey = session.id;
-  const alreadyRecorded = user.subscriptionHistory?.some(
-    h => h.stripePaymentIntentId === historyKey
-  );
-  if (!alreadyRecorded) {
-    user.subscriptionHistory.push({
-      planId: planId,
-      startDate: startDate,
-      endDate: endDate,
-      amount: plan.price,
-      currency: plan.currency,
-      status: 'completed',
-      stripePaymentIntentId: historyKey
-    });
-  }
+  user.subscriptionHistory.push({
+    planId: planId,
+    startDate: startDate,
+    endDate: endDate,
+    amount: plan.price,
+    currency: plan.currency,
+    status: 'completed',
+    stripePaymentIntentId: historyKey
+  });
 
   const isNewUser = !session.metadata.userId;
   
