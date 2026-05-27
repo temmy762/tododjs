@@ -77,7 +77,7 @@ export default function Footer() {
           <p className="text-xs text-brand-text-tertiary">
             {isEs ? 'Desarrollado por' : 'Developed by'}{' '}
             <a
-              href="https://solvatree.com"
+              href="https://www.upwork.com/freelancers/~01570d6e8820d27bcf?mp_source=share"
               target="_blank"
               rel="noopener noreferrer"
               className="text-accent hover:text-white transition-colors duration-150 font-medium"
