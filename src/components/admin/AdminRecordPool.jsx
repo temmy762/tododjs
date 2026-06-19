@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star, Maximize2, Minimize2, Camera, Download } from 'lucide-react';
+import { Upload, FolderOpen, Music, Trash2, Eye, Plus, AlertCircle, CheckCircle, X, ChevronRight, Home, Calendar, Disc, Edit2, Loader, Image as ImageIcon, Star, Maximize2, Minimize2, Camera, Download, Layers } from 'lucide-react';
 import ManageAlbumModal from './ManageAlbumModal';
 import CollectionCard from './CollectionCard';
 import API_URL from '../../config/api';
@@ -25,6 +25,10 @@ export default function AdminRecordPool() {
   const [selectedCollIds, setSelectedCollIds] = useState(new Set());
   const [selectedSrcIds, setSelectedSrcIds] = useState(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const [selectedAlbumIds, setSelectedAlbumIds] = useState(new Set());
+  const [bulkModal, setBulkModal] = useState(null);
+  const [bulkActionLoading, setBulkActionLoading] = useState(false);
 
   const totalSelected = selectedCollIds.size + selectedSrcIds.size;
 
@@ -162,12 +166,14 @@ export default function AdminRecordPool() {
   };
 
   const navigateToDateCard = (dc) => {
+    setSelectedAlbumIds(new Set());
     setSelectedDateCard(dc);
     setView('albums');
     fetchAlbums(dc._id);
   };
 
   const navigateBack = (target) => {
+    setSelectedAlbumIds(new Set());
     if (target === 'list') {
       setView('list');
       setSelectedCollection(null);
@@ -225,6 +231,22 @@ export default function AdminRecordPool() {
       const data = await res.json();
       if (data.success && selectedDateCard) fetchAlbums(selectedDateCard._id);
     } catch (err) { console.error('Error deleting album:', err); }
+  };
+
+  const handleBulkDeleteAlbums = async () => {
+    const ids = [...selectedAlbumIds];
+    if (!ids.length || !confirm(`Delete ${ids.length} album(s)? This will remove all tracks inside them.`)) return;
+    setBulkActionLoading(true);
+    try {
+      const res = await fetch(`${API}/albums/bulk`, {
+        method: 'DELETE',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids })
+      });
+      const data = await res.json();
+      if (data.success) { setSelectedAlbumIds(new Set()); if (selectedDateCard) fetchAlbums(selectedDateCard._id); }
+    } catch (err) { console.error('Bulk delete error:', err); }
+    finally { setBulkActionLoading(false); }
   };
 
   return (
@@ -360,18 +382,66 @@ export default function AdminRecordPool() {
                   </p>
                 </div>
               )}
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4">
                 <h2 className="text-2xl font-bold">Albums — {selectedDateCard.name}</h2>
-                {activeParentType === 'source' && (
-                  <button onClick={openAlbumUpload} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
-                    <Upload size={18} /> Upload Album
-                  </button>
-                )}
+                <div className="flex items-center gap-3">
+                  {albums.length > 0 && (
+                    <button
+                      onClick={() => setSelectedAlbumIds(selectedAlbumIds.size === albums.length ? new Set() : new Set(albums.map(a => a._id)))}
+                      className="text-sm text-brand-text-tertiary hover:text-white transition-colors"
+                    >
+                      {selectedAlbumIds.size === albums.length ? 'Deselect all' : 'Select all'}
+                    </button>
+                  )}
+                  {activeParentType === 'source' && (
+                    <button onClick={openAlbumUpload} className="flex items-center gap-2 px-5 py-2.5 bg-accent hover:bg-accent-hover rounded-lg font-medium transition-colors">
+                      <Upload size={18} /> Upload Album
+                    </button>
+                  )}
+                </div>
               </div>
+
+              {selectedAlbumIds.size > 0 && (
+                <div className="flex items-center gap-3 mb-5 p-3 rounded-lg bg-accent/10 border border-accent/20 flex-wrap">
+                  <span className="text-xs text-accent font-medium flex-shrink-0">{selectedAlbumIds.size} selected</span>
+                  <div className="flex-1" />
+                  <button
+                    onClick={() => setBulkModal('assignPool')}
+                    className="px-4 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 rounded-lg text-xs font-medium text-blue-400 transition-colors flex items-center gap-1.5"
+                  >
+                    <Layers size={12} /> Assign Record Pool
+                  </button>
+                  <button
+                    onClick={() => setBulkModal('bulkCover')}
+                    className="px-4 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 rounded-lg text-xs font-medium text-purple-400 transition-colors flex items-center gap-1.5"
+                  >
+                    <ImageIcon size={12} /> Change Cover
+                  </button>
+                  <button
+                    onClick={handleBulkDeleteAlbums}
+                    disabled={bulkActionLoading}
+                    className="px-4 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 disabled:opacity-50 rounded-lg text-xs font-medium text-red-400 transition-colors flex items-center gap-1.5"
+                  >
+                    {bulkActionLoading ? <Loader size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                    Delete {selectedAlbumIds.size}
+                  </button>
+                  <button onClick={() => setSelectedAlbumIds(new Set())} className="p-1.5 text-brand-text-tertiary hover:text-white transition-colors">
+                    <X size={14} />
+                  </button>
+                </div>
+              )}
+
               {loading ? <LoadingSpinner /> : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {albums.map(a => (
-                    <AlbumCard key={a._id} album={a} onView={() => setSelectedAlbum(a)} onDelete={handleDeleteAlbum} />
+                    <AlbumCard
+                      key={a._id}
+                      album={a}
+                      onView={() => setSelectedAlbum(a)}
+                      onDelete={handleDeleteAlbum}
+                      selected={selectedAlbumIds.has(a._id)}
+                      onSelect={() => setSelectedAlbumIds(prev => { const n = new Set(prev); n.has(a._id) ? n.delete(a._id) : n.add(a._id); return n; })}
+                    />
                   ))}
                   {albums.length === 0 && (
                     <div className="col-span-full text-center py-16">
@@ -429,6 +499,21 @@ export default function AdminRecordPool() {
             album={selectedAlbum}
             onClose={() => setSelectedAlbum(null)}
             onUpdate={() => { if (selectedDateCard) fetchAlbums(selectedDateCard._id); }}
+          />
+        )}
+
+        {bulkModal === 'assignPool' && (
+          <BulkAssignModal
+            ids={[...selectedAlbumIds]}
+            onClose={() => setBulkModal(null)}
+            onSuccess={() => { setBulkModal(null); setSelectedAlbumIds(new Set()); if (selectedDateCard) fetchAlbums(selectedDateCard._id); }}
+          />
+        )}
+        {bulkModal === 'bulkCover' && (
+          <BulkCoverModal
+            ids={[...selectedAlbumIds]}
+            onClose={() => setBulkModal(null)}
+            onSuccess={() => { setBulkModal(null); setSelectedAlbumIds(new Set()); if (selectedDateCard) fetchAlbums(selectedDateCard._id); }}
           />
         )}
       </div>
@@ -604,7 +689,7 @@ function DateCardItem({ dateCard, onView, onEdit, onDelete }) {
 }
 
 // Album Card
-function AlbumCard({ album, onView, onDelete, onToggleFeatured }) {
+function AlbumCard({ album, onView, onDelete, onToggleFeatured, selected = false, onSelect }) {
   const [reanalyzing, setReanalyzing] = useState(false);
   const [reanalyzeMsg, setReanalyzeMsg] = useState(null);
   const [featured, setFeatured] = useState(album.isFeatured || false);
@@ -673,8 +758,19 @@ function AlbumCard({ album, onView, onDelete, onToggleFeatured }) {
   };
 
   return (
-    <div className="bg-dark-elevated rounded-xl border border-white/10 overflow-hidden hover:border-accent/40 transition-all duration-300 group">
+    <div className={`bg-dark-elevated rounded-xl border overflow-hidden hover:border-accent/40 transition-all duration-300 group ${selected ? 'border-accent/60 bg-accent/5' : 'border-white/10'}`}>
       <div className="relative aspect-square overflow-hidden">
+        {onSelect && (
+          <div className="absolute top-2 left-12 z-20" onClick={e => { e.stopPropagation(); onSelect(); }}>
+            <input
+              type="checkbox"
+              checked={selected}
+              onChange={onSelect}
+              onClick={e => e.stopPropagation()}
+              className="w-4 h-4 accent-accent cursor-pointer"
+            />
+          </div>
+        )}
         <div className="cursor-pointer w-full h-full" onClick={onView}>
           {localCoverArt ? (
             <img src={localCoverArt} alt={album.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" onError={() => setLocalCoverArt(null)} />
@@ -1374,6 +1470,224 @@ export function AlbumUploadModal({ sourceId, datePackId, sourceName, dateCardNam
               {isUploading ? <><Loader size={16} className="animate-spin" /> Uploading...</> : <><Upload size={16} /> Upload All ({queue.filter(q => q.stage === 'idle' || q.stage === 'failed').length})</>}
             </button>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Bulk Assign Modal ────────────────────────────────────────────────────────
+function BulkAssignModal({ ids, onClose, onSuccess }) {
+  const [step, setStep] = useState(1);
+  const [parents, setParents] = useState([]);
+  const [selectedParent, setSelectedParent] = useState(null);
+  const [datePacks, setDatePacks] = useState([]);
+  const [selectedDatePackId, setSelectedDatePackId] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetch_ = async () => {
+      setLoading(true);
+      try {
+        const [colRes, srcRes] = await Promise.all([
+          fetch(`${API}/collections`, { headers: authHeaders() }),
+          fetch(`${API}/sources`, { headers: authHeaders() })
+        ]);
+        const [colData, srcData] = await Promise.all([colRes.json(), srcRes.json()]);
+        const cols = (colData.success ? colData.data : []).map(c => ({ ...c, _type: 'collection' }));
+        const srcs = (srcData.success ? srcData.data : []).map(s => ({ ...s, _type: 'source' }));
+        setParents([...srcs, ...cols]);
+      } catch {}
+      finally { setLoading(false); }
+    };
+    fetch_();
+  }, []);
+
+  const handleSelectParent = async (parent) => {
+    setSelectedParent(parent);
+    setSelectedDatePackId('');
+    setDatePacks([]);
+    setLoading(true);
+    try {
+      const url = parent._type === 'source'
+        ? `${API}/date-packs/source/${parent._id}`
+        : `${API}/collections/${parent._id}/date-packs`;
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.success) setDatePacks(data.data);
+    } catch {}
+    finally { setLoading(false); }
+    setStep(2);
+  };
+
+  const handleConfirm = async () => {
+    if (!selectedDatePackId) return;
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch(`${API}/albums/bulk-assign`, {
+        method: 'PUT',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, datePackId: selectedDatePackId })
+      });
+      const data = await res.json();
+      if (data.success) onSuccess();
+      else setError(data.message || 'Failed to reassign');
+    } catch { setError('Network error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4 overflow-y-auto">
+      <div className="bg-dark-elevated rounded-xl max-w-md w-full p-6 my-8 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-bold flex items-center gap-2"><Layers size={18} className="text-blue-400" /> Assign Record Pool</h2>
+            <p className="text-xs text-brand-text-tertiary mt-0.5">{ids.length} album{ids.length > 1 ? 's' : ''} selected</p>
+          </div>
+          <button onClick={onClose} className="text-brand-text-tertiary hover:text-white"><X size={20} /></button>
+        </div>
+        {error && <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm flex items-center gap-2"><AlertCircle size={14} />{error}</div>}
+
+        {step === 1 && (
+          <>
+            <p className="text-sm text-brand-text-tertiary mb-4">Select the Record Pool to move albums into:</p>
+            {loading ? (
+              <div className="flex justify-center py-8"><Loader size={24} className="animate-spin text-accent" /></div>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {parents.map(p => (
+                  <button key={p._id} onClick={() => handleSelectParent(p)}
+                    className="w-full flex items-center gap-3 p-3 rounded-lg bg-white/5 hover:bg-accent/10 hover:border-accent/40 border border-white/10 transition-all text-left">
+                    <div className="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center flex-shrink-0">
+                      {p._type === 'source' ? <Disc size={16} className="text-accent" /> : <FolderOpen size={16} className="text-accent" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{p.name}</p>
+                      <p className="text-xs text-brand-text-tertiary capitalize">{p._type} · {p.year}</p>
+                    </div>
+                    <ChevronRight size={14} className="text-brand-text-tertiary flex-shrink-0" />
+                  </button>
+                ))}
+                {parents.length === 0 && <p className="text-sm text-brand-text-tertiary text-center py-6">No pools found</p>}
+              </div>
+            )}
+          </>
+        )}
+
+        {step === 2 && (
+          <>
+            <button onClick={() => { setStep(1); setSelectedParent(null); }} className="flex items-center gap-1 text-sm text-accent hover:text-white mb-4 transition-colors">
+              ← {selectedParent?.name}
+            </button>
+            <p className="text-sm text-brand-text-tertiary mb-3">Select the date pack to move albums into:</p>
+            {loading ? (
+              <div className="flex justify-center py-8"><Loader size={24} className="animate-spin text-accent" /></div>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {datePacks.map(dp => (
+                  <label key={dp._id} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selectedDatePackId === dp._id ? 'bg-blue-500/15 border-blue-500/50' : 'bg-white/5 border-white/10 hover:border-white/20'}`}>
+                    <input type="radio" name="datePack" value={dp._id} checked={selectedDatePackId === dp._id} onChange={() => setSelectedDatePackId(dp._id)} className="accent-blue-500" />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{dp.name}</p>
+                      <p className="text-xs text-brand-text-tertiary">{dp.totalAlbums || 0} albums</p>
+                    </div>
+                  </label>
+                ))}
+                {datePacks.length === 0 && <p className="text-sm text-brand-text-tertiary text-center py-6">No date packs in this pool</p>}
+              </div>
+            )}
+            <div className="flex gap-3 mt-4">
+              <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-lg font-medium transition-colors text-sm">Cancel</button>
+              <button onClick={handleConfirm} disabled={!selectedDatePackId || saving}
+                className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 flex items-center justify-center gap-2">
+                {saving && <Loader size={14} className="animate-spin" />}
+                Move {ids.length} album{ids.length > 1 ? 's' : ''}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Bulk Cover Modal ─────────────────────────────────────────────────────────
+function BulkCoverModal({ ids, onClose, onSuccess }) {
+  const [file, setFile] = useState(null);
+  const [preview, setPreview] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const inputRef = useRef(null);
+
+  const handleFile = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    if (!f.type.startsWith('image/')) { setError('Please select a valid image file'); return; }
+    if (f.size > 10 * 1024 * 1024) { setError('Image must be under 10MB'); return; }
+    setFile(f);
+    setPreview(URL.createObjectURL(f));
+    setError('');
+  };
+
+  const handleConfirm = async () => {
+    if (!file) return;
+    setSaving(true);
+    setError('');
+    try {
+      const fd = new FormData();
+      fd.append('ids', JSON.stringify(ids));
+      fd.append('coverArt', file);
+      const res = await fetch(`${API}/albums/bulk-cover`, {
+        method: 'PUT',
+        headers: authHeaders(),
+        body: fd
+      });
+      const data = await res.json();
+      if (data.success) onSuccess();
+      else setError(data.message || 'Failed to update covers');
+    } catch { setError('Network error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4">
+      <div className="bg-dark-elevated rounded-xl max-w-sm w-full p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-bold flex items-center gap-2"><ImageIcon size={18} className="text-purple-400" /> Change Cover Art</h2>
+            <p className="text-xs text-brand-text-tertiary mt-0.5">{ids.length} album{ids.length > 1 ? 's' : ''} selected</p>
+          </div>
+          <button onClick={onClose} className="text-brand-text-tertiary hover:text-white"><X size={20} /></button>
+        </div>
+        {error && <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm flex items-center gap-2"><AlertCircle size={14} />{error}</div>}
+        <div onClick={() => inputRef.current?.click()}
+          className="border-2 border-dashed border-white/20 hover:border-purple-500/50 rounded-xl p-6 text-center cursor-pointer transition-colors mb-4">
+          {preview ? (
+            <img src={preview} alt="Preview" className="w-full h-40 object-cover rounded-lg mb-2" />
+          ) : (
+            <div className="py-4">
+              <ImageIcon size={36} className="mx-auto mb-3 text-brand-text-tertiary" />
+              <p className="text-sm text-brand-text-tertiary">Click to select cover image</p>
+              <p className="text-xs text-brand-text-tertiary mt-1">JPG, PNG · max 10MB</p>
+            </div>
+          )}
+          {file && <p className="text-xs text-brand-text-tertiary truncate">{file.name}</p>}
+        </div>
+        <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+        <p className="text-xs text-yellow-400/80 mb-4 flex items-start gap-1.5">
+          <AlertCircle size={12} className="flex-shrink-0 mt-0.5" />
+          This replaces the cover art on all {ids.length} selected albums with the same image.
+        </p>
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-lg font-medium transition-colors text-sm">Cancel</button>
+          <button onClick={handleConfirm} disabled={!file || saving}
+            className="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 flex items-center justify-center gap-2">
+            {saving && <Loader size={14} className="animate-spin" />}
+            Apply to {ids.length}
+          </button>
         </div>
       </div>
     </div>

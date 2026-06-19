@@ -10,7 +10,10 @@ import {
   deleteAlbum,
   toggleFeatured,
   getFeaturedAlbums,
-  updateAlbum
+  updateAlbum,
+  bulkDeleteAlbums,
+  bulkAssignAlbums,
+  bulkUpdateCover
 } from '../controllers/albumController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -51,6 +54,11 @@ router.route('/')
 
 router.route('/featured')
   .get(getFeaturedAlbums);
+
+// Bulk routes — must be before /:id to avoid route conflicts
+router.delete('/bulk', protect, authorize('admin'), bulkDeleteAlbums);
+router.put('/bulk-assign', protect, authorize('admin'), bulkAssignAlbums);
+router.put('/bulk-cover', protect, authorize('admin'), coverUpload.single('coverArt'), bulkUpdateCover);
 
 router.route('/:id')
   .get(getAlbum)

@@ -755,6 +755,65 @@ export const toggleFeatured = async (req, res) => {
   }
 };
 
+// @desc    Bulk soft-delete albums
+// @route   DELETE /api/albums/bulk
+// @access  Private/Admin
+export const bulkDeleteAlbums = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids?.length) return res.status(400).json({ success: false, message: 'No album IDs provided' });
+    await Album.updateMany({ _id: { $in: ids }, isActive: true }, { $set: { isActive: false } });
+    res.status(200).json({ success: true, message: `${ids.length} albums deleted` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Bulk reassign albums to a different date pack
+// @route   PUT /api/albums/bulk-assign
+// @access  Private/Admin
+export const bulkAssignAlbums = async (req, res) => {
+  try {
+    const { ids, datePackId } = req.body;
+    if (!ids?.length) return res.status(400).json({ success: false, message: 'No album IDs provided' });
+    if (!datePackId) return res.status(400).json({ success: false, message: 'Target date pack ID required' });
+    const targetDatePack = await DatePack.findById(datePackId);
+    if (!targetDatePack) return res.status(404).json({ success: false, message: 'Date pack not found' });
+    await Album.updateMany(
+      { _id: { $in: ids } },
+      {
+        $set: {
+          datePackId: targetDatePack._id,
+          sourceId: targetDatePack.sourceId || null,
+          collectionId: targetDatePack.collectionId || null
+        }
+      }
+    );
+    res.status(200).json({ success: true, message: `${ids.length} albums reassigned to "${targetDatePack.name}"` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Bulk update cover art for multiple albums (upload once, apply to all)
+// @route   PUT /api/albums/bulk-cover
+// @access  Private/Admin
+export const bulkUpdateCover = async (req, res) => {
+  try {
+    let ids;
+    try { ids = JSON.parse(req.body.ids); } catch { ids = req.body.ids; }
+    if (!ids?.length) return res.status(400).json({ success: false, message: 'No album IDs provided' });
+    if (!req.file) return res.status(400).json({ success: false, message: 'No cover image provided' });
+    const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
+    const key = `covers/bulk-${Date.now()}.${ext}`;
+    const coverUrl = await uploadToWasabi(req.file.buffer, key, req.file.mimetype);
+    await Album.updateMany({ _id: { $in: ids } }, { $set: { coverArt: coverUrl } });
+    res.status(200).json({ success: true, message: `Cover updated for ${ids.length} albums`, data: { coverArt: coverUrl } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 // @desc    Get all featured albums
 // @route   GET /api/albums/featured
 // @access  Public
