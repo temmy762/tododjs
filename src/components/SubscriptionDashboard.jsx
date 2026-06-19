@@ -56,7 +56,7 @@ function UpdateCardForm({ onSuccess, onCancel, isSpanish }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <PaymentElement options={{ layout: 'tabs' }} />
+      <PaymentElement options={{ layout: 'accordion', defaultCollapsed: false }} />
       {error && <p className="text-red-400 text-sm">{error}</p>}
       <div className="flex gap-3 pt-2">
         <button type="submit" disabled={!stripe || saving}
@@ -473,8 +473,8 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
 
       {/* ── Update card modal ── */}
       {showUpdateCard && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-dark-surface rounded-2xl border border-white/10 p-6 shadow-2xl">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-sm">
+          <div className="w-full max-w-md bg-dark-surface rounded-2xl border border-white/10 p-4 sm:p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-bold text-white">
                 {isSpanish ? 'Actualizar método de pago' : 'Update payment method'}
