@@ -473,7 +473,7 @@ export default function SubscriptionDashboard({ user, onUpdate }) {
 
       {/* ── Update card modal ── */}
       {showUpdateCard && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="w-full max-w-md bg-dark-surface rounded-2xl border border-white/10 p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-lg font-bold text-white">

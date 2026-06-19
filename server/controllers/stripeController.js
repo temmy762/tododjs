@@ -84,6 +84,7 @@ export const handleWebhook = async (req, res) => {
         break;
 
       case 'invoice.paid':
+      case 'invoice.payment_succeeded':
         await handleInvoicePaid(event.data.object);
         break;
 
@@ -352,6 +353,12 @@ async function handleInvoicePaid(invoice) {
   user.subscription.autoRenew = true;
   if (newEndDate) {
     user.subscription.endDate = newEndDate;
+  }
+
+  // Update startDate to current period start so UI shows the renewal date
+  const lineItemForStart = invoice.lines?.data?.[0];
+  if (lineItemForStart?.period?.start) {
+    user.subscription.startDate = new Date(lineItemForStart.period.start * 1000);
   }
 
   // Recovery: sync stripeSubscriptionId if user was found by customerId and ID is missing
