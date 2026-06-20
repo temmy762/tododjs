@@ -180,6 +180,57 @@ export async function sendSubscriptionCancelledEmail(user, planName, accessUntil
 }
 
 /**
+ * Account blocked notification email
+ */
+export async function sendBlockedAccountEmail(user) {
+  const lang = user.preferredLanguage || 'es';
+  const isEs = lang.startsWith('es');
+
+  const reasonLabels = {
+    account_sharing: isEs ? 'Compartición de cuenta' : 'Account sharing',
+    content_sharing: isEs ? 'Compartición de contenido' : 'Content sharing',
+    abusive_use:     isEs ? 'Uso abusivo de la plataforma' : 'Abusive platform use',
+    piracy:          isEs ? 'Piratería' : 'Piracy',
+    other:           isEs ? 'Otro (contacta con soporte)' : 'Other (contact support)'
+  };
+  const reasonLabel = reasonLabels[user.blockReason] || reasonLabels.other;
+
+  const subject = isEs ? 'Acceso suspendido — TodoDJs' : 'Access suspended — TodoDJs';
+
+  const html = `
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;background:#0a0a0a;color:#fff;border-radius:12px;overflow:hidden;">
+  <div style="background:linear-gradient(135deg,#e50914,#b00710);padding:32px;text-align:center;">
+    <div style="width:64px;height:64px;background:rgba(255,255,255,0.15);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
+    </div>
+    <h1 style="margin:0;font-size:24px;font-weight:700;">${isEs ? 'Cuenta suspendida' : 'Account suspended'}</h1>
+    <p style="margin:8px 0 0;opacity:.85;font-size:14px;">TodoDJs</p>
+  </div>
+  <div style="padding:32px;">
+    <p style="font-size:16px;margin-top:0;">${isEs ? `Hola ${user.name},` : `Hi ${user.name},`}</p>
+    <p style="color:#ccc;line-height:1.6;">${isEs
+      ? 'Tu cuenta ha sido suspendida por incumplimiento de nuestros Términos de Servicio.'
+      : 'Your account has been suspended due to a violation of our Terms of Service.'}</p>
+    <div style="background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:16px;margin:20px 0;">
+      <p style="margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:1px;color:#888;">${isEs ? 'Motivo de la suspensión' : 'Reason for suspension'}</p>
+      <p style="margin:0;font-size:15px;font-weight:600;color:#e50914;">${reasonLabel}</p>
+    </div>
+    <p style="color:#ccc;line-height:1.6;">${isEs
+      ? 'Si crees que esto es un error o quieres apelar esta decisión, contacta con nuestro equipo de soporte.'
+      : 'If you believe this is an error or would like to appeal this decision, please contact our support team.'}</p>
+    <div style="text-align:center;margin:28px 0;">
+      <a href="mailto:support@tododjs.com" style="display:inline-block;background:#e50914;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:600;">
+        ${isEs ? 'Contactar soporte' : 'Contact support'}
+      </a>
+    </div>
+    <p style="color:#555;font-size:12px;text-align:center;margin-bottom:0;">© ${new Date().getFullYear()} TodoDJs. ${isEs ? 'Todos los derechos reservados.' : 'All rights reserved.'}</p>
+  </div>
+</div>`;
+
+  return sendEmail({ to: user.email, subject, html });
+}
+
+/**
  * Payment failed email sent to user
  */
 export async function sendPaymentFailedEmail(user) {

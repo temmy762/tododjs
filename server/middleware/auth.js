@@ -36,6 +36,15 @@ export const protect = async (req, res, next) => {
       });
     }
 
+    if (req.user.isBlocked) {
+      return res.status(403).json({
+        success: false,
+        blocked: true,
+        blockReason: req.user.blockReason,
+        message: 'Your account has been suspended. Please contact support.'
+      });
+    }
+
     // Register/upsert device for ALL authenticated users (fire-and-forget, never blocks)
     const deviceId = req.headers['x-device-id'];
     if (deviceId) {

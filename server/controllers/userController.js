@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import { uploadToWasabi, deleteFromWasabi, getSignedDownloadUrl } from '../config/wasabi.js';
 import stripe from '../config/stripe.js';
+import { sendBlockedAccountEmail } from '../services/emailService.js';
 
 // @desc    Get all users with search, pagination, stats
 // @route   GET /api/users
@@ -570,6 +571,48 @@ export const uploadAvatar = async (req, res) => {
     });
   } catch (error) {
     console.error('Avatar upload error:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Block a user
+// @route   PUT /api/users/:id/block
+// @access  Private/Admin
+export const blockUser = async (req, res) => {
+  try {
+    const { reason } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    if (user.role === 'admin') return res.status(400).json({ success: false, message: 'Cannot block admin users' });
+
+    user.isBlocked = true;
+    user.blockReason = reason || 'other';
+    user.blockedAt = new Date();
+    await user.save();
+
+    try { await sendBlockedAccountEmail(user); } catch (e) { console.warn('Block email failed:', e.message); }
+
+    res.status(200).json({ success: true, message: 'User blocked successfully' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Unblock a user
+// @route   PUT /api/users/:id/unblock
+// @access  Private/Admin
+export const unblockUser = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    user.isBlocked = false;
+    user.blockReason = null;
+    user.blockedAt = null;
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'User unblocked successfully' });
+  } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
 };

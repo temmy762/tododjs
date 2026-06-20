@@ -152,6 +152,19 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  isBlocked: {
+    type: Boolean,
+    default: false
+  },
+  blockReason: {
+    type: String,
+    enum: ['account_sharing', 'content_sharing', 'abusive_use', 'piracy', 'other', null],
+    default: null
+  },
+  blockedAt: {
+    type: Date,
+    default: null
+  },
   preferredLanguage: {
     type: String,
     enum: ['en', 'es'],

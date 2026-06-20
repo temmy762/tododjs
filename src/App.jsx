@@ -19,6 +19,7 @@ import PlaylistsSection from './components/PlaylistsSection';
 import TrackListView from './components/TrackListView';
 import AlbumDetailView from './components/AlbumDetailView';
 import FloatingContact from './components/FloatingContact';
+import BlockedScreen from './components/BlockedScreen';
 
 // Lazy-loaded pages for code splitting
 const LibraryPage = lazy(() => import('./components/LibraryPage'));
@@ -723,6 +724,10 @@ function App() {
         <div style={{ color: 'white', fontSize: '24px' }}>Loading...</div>
       </div>
     );
+  }
+
+  if (user?.isBlocked) {
+    return <BlockedScreen onLogout={handleLogout} />;
   }
 
   return (

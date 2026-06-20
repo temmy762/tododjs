@@ -73,6 +73,15 @@ export const authService = {
         return null;
       }
 
+      // Blocked user — return a minimal object so App.jsx can show BlockedScreen
+      if (response.status === 403) {
+        const data = await response.json();
+        if (data.blocked) {
+          return { isBlocked: true, blockReason: data.blockReason };
+        }
+        return null;
+      }
+
       const data = await response.json();
       
       if (data.success) {

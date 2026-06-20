@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, UserPlus, Edit, Trash2, Shield, Crown, User, Loader, X, ChevronLeft, ChevronRight, Users, RefreshCw } from 'lucide-react';
+import { Search, UserPlus, Edit, Trash2, Shield, Crown, User, Loader, X, ChevronLeft, ChevronRight, Users, RefreshCw, Ban, CheckCircle } from 'lucide-react';
 import API_URL from '../../config/api';
 
 const API = API_URL;
@@ -25,6 +25,7 @@ export default function AdminUsers() {
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [bulkSyncing, setBulkSyncing] = useState(false);
   const [bulkResult, setBulkResult] = useState(null);
+  const [blockModal, setBlockModal] = useState(null);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
@@ -83,6 +84,31 @@ export default function AdminUsers() {
         fetchUsers(pagination.page);
       }
     } catch (err) { console.error('Delete failed:', err); }
+  };
+
+  const handleBlockUser = async (userId, reason) => {
+    try {
+      const res = await fetch(`${API}/users/${userId}/block`, {
+        method: 'PUT',
+        headers: authHeaders(true),
+        body: JSON.stringify({ reason })
+      });
+      const data = await res.json();
+      if (data.success) { setBlockModal(null); fetchUsers(pagination.page); }
+      else alert(data.message || 'Failed to block user');
+    } catch (err) { console.error('Block failed:', err); }
+  };
+
+  const handleUnblockUser = async (userId) => {
+    try {
+      const res = await fetch(`${API}/users/${userId}/unblock`, {
+        method: 'PUT',
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      if (data.success) fetchUsers(pagination.page);
+      else alert(data.message || 'Failed to unblock user');
+    } catch (err) { console.error('Unblock failed:', err); }
   };
 
   const handleEditSave = async (userId, updates) => {
@@ -311,19 +337,36 @@ export default function AdminUsers() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                          user.isActive !== false
-                            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                            : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                        }`}>
-                          {user.isActive !== false ? t('admin.activeStatus') : t('admin.inactiveStatus')}
-                        </span>
+                        {user.isBlocked ? (
+                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center gap-1 w-fit">
+                            <Ban className="w-3 h-3" /> Blocked
+                          </span>
+                        ) : (
+                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                            user.isActive !== false
+                              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                              : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          }`}>
+                            {user.isActive !== false ? t('admin.activeStatus') : t('admin.inactiveStatus')}
+                          </span>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <button onClick={() => setEditingUser(user)} className="p-2 hover:bg-dark-elevated rounded-lg transition-colors text-brand-text-tertiary hover:text-white">
                             <Edit className="w-4 h-4" />
                           </button>
+                          {user.role !== 'admin' && (
+                            user.isBlocked ? (
+                              <button onClick={() => handleUnblockUser(user._id)} className="p-2 hover:bg-dark-elevated rounded-lg transition-colors text-orange-400 hover:text-green-400" title="Unblock user">
+                                <CheckCircle className="w-4 h-4" />
+                              </button>
+                            ) : (
+                              <button onClick={() => setBlockModal(user)} className="p-2 hover:bg-dark-elevated rounded-lg transition-colors text-brand-text-tertiary hover:text-orange-400" title="Block user">
+                                <Ban className="w-4 h-4" />
+                              </button>
+                            )
+                          )}
                           {user.role !== 'admin' && (
                             <button onClick={() => setDeleteConfirm(user)} className="p-2 hover:bg-dark-elevated rounded-lg transition-colors text-brand-text-tertiary hover:text-red-400">
                               <Trash2 className="w-4 h-4" />
@@ -390,6 +433,11 @@ export default function AdminUsers() {
       {/* Edit Modal */}
       {editingUser && (
         <EditUserModal user={editingUser} onClose={() => setEditingUser(null)} onSave={handleEditSave} />
+      )}
+
+      {/* Block Modal */}
+      {blockModal && (
+        <BlockUserModal user={blockModal} onClose={() => setBlockModal(null)} onBlock={handleBlockUser} />
       )}
     </div>
   );
@@ -539,6 +587,67 @@ function EditUserModal({ user, onClose, onSave }) {
         <div className="flex gap-3 mt-6">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white font-medium transition-colors">{t('common.cancel')}</button>
           <button onClick={() => onSave(user._id, { role, plan, isActive })} className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-colors">{t('common.save')}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const BLOCK_REASONS = [
+  { value: 'account_sharing', label: 'Account sharing' },
+  { value: 'content_sharing', label: 'Content sharing' },
+  { value: 'abusive_use',     label: 'Abusive use' },
+  { value: 'piracy',          label: 'Piracy' },
+  { value: 'other',           label: 'Other' },
+];
+
+function BlockUserModal({ user, onClose, onBlock }) {
+  const [reason, setReason] = useState('account_sharing');
+  const [loading, setLoading] = useState(false);
+
+  const handleConfirm = async () => {
+    setLoading(true);
+    await onBlock(user._id, reason);
+    setLoading(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+      <div className="bg-dark-surface rounded-2xl border border-white/10 p-8 max-w-md w-full">
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 rounded-full bg-orange-500/10 border border-orange-500/30 flex items-center justify-center">
+            <Ban className="w-5 h-5 text-orange-400" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white">Block user</h3>
+            <p className="text-sm text-brand-text-tertiary">{user.name} · {user.email}</p>
+          </div>
+        </div>
+
+        <div className="bg-orange-500/10 border border-orange-500/20 rounded-xl p-4 mb-6 text-sm text-orange-300">
+          The user will immediately lose access, receive a suspension email, and see a blocked screen on their next login.
+        </div>
+
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-brand-text-tertiary mb-2">Reason for blocking</label>
+          <div className="space-y-2">
+            {BLOCK_REASONS.map(r => (
+              <label key={r.value} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${reason === r.value ? 'bg-orange-500/10 border-orange-500/40' : 'bg-white/5 border-white/10 hover:border-white/20'}`}>
+                <input type="radio" name="blockReason" value={r.value} checked={reason === r.value} onChange={() => setReason(r.value)} className="accent-orange-500" />
+                <span className="text-sm text-white">{r.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white font-medium transition-colors">
+            Cancel
+          </button>
+          <button onClick={handleConfirm} disabled={loading} className="flex-1 px-4 py-2.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-2">
+            {loading ? <Loader className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+            Block user
+          </button>
         </div>
       </div>
     </div>
