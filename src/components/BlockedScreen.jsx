@@ -1,69 +1,149 @@
 import { useTranslation } from 'react-i18next';
 
-const REASON_LABELS = {
-  account_sharing: { es: 'Compartición de cuenta', en: 'Account sharing' },
-  content_sharing: { es: 'Compartición de contenido', en: 'Content sharing' },
-  abusive_use:     { es: 'Uso abusivo de la plataforma', en: 'Abusive platform use' },
-  piracy:          { es: 'Piratería', en: 'Piracy' },
-  other:           { es: 'Otro motivo', en: 'Other reason' }
+const REASON_DETAILS = {
+  account_sharing: {
+    es: {
+      label:   'ACCESO REVOCADO — COMPARTICIÓN DE CUENTA',
+      body:    'Tu acceso ha sido revocado de forma inmediata y permanente por compartir tu cuenta con terceros no autorizados.',
+      warning: 'Cualquier nueva cuenta vinculada a ti también puede ser bloqueada automáticamente.',
+    },
+    en: {
+      label:   'ACCESS REVOKED — ACCOUNT SHARING',
+      body:    'Your access has been immediately and permanently revoked for sharing your account with unauthorized third parties.',
+      warning: 'Any new account linked to you may also be automatically blocked.',
+    },
+  },
+  content_sharing: {
+    es: {
+      label:   'ACCESO REVOCADO — FILTRACIÓN DE CONTENIDO',
+      body:    'Tu acceso ha sido revocado de forma inmediata y permanente por filtrar, compartir o redistribuir contenido protegido.',
+      warning: 'Cualquier nueva cuenta vinculada a ti también puede ser bloqueada automáticamente.',
+    },
+    en: {
+      label:   'ACCESS REVOKED — CONTENT LEAKING',
+      body:    'Your access has been immediately and permanently revoked for leaking, sharing or redistributing protected content.',
+      warning: 'Any new account linked to you may also be automatically blocked.',
+    },
+  },
+  abusive_use: {
+    es: {
+      label:   'ACCESO REVOCADO — USO ABUSIVO',
+      body:    'Tu acceso ha sido revocado de forma inmediata por uso abusivo de la plataforma en contra de nuestros Términos de Servicio.',
+      warning: 'Cualquier nueva cuenta vinculada a ti también puede ser bloqueada automáticamente.',
+    },
+    en: {
+      label:   'ACCESS REVOKED — ABUSIVE USE',
+      body:    'Your access has been immediately revoked for abusive use of the platform in violation of our Terms of Service.',
+      warning: 'Any new account linked to you may also be automatically blocked.',
+    },
+  },
+  piracy: {
+    es: {
+      label:   'ACCESO REVOCADO — PIRATERÍA',
+      body:    'Tu acceso ha sido revocado de forma inmediata y permanente por actividades relacionadas con la piratería de contenidos.',
+      warning: 'Cualquier nueva cuenta vinculada a ti también puede ser bloqueada automáticamente.',
+    },
+    en: {
+      label:   'ACCESS REVOKED — PIRACY',
+      body:    'Your access has been immediately and permanently revoked due to content piracy activities.',
+      warning: 'Any new account linked to you may also be automatically blocked.',
+    },
+  },
+  other: {
+    es: {
+      label:   'ACCESO REVOCADO PERMANENTEMENTE',
+      body:    'Tu acceso ha sido revocado de forma inmediata. Para más detalles sobre el motivo, contacta con el equipo de soporte.',
+      warning: 'Cualquier nueva cuenta vinculada a ti también puede ser bloqueada automáticamente.',
+    },
+    en: {
+      label:   'ACCESS PERMANENTLY REVOKED',
+      body:    'Your access has been immediately revoked. For more details on the reason, please contact the support team.',
+      warning: 'Any new account linked to you may also be automatically blocked.',
+    },
+  },
 };
 
-export default function BlockedScreen({ onLogout }) {
+export default function BlockedScreen({ user, onLogout }) {
   const { i18n } = useTranslation();
   const isEs = i18n.language?.startsWith('es');
+  const lang = isEs ? 'es' : 'en';
+
+  const reason = user?.blockReason || 'other';
+  const details = REASON_DETAILS[reason]?.[lang] || REASON_DETAILS.other[lang];
 
   return (
-    <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center p-4">
-      <div className="max-w-md w-full text-center">
-        {/* Icon */}
-        <div className="w-24 h-24 rounded-full bg-red-500/10 border-2 border-red-500/30 flex items-center justify-center mx-auto mb-8">
-          <svg className="w-12 h-12 text-red-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <circle cx="12" cy="12" r="10" />
-            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+    <div className="min-h-screen bg-[#1a1a2e] flex items-center justify-center p-4">
+      {/* Card */}
+      <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-8 text-center">
+
+        {/* Ban icon */}
+        <div className="flex justify-center mb-4">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="11" stroke="#e53e3e" strokeWidth="2" fill="none" />
+            <line x1="5.5" y1="5.5" x2="18.5" y2="18.5" stroke="#e53e3e" strokeWidth="2.5" strokeLinecap="round" />
           </svg>
         </div>
 
         {/* Title */}
-        <h1 className="text-3xl font-bold text-white mb-3">
-          {isEs ? 'Acceso suspendido' : 'Access suspended'}
+        <h1 className="text-2xl font-extrabold text-red-600 tracking-wide uppercase mb-6">
+          {isEs ? 'ACCESO DENEGADO' : 'ACCESS DENIED'}
         </h1>
-        <p className="text-brand-text-tertiary text-lg mb-8">
-          {isEs
-            ? 'Tu cuenta ha sido bloqueada por el equipo de TodoDJs.'
-            : 'Your account has been blocked by the TodoDJs team.'}
-        </p>
 
-        {/* Info card */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 mb-8 text-left space-y-4">
-          <p className="text-sm text-brand-text-tertiary leading-relaxed">
-            {isEs
-              ? 'El acceso a tu cuenta y a todos los contenidos ha sido suspendido. No podrás descargar ni reproducir ningún track mientras tu cuenta permanezca bloqueada.'
-              : 'Access to your account and all content has been suspended. You will not be able to download or play any tracks while your account remains blocked.'}
+        {/* Reason box */}
+        <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-4 text-left mb-6">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            {isEs ? 'Motivo del ban:' : 'Reason for ban:'}
           </p>
-          <div className="pt-2 border-t border-white/10">
-            <p className="text-xs text-brand-text-tertiary uppercase tracking-widest mb-2">
-              {isEs ? '¿Crees que es un error?' : 'Think this is a mistake?'}
-            </p>
-            <p className="text-sm text-white">
-              {isEs
-                ? 'Contacta con nuestro equipo en '
-                : 'Contact our team at '}
-              <a href="mailto:support@tododjs.com" className="text-accent hover:underline font-medium">
-                support@tododjs.com
-              </a>
-            </p>
+
+          {/* Reason label row */}
+          <div className="flex items-center gap-2 mb-3">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="flex-shrink-0">
+              <circle cx="12" cy="12" r="11" stroke="#e53e3e" strokeWidth="2" fill="none" />
+              <line x1="5.5" y1="5.5" x2="18.5" y2="18.5" stroke="#e53e3e" strokeWidth="2.5" strokeLinecap="round" />
+            </svg>
+            <span className="text-xs font-bold text-red-600 uppercase tracking-wide">
+              {details.label}
+            </span>
           </div>
+
+          {/* Body text */}
+          <p className="text-sm text-gray-700 leading-relaxed mb-3">
+            {details.body}
+          </p>
+
+          {/* Warning */}
+          <p className="text-sm text-gray-700 leading-relaxed mb-3">
+            {details.warning}
+          </p>
+
+          {/* Contact */}
+          <p className="text-sm text-gray-700 leading-relaxed">
+            {isEs ? 'Para más información, contacta a través de:' : 'For more information, please contact:'}
+            {' '}
+            <a href="mailto:support@tododjs.com" className="text-red-600 font-medium hover:underline">
+              support@tododjs.com
+            </a>
+          </p>
         </div>
 
-        {/* Sign out */}
+        {/* Disclaimer */}
+        <p className="text-xs text-gray-400 mb-6">
+          {isEs
+            ? 'Si crees que esto es un error, contacta con el administrador del sitio.'
+            : 'If you believe this is a mistake, please contact the site administrator.'}
+        </p>
+
+        {/* Button */}
         <button
           onClick={onLogout}
-          className="w-full py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white font-medium transition-colors"
+          className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-colors flex items-center justify-center gap-2"
         >
-          {isEs ? 'Cerrar sesión' : 'Sign out'}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+            <circle cx="12" cy="7" r="4" />
+          </svg>
+          {isEs ? 'Gestionar mi cuenta' : 'Manage My Account'}
         </button>
-
-        <p className="text-xs text-brand-text-tertiary mt-6">© {new Date().getFullYear()} TodoDJs</p>
       </div>
     </div>
   );

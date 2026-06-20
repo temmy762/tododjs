@@ -727,7 +727,7 @@ function App() {
   }
 
   if (user?.isBlocked) {
-    return <BlockedScreen onLogout={handleLogout} />;
+    return <BlockedScreen user={user} onLogout={handleLogout} />;
   }
 
   return (
