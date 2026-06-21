@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, UserPlus, Edit, Trash2, Shield, Crown, User, Loader, X, ChevronLeft, ChevronRight, Users, RefreshCw, Ban, CheckCircle } from 'lucide-react';
+import { Search, UserPlus, Edit, Trash2, Shield, Crown, User, Loader, X, ChevronLeft, ChevronRight, Users, RefreshCw, Ban, CheckCircle, Download } from 'lucide-react';
 import API_URL from '../../config/api';
 
 const API = API_URL;
@@ -97,6 +97,18 @@ export default function AdminUsers() {
       if (data.success) { setBlockModal(null); fetchUsers(pagination.page); }
       else alert(data.message || 'Failed to block user');
     } catch (err) { console.error('Block failed:', err); }
+  };
+
+  const handleLiftSuspension = async (userId) => {
+    try {
+      const res = await fetch(`${API}/users/${userId}/lift-download-suspension`, {
+        method: 'PUT',
+        headers: authHeaders()
+      });
+      const data = await res.json();
+      if (data.success) fetchUsers(pagination.page);
+      else alert(data.message || 'Failed to lift suspension');
+    } catch (err) { console.error('Lift suspension failed:', err); }
   };
 
   const handleUnblockUser = async (userId) => {
@@ -337,19 +349,26 @@ export default function AdminUsers() {
                         )}
                       </td>
                       <td className="px-6 py-4">
-                        {user.isBlocked ? (
-                          <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center gap-1 w-fit">
-                            <Ban className="w-3 h-3" /> Blocked
-                          </span>
-                        ) : (
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                            user.isActive !== false
-                              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                              : 'bg-red-500/20 text-red-400 border border-red-500/30'
-                          }`}>
-                            {user.isActive !== false ? t('admin.activeStatus') : t('admin.inactiveStatus')}
-                          </span>
-                        )}
+                        <div className="flex flex-col gap-1">
+                          {user.isBlocked ? (
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center gap-1 w-fit">
+                              <Ban className="w-3 h-3" /> Blocked
+                            </span>
+                          ) : (
+                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                              user.isActive !== false
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                            }`}>
+                              {user.isActive !== false ? t('admin.activeStatus') : t('admin.inactiveStatus')}
+                            </span>
+                          )}
+                          {user.downloadSuspended && (
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 w-fit">
+                              <Download className="w-3 h-3" /> DL Suspended
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
@@ -366,6 +385,11 @@ export default function AdminUsers() {
                                 <Ban className="w-4 h-4" />
                               </button>
                             )
+                          )}
+                          {user.role !== 'admin' && user.downloadSuspended && (
+                            <button onClick={() => handleLiftSuspension(user._id)} className="p-2 hover:bg-dark-elevated rounded-lg transition-colors text-amber-400 hover:text-green-400" title="Lift download suspension">
+                              <CheckCircle className="w-4 h-4" />
+                            </button>
                           )}
                           {user.role !== 'admin' && (
                             <button onClick={() => setDeleteConfirm(user)} className="p-2 hover:bg-dark-elevated rounded-lg transition-colors text-brand-text-tertiary hover:text-red-400">

@@ -616,3 +616,21 @@ export const unblockUser = async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 };
+
+// @desc    Lift download suspension for a user
+// @route   PUT /api/users/:id/lift-download-suspension
+// @access  Private/Admin
+export const liftDownloadSuspension = async (req, res) => {
+  try {
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    user.downloadSuspended = false;
+    user.downloadSuspendedAt = null;
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'Download suspension lifted' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};

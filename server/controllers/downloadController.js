@@ -9,6 +9,22 @@ import s3Client from '../config/wasabi.js';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import archiver from 'archiver';
+import { notifyAdminSuspiciousDownloads } from '../services/emailService.js';
+
+const SUSPICIOUS_THRESHOLD = 30;
+const SUSPICIOUS_WINDOW_MS = 60 * 60 * 1000;
+
+async function checkAndSuspendIfSuspicious(user) {
+  if (user.downloadSuspended) return;
+  const since = new Date(Date.now() - SUSPICIOUS_WINDOW_MS);
+  const recentCount = await Download.countDocuments({ userId: user._id, createdAt: { $gte: since } });
+  if (recentCount >= SUSPICIOUS_THRESHOLD) {
+    user.downloadSuspended = true;
+    user.downloadSuspendedAt = new Date();
+    await user.save();
+    try { await notifyAdminSuspiciousDownloads(user, recentCount, 60); } catch (e) { console.warn('Suspicious download alert failed:', e.message); }
+  }
+}
 
 const parseUA = (ua = '') => {
   const s = ua.toLowerCase();
@@ -55,6 +71,13 @@ export const downloadTrack = async (req, res) => {
 
     // Admin bypasses all download restrictions
     if (user.role !== 'admin') {
+      if (user.downloadSuspended) {
+        return res.status(403).json({
+          success: false,
+          downloadSuspended: true,
+          message: 'Your download access has been temporarily suspended due to unusual activity. Please contact support.'
+        });
+      }
       // Check if user can download
       if (!user.canDownload()) {
         return res.status(403).json({
@@ -129,6 +152,10 @@ export const downloadTrack = async (req, res) => {
       }
     }
 
+    if (user.role !== 'admin') {
+      checkAndSuspendIfSuspicious(user).catch(() => {});
+    }
+
     res.status(200).json({
       success: true,
       data: {
@@ -169,6 +196,13 @@ export const downloadTrackFile = async (req, res) => {
 
     // Admin bypasses all download restrictions
     if (user.role !== 'admin') {
+      if (user.downloadSuspended) {
+        return res.status(403).json({
+          success: false,
+          downloadSuspended: true,
+          message: 'Your download access has been temporarily suspended due to unusual activity. Please contact support.'
+        });
+      }
       if (!user.canDownload()) {
         const isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
         const hasSubscription = (user.subscription.status === 'active' || (user.subscription.status === 'cancelled' && isWithinPeriod)) && user.subscription.planId;
@@ -233,6 +267,10 @@ export const downloadTrackFile = async (req, res) => {
       }
     }
 
+    if (user.role !== 'admin') {
+      checkAndSuspendIfSuspicious(user).catch(() => {});
+    }
+
     const filename = buildSafeFilename(`${track.artist || 'Unknown Artist'} - ${track.title || 'Unknown Title'}.mp3`);
     const command = new GetObjectCommand({
       Bucket: process.env.WASABI_BUCKET_NAME,
@@ -277,6 +315,13 @@ export const downloadAlbum = async (req, res) => {
 
     // Admin bypasses all subscription checks
     if (user.role !== 'admin') {
+      if (user.downloadSuspended) {
+        return res.status(403).json({
+          success: false,
+          downloadSuspended: true,
+          message: 'Your download access has been temporarily suspended due to unusual activity. Please contact support.'
+        });
+      }
       const hasPlan = user.subscription?.planId || (user.subscription?.plan && user.subscription.plan !== 'free');
       const isWithinPeriod = !!user.subscription?.endDate && new Date() <= new Date(user.subscription.endDate);
       const hasAccess = user.subscription?.status === 'active' || (user.subscription?.status === 'cancelled' && isWithinPeriod);
@@ -322,6 +367,10 @@ export const downloadAlbum = async (req, res) => {
       await source.save();
     }
 
+    if (user.role !== 'admin') {
+      checkAndSuspendIfSuspicious(user).catch(() => {});
+    }
+
     res.status(200).json({
       success: true,
       data: {
@@ -358,6 +407,14 @@ export const downloadAlbumFile = async (req, res) => {
     }
     const user = await User.findById(req.user.id);
 
+    if (user.role !== 'admin' && user.downloadSuspended) {
+      return res.status(403).json({
+        success: false,
+        downloadSuspended: true,
+        message: 'Your download access has been temporarily suspended due to unusual activity. Please contact support.'
+      });
+    }
+
     const { browser: b4, os: o4, device: d4 } = parseUA(req.get('user-agent'));
     await Download.create({
       userId: user._id,
@@ -386,6 +443,10 @@ export const downloadAlbumFile = async (req, res) => {
         source.totalDownloads += album.trackCount;
         await source.save();
       }
+    }
+
+    if (user.role !== 'admin') {
+      checkAndSuspendIfSuspicious(user).catch(() => {});
     }
 
     // If a pre-built ZIP exists on Wasabi, redirect to a signed URL for fast direct download

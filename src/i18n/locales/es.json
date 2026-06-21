@@ -700,7 +700,8 @@
     "like": "Me gusta",
     "unlike": "Ya no me gusta",
     "downloadTrack": "Descargar pista",
-    "downloadFailed": "Descarga fallida"
+    "downloadFailed": "Descarga fallida",
+    "back": "Volver"
   },
   "player": {
     "subscribe": "SUSCRÍBETE",
@@ -770,6 +771,10 @@
   "downloadModal": {
     "licenseAgreement": "Acepto los términos de la licencia y usaré esta pista de acuerdo con los derechos de uso permitidos. Esta descarga es para uso personal/comercial según mi plan de suscripción.",
     "downloadsRemaining": "Descargas restantes este mes:"
+  },
+  "downloads": {
+    "suspended": "Descargas temporalmente suspendidas",
+    "suspendedDesc": "Se detectó actividad inusual en tu cuenta. Por favor, contacta a soporte para restaurar el acceso."
   },
   "playlist": {
     "createPlaylist": "Crear Lista de Reproducción",

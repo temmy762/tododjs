@@ -292,6 +292,35 @@ export async function notifyAdminExpiredSubscription(user, planName) {
   return sendAdminNotification({ subject, html, text });
 }
 
+/**
+ * Notify admin of suspicious (mass) download activity — user auto-suspended
+ */
+export async function notifyAdminSuspiciousDownloads(user, downloadCount, windowMinutes) {
+  const subject = `⚠️ Suspicious downloads — ${user.name} (${user.email}) auto-suspended`;
+  const html = `
+<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;background:#0a0a0a;color:#fff;border-radius:12px;overflow:hidden;">
+  <div style="background:linear-gradient(135deg,#f59e0b,#d97706);padding:32px;text-align:center;">
+    <h1 style="margin:0;font-size:22px;font-weight:700;">⚠️ Suspicious Download Activity</h1>
+    <p style="margin:8px 0 0;opacity:.85;font-size:14px;">TodoDJs — Admin Alert</p>
+  </div>
+  <div style="padding:32px;">
+    <p style="font-size:15px;margin-top:0;">A user has been automatically suspended for excessive downloads.</p>
+    <div style="background:#1a1a1a;border:1px solid #333;border-radius:8px;padding:16px;margin:20px 0;">
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr><td style="color:#888;padding:4px 0;width:140px;">Name</td><td style="color:#fff;font-weight:600;">${user.name}</td></tr>
+        <tr><td style="color:#888;padding:4px 0;">Email</td><td style="color:#fff;">${user.email}</td></tr>
+        <tr><td style="color:#888;padding:4px 0;">Downloads</td><td style="color:#f59e0b;font-weight:700;">${downloadCount} in the last ${windowMinutes} minutes</td></tr>
+        <tr><td style="color:#888;padding:4px 0;">Plan</td><td style="color:#fff;">${user.subscription?.planId || user.subscription?.plan || 'free'}</td></tr>
+        <tr><td style="color:#888;padding:4px 0;">Suspended at</td><td style="color:#fff;">${new Date().toUTCString()}</td></tr>
+      </table>
+    </div>
+    <p style="color:#ccc;line-height:1.6;font-size:14px;">Downloads have been automatically suspended for this account. You can lift the suspension from the Admin → Users panel.</p>
+    <p style="color:#555;font-size:12px;text-align:center;margin-bottom:0;">© ${new Date().getFullYear()} TodoDJs</p>
+  </div>
+</div>`;
+  return sendAdminNotification({ subject, html });
+}
+
 export {
   getDeviceBlockedEmailTemplate,
   getNewDeviceEmailTemplate,

@@ -165,6 +165,14 @@ const userSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
+  downloadSuspended: {
+    type: Boolean,
+    default: false
+  },
+  downloadSuspendedAt: {
+    type: Date,
+    default: null
+  },
   preferredLanguage: {
     type: String,
     enum: ['en', 'es'],

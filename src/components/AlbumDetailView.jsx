@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { usePlayer } from '../context/PlayerContext';
-import { Play, Download, Heart, Music, Archive, Share2, Pause, Check, ArrowLeft } from 'lucide-react';
+import { Play, Download, Heart, Music, Archive, Share2, Pause, Check, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import PremiumPrompt from './PremiumPrompt';
 import API_URL from '../config/api';
+import { apiFetch } from '../services/apiFetch';
 
 const getTonalityColor = (tonality) => {
   const colors = {
@@ -44,6 +45,8 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
   const [shareToast, setShareToast] = useState(false);
   const [downloadingTrackId, setDownloadingTrackId] = useState(null);
   const [downloadingZip, setDownloadingZip] = useState(false);
+  const [downloadJustSuspended, setDownloadJustSuspended] = useState(false);
+  const downloadSuspended = !!(user?.downloadSuspended) || downloadJustSuspended;
 
   const isAdmin = user?.role === 'admin';
   const isWithinPeriod = !!(user?.subscription?.endDate) && new Date(user.subscription.endDate) > new Date();
@@ -85,20 +88,59 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
     return true;
   }, [user, isPremium]);
 
-  const handleDownloadTrack = useCallback((track, e) => {
+  const handleDownloadTrack = useCallback(async (track, e) => {
     e?.stopPropagation();
     if (!requireAuth('download')) return;
     const trackId = track.id || track._id;
-    const token = localStorage.getItem('token');
-    window.location.href = `${API_URL}/downloads/track/${trackId}/file?token=${encodeURIComponent(token)}`;
+    setDownloadingTrackId(trackId);
+    try {
+      const res = await apiFetch(`${API_URL}/downloads/track/${trackId}/file`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.downloadSuspended) setDownloadJustSuspended(true);
+        return;
+      }
+      const data = await res.json();
+      if (data.downloadUrl) window.open(data.downloadUrl, '_blank');
+    } catch (err) {
+      console.error('Download error:', err);
+    } finally {
+      setDownloadingTrackId(null);
+    }
   }, [requireAuth]);
 
-  const handleDownloadZip = useCallback(() => {
+  const handleDownloadZip = useCallback(async () => {
     if (!album || !requireAuth('downloadZip')) return;
     const albumId = album.id || album._id;
     if (!albumId) return;
-    const token = localStorage.getItem('token');
-    window.location.href = `${API_URL}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`;
+    setDownloadingZip(true);
+    try {
+      const res = await apiFetch(`${API_URL}/downloads/album/${albumId}/file`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.downloadSuspended) setDownloadJustSuspended(true);
+        return;
+      }
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/zip')) {
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `${album.name || album.title || 'Album'}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      } else {
+        const data = await res.json();
+        if (data.downloadUrl) window.open(data.downloadUrl, '_blank');
+      }
+    } catch (err) {
+      console.error('Download error:', err);
+    } finally {
+      setDownloadingZip(false);
+    }
   }, [album, requireAuth]);
 
   const toggleLike = useCallback((track, e) => {
@@ -159,6 +201,16 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
             <ArrowLeft className="w-4 h-4" strokeWidth={2} />
             <span className="text-sm font-medium">{t('album.back', 'Back')}</span>
           </button>
+          {/* Download Suspended Banner */}
+          {downloadSuspended && (
+            <div className="mb-4 flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
+              <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-sm">{t('downloads.suspended', 'Downloads temporarily suspended')}</p>
+                <p className="text-xs text-amber-300/70 mt-0.5">{t('downloads.suspendedDesc', 'Unusual activity was detected on your account. Please contact support to restore access.')}</p>
+              </div>
+            </div>
+          )}
           {/* Split Layout Container */}
           <div className="grid grid-cols-1 lg:grid-cols-[340px_1fr] xl:grid-cols-[380px_1fr] gap-4 lg:gap-8 animate-in slide-in-from-bottom duration-500">
             

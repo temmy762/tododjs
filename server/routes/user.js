@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getAllUsers, updateUser, deleteUser, uploadAvatar, getDeviceOverview, revokeDevice, getSharingSuspects, syncUserStripeSubscription, bulkSyncStripeSubscriptions, blockUser, unblockUser } from '../controllers/userController.js';
+import { getAllUsers, updateUser, deleteUser, uploadAvatar, getDeviceOverview, revokeDevice, getSharingSuspects, syncUserStripeSubscription, bulkSyncStripeSubscriptions, blockUser, unblockUser, liftDownloadSuspension } from '../controllers/userController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -29,5 +29,6 @@ router.delete('/:id/devices/:deviceId', protect, authorize('admin'), revokeDevic
 router.post('/:id/sync-stripe', protect, authorize('admin'), syncUserStripeSubscription);
 router.put('/:id/block', protect, authorize('admin'), blockUser);
 router.put('/:id/unblock', protect, authorize('admin'), unblockUser);
+router.put('/:id/lift-download-suspension', protect, authorize('admin'), liftDownloadSuspension);
 
 export default router;

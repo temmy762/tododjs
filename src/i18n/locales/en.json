@@ -684,7 +684,8 @@
     "like": "Like",
     "unlike": "Unlike",
     "downloadTrack": "Download track",
-    "downloadFailed": "Download failed"
+    "downloadFailed": "Download failed",
+    "back": "Back"
   },
   "player": {
     "subscribe": "Subscribe",
@@ -754,6 +755,10 @@
   "downloadModal": {
     "licenseAgreement": "I agree to the license terms and will use this track according to the permitted usage rights. This download is for personal/commercial use as per my subscription plan.",
     "downloadsRemaining": "Downloads remaining this month:"
+  },
+  "downloads": {
+    "suspended": "Downloads temporarily suspended",
+    "suspendedDesc": "Unusual activity was detected on your account. Please contact support to restore access."
   },
   "playlist": {
     "createPlaylist": "Create Playlist",
