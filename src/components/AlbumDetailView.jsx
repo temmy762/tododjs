@@ -210,7 +210,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
             <span className="text-sm font-medium">{t('album.back', 'Back')}</span>
           </button>
           {/* Download Suspended Banner */}
-          {downloadSuspended && (
+          {(user?.downloadSuspended || user?.downloadFlaggedForReview) && (
             <div className="mb-4 flex items-start gap-3 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300">
               <AlertTriangle className="w-5 h-5 mt-0.5 flex-shrink-0" />
               <div>
