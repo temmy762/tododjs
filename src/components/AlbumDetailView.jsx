@@ -36,7 +36,7 @@ const getTonalityColor = (tonality) => {
   return colors[tonality] || '#FFFFFF';
 };
 
-export default function AlbumDetailView({ album, tracks = [], isLoading = false, autoPlay = false, onClose, onTrackInteraction, userFavorites = new Set(), user, onAuthRequired, onSubscribe }) {
+export default function AlbumDetailView({ album, tracks = [], isLoading = false, autoPlay = false, onClose, onTrackInteraction, userFavorites = new Set(), user, onAuthRequired, onDownloadAlert, onSubscribe }) {
   const { t, i18n } = useTranslation();
   const dateLocale = i18n.language === 'es' ? 'es-ES' : 'en-US';
   const { currentTrackId, isPanelPlaying } = usePlayer();
@@ -45,8 +45,6 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
   const [shareToast, setShareToast] = useState(false);
   const [downloadingTrackId, setDownloadingTrackId] = useState(null);
   const [downloadingZip, setDownloadingZip] = useState(false);
-  const [downloadJustSuspended, setDownloadJustSuspended] = useState(false);
-  const downloadSuspended = !!(user?.downloadSuspended) || downloadJustSuspended;
 
   const isAdmin = user?.role === 'admin';
   const isWithinPeriod = !!(user?.subscription?.endDate) && new Date(user.subscription.endDate) > new Date();
@@ -81,12 +79,25 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       setPromptType('signup');
       return false;
     }
+    if (user.role !== 'admin') {
+      if (user.downloadFlaggedForReview) {
+        onDownloadAlert?.({ level: 3 });
+        return false;
+      }
+      if (user.downloadSuspended) {
+        const pausedUntil = user.downloadPausedUntil;
+        if (!pausedUntil || new Date() <= new Date(pausedUntil)) {
+          onDownloadAlert?.({ level: 2, pausedUntil });
+          return false;
+        }
+      }
+    }
     if (!isPremium && (action === 'download' || action === 'downloadZip')) {
       setPromptType('subscribe');
       return false;
     }
     return true;
-  }, [user, isPremium]);
+  }, [user, isPremium, onDownloadAlert]);
 
   const handleDownloadTrack = useCallback(async (track, e) => {
     e?.stopPropagation();
@@ -97,11 +108,12 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       const res = await apiFetch(`${API_URL}/downloads/track/${trackId}/file`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (data.downloadSuspended) setDownloadJustSuspended(true);
+        if (data.downloadLevel) onDownloadAlert?.({ level: data.downloadLevel, pausedUntil: data.pausedUntil });
         return;
       }
       const data = await res.json();
       if (data.downloadUrl) window.open(data.downloadUrl, '_blank');
+      if (data.downloadWarning) onDownloadAlert?.(data.downloadWarning);
     } catch (err) {
       console.error('Download error:', err);
     } finally {
@@ -118,7 +130,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       const res = await apiFetch(`${API_URL}/downloads/album/${albumId}/file`);
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (data.downloadSuspended) setDownloadJustSuspended(true);
+        if (data.downloadLevel) onDownloadAlert?.({ level: data.downloadLevel, pausedUntil: data.pausedUntil });
         return;
       }
       const contentType = res.headers.get('content-type') || '';

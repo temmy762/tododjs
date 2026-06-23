@@ -363,9 +363,19 @@ export default function AdminUsers() {
                               {user.isActive !== false ? t('admin.activeStatus') : t('admin.inactiveStatus')}
                             </span>
                           )}
-                          {user.downloadSuspended && (
-                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-amber-500/20 text-amber-400 border border-amber-500/30 flex items-center gap-1 w-fit">
-                              <Download className="w-3 h-3" /> DL Suspended
+                          {user.downloadWarningLevel === 1 && !user.downloadSuspended && (
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30 flex items-center gap-1 w-fit">
+                              <Download className="w-3 h-3" /> DL Warning
+                            </span>
+                          )}
+                          {user.downloadSuspended && !user.downloadFlaggedForReview && (
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center gap-1 w-fit">
+                              <Download className="w-3 h-3" /> DL Paused {user.downloadPausedUntil ? `until ${new Date(user.downloadPausedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                            </span>
+                          )}
+                          {user.downloadFlaggedForReview && (
+                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1 w-fit">
+                              <Download className="w-3 h-3" /> DL Flagged
                             </span>
                           )}
                         </div>
@@ -386,8 +396,8 @@ export default function AdminUsers() {
                               </button>
                             )
                           )}
-                          {user.role !== 'admin' && user.downloadSuspended && (
-                            <button onClick={() => handleLiftSuspension(user._id)} className="p-2 hover:bg-dark-elevated rounded-lg transition-colors text-amber-400 hover:text-green-400" title="Lift download suspension">
+                          {user.role !== 'admin' && (user.downloadSuspended || user.downloadWarningLevel > 0) && (
+                            <button onClick={() => handleLiftSuspension(user._id)} className="p-2 hover:bg-dark-elevated rounded-lg transition-colors text-amber-400 hover:text-green-400" title="Clear download restrictions">
                               <CheckCircle className="w-4 h-4" />
                             </button>
                           )}

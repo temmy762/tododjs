@@ -19,6 +19,7 @@ import PlaylistsSection from './components/PlaylistsSection';
 import TrackListView from './components/TrackListView';
 import AlbumDetailView from './components/AlbumDetailView';
 import FloatingContact from './components/FloatingContact';
+import DownloadProtectionModal from './components/DownloadProtectionModal';
 import BlockedScreen from './components/BlockedScreen';
 
 // Lazy-loaded pages for code splitting
@@ -149,7 +150,7 @@ function App() {
   const [albumDetailTracks, setAlbumDetailTracks] = useState([]);
   const [albumDetailLoading, setAlbumDetailLoading] = useState(false);
   const [albumAutoPlay, setAlbumAutoPlay] = useState(false);
-  const [downloadSuspendedToast, setDownloadSuspendedToast] = useState(false);
+  const [downloadAlert, setDownloadAlert] = useState(null);
 
   // Clear album detail when navigating away from the record-pool page
   useEffect(() => {
@@ -467,10 +468,16 @@ function App() {
       }
       // Admin bypasses all subscription restrictions
       if (user.role !== 'admin') {
-        if (user.downloadSuspended) {
-          setDownloadSuspendedToast(true);
-          setTimeout(() => setDownloadSuspendedToast(false), 6000);
+        if (user.downloadFlaggedForReview) {
+          setDownloadAlert({ level: 3 });
           return;
+        }
+        if (user.downloadSuspended) {
+          const pausedUntil = user.downloadPausedUntil;
+          if (!pausedUntil || new Date() <= new Date(pausedUntil)) {
+            setDownloadAlert({ level: 2, pausedUntil });
+            return;
+          }
         }
         const sub = user.subscription;
         const isPaid = sub && (sub.planId || (sub.plan && sub.plan !== 'free'));
@@ -500,13 +507,11 @@ function App() {
         .then(async res => {
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
-            if (data.downloadSuspended) {
-              setDownloadSuspendedToast(true);
-              setTimeout(() => setDownloadSuspendedToast(false), 6000);
-            }
+            if (data.downloadLevel) setDownloadAlert({ level: data.downloadLevel, pausedUntil: data.pausedUntil });
             return;
           }
           if (data.downloadUrl) window.open(data.downloadUrl, '_blank');
+          if (data.downloadWarning) setDownloadAlert(data.downloadWarning);
         })
         .catch(() => {});
       return;
@@ -702,14 +707,38 @@ function App() {
       }
     }
 
+    if (user.role !== 'admin') {
+      if (user.downloadFlaggedForReview) {
+        setDownloadAlert({ level: 3 });
+        return;
+      }
+      if (user.downloadSuspended) {
+        const pausedUntil = user.downloadPausedUntil;
+        if (!pausedUntil || new Date() <= new Date(pausedUntil)) {
+          setDownloadAlert({ level: 2, pausedUntil });
+          return;
+        }
+      }
+    }
+
     const albumId = album?._id || album?.id;
     if (!albumId) {
       alert('Album id is missing');
       return;
     }
 
-    const token = localStorage.getItem('token');
-    window.location.href = `${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}`;
+    apiFetch(`${API}/downloads/album/${albumId}/file`)
+      .then(async res => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          if (data.downloadLevel) setDownloadAlert({ level: data.downloadLevel, pausedUntil: data.pausedUntil });
+          return;
+        }
+        const url = data.downloadUrl || data.data?.downloadUrl;
+        if (url) window.open(url, '_blank');
+        if (data.downloadWarning) setDownloadAlert(data.downloadWarning);
+      })
+      .catch(() => {});
   };
 
   const allTracks = useMemo(() => {
@@ -800,6 +829,7 @@ function App() {
             userFavorites={userFavorites}
             user={user}
             onAuthRequired={handleOpenAuth}
+            onDownloadAlert={setDownloadAlert}
             onSubscribe={() => {
               navigate('/pricing');
             }}
@@ -1046,18 +1076,7 @@ function App() {
       )}
       {upload && <ResumedUploadWidget upload={upload} />}
 
-      {downloadSuspendedToast && (
-        <div className="fixed bottom-4 right-4 z-50 w-80 bg-amber-500/10 border border-amber-500/40 rounded-xl shadow-2xl shadow-black/50 p-4">
-          <div className="flex items-start gap-3">
-            <span className="text-amber-400 text-lg mt-0.5">⚠️</span>
-            <div>
-              <p className="text-sm font-semibold text-amber-300">{t('downloads.suspended', 'Downloads temporarily suspended')}</p>
-              <p className="text-xs text-amber-300/70 mt-0.5">{t('downloads.suspendedDesc', 'Unusual activity was detected on your account. Please contact support to restore access.')}</p>
-            </div>
-            <button onClick={() => setDownloadSuspendedToast(false)} className="ml-auto text-amber-400/60 hover:text-amber-300 transition-colors text-sm">✕</button>
-          </div>
-        </div>
-      )}
+      <DownloadProtectionModal alert={downloadAlert} onDismiss={() => setDownloadAlert(null)} />
 
       <FloatingContact />
     </div>

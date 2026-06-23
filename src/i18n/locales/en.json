@@ -760,6 +760,21 @@
     "suspended": "Downloads temporarily suspended",
     "suspendedDesc": "Unusual activity was detected on your account. Please contact support to restore access."
   },
+  "downloadProtection": {
+    "level1Title": "Very fast downloads detected",
+    "level1Message": "We have detected a download speed higher than usual. You can continue downloading content normally, but avoid making consecutive large downloads to avoid triggering a temporary security pause. This measure helps protect TODODJS against mass downloads.",
+    "level1Button": "Understood",
+    "level2Title": "Downloads temporarily paused",
+    "level2Subtitle": "Unusual download activity detected",
+    "level2Message": "Our system has detected a download pattern incompatible with normal use of the platform. For security reasons, downloads have been suspended for 12 hours. Repeating this behavior may result in the permanent suspension of the account and the definitive loss of access to TODODJS.",
+    "level2CanBrowse": "You can still browse and listen to content normally.",
+    "level2Button": "Accept",
+    "resumesAt": "Access restores on:",
+    "level3Title": "Account blocked for security reasons",
+    "level3Message": "Our system has detected an activity pattern incompatible with normal use of the platform. As a protective measure, this account has been blocked and marked for manual review. Our team will review the account's activity history, downloads, and usage to verify compliance with TODODJS's terms of use.",
+    "level3Contact": "Until the review is completed, access to downloads will remain blocked. If you believe this is an error, you can contact support to request a review of your case.",
+    "level3Footer": "Access blocked pending review"
+  },
   "playlist": {
     "createPlaylist": "Create Playlist",
     "organizeYourTracks": "Organize your favorite tracks",

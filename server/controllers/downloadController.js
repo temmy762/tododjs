@@ -11,18 +11,84 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import archiver from 'archiver';
 import { notifyAdminSuspiciousDownloads } from '../services/emailService.js';
 
-const SUSPICIOUS_THRESHOLD = 30;
-const SUSPICIOUS_WINDOW_MS = 60 * 60 * 1000;
+// ── Download behaviour detection thresholds ──────────────────────────────
+const ZIP_RAPID_GAP_MS    = 60 * 1000;  // < 60s between ZIPs = rapid
+const MP3_RAPID_GAP_MS    = 3  * 1000;  // < 3s  between MP3s = rapid (bot-like)
+const ZIP_L1_THRESHOLD    = 10;          // 10 rapid ZIPs  → Level 1 warning
+const ZIP_L2_THRESHOLD    = 15;          // 15 rapid ZIPs  → Level 2 pause
+const ZIP_L3_THRESHOLD    = 30;          // 30 rapid ZIPs  → Level 3 review
+const MP3_L1_THRESHOLD    = 20;          // 20 rapid MP3s  → Level 1 warning
+const MP3_L2_THRESHOLD    = 50;          // 50 rapid MP3s  → Level 2 pause
+const LEVEL2_PAUSE_MS     = 12 * 60 * 60 * 1000; // 12 h
 
-async function checkAndSuspendIfSuspicious(user) {
-  if (user.downloadSuspended) return;
-  const since = new Date(Date.now() - SUSPICIOUS_WINDOW_MS);
-  const recentCount = await Download.countDocuments({ userId: user._id, createdAt: { $gte: since } });
-  if (recentCount >= SUSPICIOUS_THRESHOLD) {
-    user.downloadSuspended = true;
-    user.downloadSuspendedAt = new Date();
+function countMaxConsecutiveRapid(docs, maxGapMs) {
+  if (docs.length < 2) return docs.length;
+  let maxRun = 1, run = 1;
+  for (let i = 1; i < docs.length; i++) {
+    const gap = new Date(docs[i].createdAt) - new Date(docs[i - 1].createdAt);
+    if (gap < maxGapMs) { run++; if (run > maxRun) maxRun = run; }
+    else run = 1;
+  }
+  return maxRun;
+}
+
+async function checkDownloadBehaviour(user) {
+  if (user.downloadFlaggedForReview) return null;
+  const now = new Date();
+  const [recentZips, recentMp3s] = await Promise.all([
+    Download.find({ userId: user._id, fileType: 'ZIP', createdAt: { $gte: new Date(now - 10 * 60 * 1000) } }).sort({ createdAt: 1 }),
+    Download.find({ userId: user._id, fileType: 'MP3', createdAt: { $gte: new Date(now -  5 * 60 * 1000) } }).sort({ createdAt: 1 })
+  ]);
+
+  const rapidZips = countMaxConsecutiveRapid(recentZips, ZIP_RAPID_GAP_MS);
+  const rapidMp3s = countMaxConsecutiveRapid(recentMp3s, MP3_RAPID_GAP_MS);
+
+  let newLevel = 0;
+  if      (rapidZips >= ZIP_L3_THRESHOLD) newLevel = 3;
+  else if (rapidZips >= ZIP_L2_THRESHOLD) newLevel = Math.max(newLevel, 2);
+  else if (rapidZips >= ZIP_L1_THRESHOLD) newLevel = Math.max(newLevel, 1);
+  if      (rapidMp3s >= MP3_L2_THRESHOLD) newLevel = Math.max(newLevel, 2);
+  else if (rapidMp3s >= MP3_L1_THRESHOLD) newLevel = Math.max(newLevel, 1);
+
+  // Repeated Level-2 offence → escalate to Level 3
+  if (newLevel === 2 && (user.downloadWarningLevel || 0) >= 2) newLevel = 3;
+
+  const currentLevel = user.downloadWarningLevel || 0;
+  if (newLevel <= currentLevel) return null;
+
+  user.downloadWarningLevel = newLevel;
+  if (newLevel === 1) {
     await user.save();
-    try { await notifyAdminSuspiciousDownloads(user, recentCount, 60); } catch (e) { console.warn('Suspicious download alert failed:', e.message); }
+    return { level: 1 };
+  } else if (newLevel === 2) {
+    user.downloadSuspended    = true;
+    user.downloadSuspendedAt  = now;
+    user.downloadPausedUntil  = new Date(now.getTime() + LEVEL2_PAUSE_MS);
+    await user.save();
+    return { level: 2, pausedUntil: user.downloadPausedUntil };
+  } else {
+    user.downloadSuspended         = true;
+    user.downloadSuspendedAt       = now;
+    user.downloadFlaggedForReview  = true;
+    await user.save();
+    notifyAdminSuspiciousDownloads(user, recentZips.length + recentMp3s.length, 10).catch(() => {});
+    return { level: 3 };
+  }
+}
+
+function buildSuspensionResponse(user) {
+  if (user.downloadFlaggedForReview) {
+    return { success: false, downloadLevel: 3, flaggedForReview: true, message: 'Your account has been blocked and flagged for manual review. Contact support to request a review.' };
+  }
+  return { success: false, downloadLevel: 2, pausedUntil: user.downloadPausedUntil, message: 'Downloads temporarily paused due to unusual activity. Try again after the pause expires.' };
+}
+
+async function applyAutoLift(user) {
+  if (user.downloadSuspended && user.downloadPausedUntil && !user.downloadFlaggedForReview && new Date() > new Date(user.downloadPausedUntil)) {
+    user.downloadSuspended   = false;
+    user.downloadPausedUntil = null;
+    user.downloadWarningLevel = 0;
+    await user.save();
   }
 }
 
@@ -71,13 +137,8 @@ export const downloadTrack = async (req, res) => {
 
     // Admin bypasses all download restrictions
     if (user.role !== 'admin') {
-      if (user.downloadSuspended) {
-        return res.status(403).json({
-          success: false,
-          downloadSuspended: true,
-          message: 'Your download access has been temporarily suspended due to unusual activity. Please contact support.'
-        });
-      }
+      await applyAutoLift(user);
+      if (user.downloadSuspended) return res.status(403).json(buildSuspensionResponse(user));
       // Check if user can download
       if (!user.canDownload()) {
         return res.status(403).json({
@@ -138,43 +199,20 @@ export const downloadTrack = async (req, res) => {
 
     if (track.albumId) {
       const album = await Album.findById(track.albumId);
-      if (album) {
-        album.totalDownloads += 1;
-        await album.save();
-      }
+      if (album) { album.totalDownloads += 1; await album.save(); }
     }
 
     if (track.sourceId) {
       const source = await Source.findById(track.sourceId);
-      if (source) {
-        source.totalDownloads += 1;
-        await source.save();
-      }
+      if (source) { source.totalDownloads += 1; await source.save(); }
     }
 
-    if (user.role !== 'admin') {
-      checkAndSuspendIfSuspicious(user).catch(() => {});
-    }
-
-    res.status(200).json({
-      success: true,
-      data: {
-        downloadUrl,
-        track: {
-          id: track._id,
-          title: track.title,
-          artist: track.artist,
-          format: track.audioFile.format,
-          size: track.audioFile.size
-        },
-        expiresIn: 3600
-      }
-    });
+    const behaviourResult = user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(() => null) : null;
+    const response = { success: true, data: { downloadUrl, track: { id: track._id, title: track.title, artist: track.artist, format: track.audioFile.format, size: track.audioFile.size }, expiresIn: 3600 } };
+    if (behaviourResult) response.downloadWarning = behaviourResult;
+    return res.status(200).json(response);
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -186,23 +224,15 @@ export const downloadTrackFile = async (req, res) => {
     const track = await Track.findById(req.params.id) || await Mashup.findById(req.params.id);
 
     if (!track) {
-      return res.status(404).json({
-        success: false,
-        message: 'Track not found'
-      });
+      return res.status(404).json({ success: false, message: 'Track not found' });
     }
 
     const user = await User.findById(req.user.id);
 
     // Admin bypasses all download restrictions
     if (user.role !== 'admin') {
-      if (user.downloadSuspended) {
-        return res.status(403).json({
-          success: false,
-          downloadSuspended: true,
-          message: 'Your download access has been temporarily suspended due to unusual activity. Please contact support.'
-        });
-      }
+      await applyAutoLift(user);
+      if (user.downloadSuspended) return res.status(403).json(buildSuspensionResponse(user));
       if (!user.canDownload()) {
         const isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
         const hasSubscription = (user.subscription.status === 'active' || (user.subscription.status === 'cancelled' && isWithinPeriod)) && user.subscription.planId;
@@ -267,9 +297,7 @@ export const downloadTrackFile = async (req, res) => {
       }
     }
 
-    if (user.role !== 'admin') {
-      checkAndSuspendIfSuspicious(user).catch(() => {});
-    }
+    const behaviourResult2 = user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(() => null) : null;
 
     const filename = buildSafeFilename(`${track.artist || 'Unknown Artist'} - ${track.title || 'Unknown Title'}.mp3`);
     const command = new GetObjectCommand({
@@ -279,21 +307,13 @@ export const downloadTrackFile = async (req, res) => {
     });
     const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
 
-    // If opened directly in browser (token via query param), redirect for native download
-    if (req.query.token) {
-      return res.redirect(signedUrl);
-    }
+    if (req.query.token) return res.redirect(signedUrl);
 
-    return res.status(200).json({
-      success: true,
-      downloadUrl: signedUrl,
-      filename
-    });
+    const resp2 = { success: true, downloadUrl: signedUrl, filename };
+    if (behaviourResult2) resp2.downloadWarning = behaviourResult2;
+    return res.status(200).json(resp2);
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -315,13 +335,8 @@ export const downloadAlbum = async (req, res) => {
 
     // Admin bypasses all subscription checks
     if (user.role !== 'admin') {
-      if (user.downloadSuspended) {
-        return res.status(403).json({
-          success: false,
-          downloadSuspended: true,
-          message: 'Your download access has been temporarily suspended due to unusual activity. Please contact support.'
-        });
-      }
+      await applyAutoLift(user);
+      if (user.downloadSuspended) return res.status(403).json(buildSuspensionResponse(user));
       const hasPlan = user.subscription?.planId || (user.subscription?.plan && user.subscription.plan !== 'free');
       const isWithinPeriod = !!user.subscription?.endDate && new Date() <= new Date(user.subscription.endDate);
       const hasAccess = user.subscription?.status === 'active' || (user.subscription?.status === 'cancelled' && isWithinPeriod);
@@ -367,28 +382,12 @@ export const downloadAlbum = async (req, res) => {
       await source.save();
     }
 
-    if (user.role !== 'admin') {
-      checkAndSuspendIfSuspicious(user).catch(() => {});
-    }
-
-    res.status(200).json({
-      success: true,
-      data: {
-        downloadUrl,
-        album: {
-          id: album._id,
-          name: album.name,
-          trackCount: album.trackCount,
-          size: album.totalSize
-        },
-        expiresIn: 3600
-      }
-    });
+    const behaviourResult3 = user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(() => null) : null;
+    const resp3 = { success: true, data: { downloadUrl, album: { id: album._id, name: album.name, trackCount: album.trackCount, size: album.totalSize }, expiresIn: 3600 } };
+    if (behaviourResult3) resp3.downloadWarning = behaviourResult3;
+    return res.status(200).json(resp3);
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -407,12 +406,9 @@ export const downloadAlbumFile = async (req, res) => {
     }
     const user = await User.findById(req.user.id);
 
-    if (user.role !== 'admin' && user.downloadSuspended) {
-      return res.status(403).json({
-        success: false,
-        downloadSuspended: true,
-        message: 'Your download access has been temporarily suspended due to unusual activity. Please contact support.'
-      });
+    if (user.role !== 'admin') {
+      await applyAutoLift(user);
+      if (user.downloadSuspended) return res.status(403).json(buildSuspensionResponse(user));
     }
 
     const { browser: b4, os: o4, device: d4 } = parseUA(req.get('user-agent'));
@@ -445,9 +441,7 @@ export const downloadAlbumFile = async (req, res) => {
       }
     }
 
-    if (user.role !== 'admin') {
-      checkAndSuspendIfSuspicious(user).catch(() => {});
-    }
+    const behaviourResult4 = user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(() => null) : null;
 
     // If a pre-built ZIP exists on Wasabi, redirect to a signed URL for fast direct download
     if (album.zipKey) {
@@ -462,11 +456,9 @@ export const downloadAlbumFile = async (req, res) => {
       if (req.query.token) {
         return res.redirect(signedUrl);
       }
-      return res.status(200).json({
-        success: true,
-        downloadUrl: signedUrl,
-        filename: zipFilename
-      });
+      const resp4 = { success: true, downloadUrl: signedUrl, filename: zipFilename };
+      if (behaviourResult4) resp4.downloadWarning = behaviourResult4;
+      return res.status(200).json(resp4);
     }
 
     // No pre-built ZIP — build one on-the-fly from the album's tracks
