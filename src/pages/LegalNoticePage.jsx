@@ -19,7 +19,7 @@ export default function LegalNoticePage() {
         </button>
 
         <h1 className="text-3xl font-bold text-white mb-2">{isEs ? 'Aviso Legal' : 'Legal Notice'}</h1>
-        <p className="text-sm text-brand-text-tertiary mb-10">{isEs ? 'Última actualización: enero de 2026' : 'Last updated: January 2026'}</p>
+        <p className="text-sm text-brand-text-tertiary mb-10">{isEs ? 'Última actualización: junio de 2026' : 'Last updated: June 2026'}</p>
 
         <div className="prose prose-invert max-w-none space-y-8 text-sm text-brand-text-secondary leading-relaxed">
 
@@ -86,6 +86,11 @@ export default function LegalNoticePage() {
               {isEs
                 ? 'TodoDJS podrá suspender o cancelar cuentas en las que se detecte actividad abusiva, uso indebido del servicio o incumplimiento de estos términos. Los usuarios son responsables del uso que hagan de los contenidos y recursos accesibles a través de la plataforma.'
                 : 'TodoDJS may suspend or cancel accounts that detect abusive activity, misuse of the service, or non-compliance with these terms. Users are responsible for the use they make of the content and resources accessible through the platform.'}
+            </p>
+            <p className="mt-3">
+              {isEs
+                ? 'La plataforma emplea un sistema automático de monitorización de patrones de descarga para proteger el contenido frente a extracciones masivas. Este sistema detecta comportamientos incompatibles con el uso legítimo y puede aplicar pausas temporales o, en caso de reincidencia, la suspensión permanente de la cuenta. Véase la Sección 14 de los Términos y Condiciones para más información.'
+                : 'The platform employs an automated download pattern monitoring system to protect content against mass extraction. This system detects behaviour incompatible with legitimate use and may apply temporary pauses or, in case of repeated violations, permanent account suspension. See Section 14 of the Terms and Conditions for full details.'}
             </p>
           </section>
 

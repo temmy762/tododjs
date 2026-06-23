@@ -19,7 +19,7 @@ export default function PrivacyPolicyPage() {
         </button>
 
         <h1 className="text-3xl font-bold text-white mb-2">{isEs ? 'Política de Privacidad' : 'Privacy Policy'}</h1>
-        <p className="text-sm text-brand-text-tertiary mb-10">{isEs ? 'Última actualización: enero de 2026' : 'Last updated: January 2026'}</p>
+        <p className="text-sm text-brand-text-tertiary mb-10">{isEs ? 'Última actualización: junio de 2026' : 'Last updated: June 2026'}</p>
 
         <div className="space-y-8 text-sm text-brand-text-secondary leading-relaxed">
 
@@ -44,6 +44,7 @@ export default function PrivacyPolicyPage() {
                   <li><strong className="text-white">Datos de suscripción:</strong> plan contratado, estado de la suscripción, renovaciones y pagos asociados.</li>
                   <li><strong className="text-white">Datos de uso:</strong> actividad en la plataforma, descargas realizadas, direcciones IP, dispositivos y accesos.</li>
                   <li><strong className="text-white">Datos técnicos:</strong> navegador, sistema operativo y registros básicos de seguridad y acceso.</li>
+                  <li><strong className="text-white">Datos de comportamiento de descarga:</strong> marcas de tiempo, tipo de archivo (MP3/ZIP), intervalos entre descargas y patrones consecutivos, utilizados exclusivamente para la protección anti-piratería y la integridad de la plataforma.</li>
                 </>
               ) : (
                 <>
@@ -52,6 +53,7 @@ export default function PrivacyPolicyPage() {
                   <li><strong className="text-white">Subscription data:</strong> plan contracted, subscription status, renewals, and associated payments.</li>
                   <li><strong className="text-white">Usage data:</strong> activity within the platform, downloads made, IP addresses, devices, and accesses.</li>
                   <li><strong className="text-white">Technical data:</strong> browser, operating system, and basic security and access logs.</li>
+                  <li><strong className="text-white">Download behaviour data:</strong> timestamps, file type (MP3/ZIP), intervals between downloads, and consecutive download patterns, used exclusively for anti-piracy protection and platform integrity.</li>
                 </>
               )}
             </ul>

@@ -19,7 +19,7 @@ export default function CookiePolicyPage() {
         </button>
 
         <h1 className="text-3xl font-bold text-white mb-2">{isEs ? 'Política de Cookies' : 'Cookie Policy'}</h1>
-        <p className="text-sm text-brand-text-tertiary mb-10">{isEs ? 'Última actualización: enero de 2026' : 'Last updated: January 2026'}</p>
+        <p className="text-sm text-brand-text-tertiary mb-10">{isEs ? 'Última actualización: junio de 2026' : 'Last updated: June 2026'}</p>
 
         <div className="space-y-8 text-sm text-brand-text-secondary leading-relaxed">
 
@@ -181,7 +181,21 @@ export default function CookiePolicyPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '6. Contacto' : '6. Contact'}</h2>
+            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '6. Monitorización de Seguridad del Lado del Servidor' : '6. Server-Side Security Monitoring'}</h2>
+            <p>
+              {isEs
+                ? 'Con el objetivo de proteger la plataforma frente a descargas masivas y usos abusivos, TodoDJS realiza un seguimiento de la actividad de descarga del usuario directamente en el servidor. Esto incluye el registro de marcas de tiempo, tipo de archivo e intervalos entre descargas consecutivas.'
+                : 'In order to protect the platform against mass downloads and abusive use, TodoDJS tracks user download activity directly on the server. This includes recording timestamps, file types, and intervals between consecutive downloads.'}
+            </p>
+            <p className="mt-2">
+              {isEs
+                ? 'Este seguimiento se realiza del lado del servidor y no depende de cookies del navegador. Su única finalidad es la protección de la integridad de la plataforma y el cumplimiento de los Términos y Condiciones (sección 14). Los datos registrados no se comparten con terceros ni se utilizan con fines publicitarios.'
+                : 'This tracking is server-side and does not rely on browser cookies. Its sole purpose is the protection of platform integrity and compliance with the Terms and Conditions (Section 14). The recorded data is not shared with third parties or used for advertising purposes.'}
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '7. Contacto' : '7. Contact'}</h2>
             <p>
               {isEs ? 'Para cualquier consulta sobre esta política, puedes contactarnos en' : 'For any queries about this policy, you can contact us at'}{' '}
               <a href="mailto:contacto.tododjs@gmail.com" className="text-accent hover:underline">

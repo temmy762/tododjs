@@ -368,14 +368,9 @@ export default function AdminUsers() {
                               <Download className="w-3 h-3" /> DL Warning
                             </span>
                           )}
-                          {user.downloadSuspended && !user.downloadFlaggedForReview && (
+                          {user.downloadSuspended && (
                             <span className="px-2 py-1 rounded-full text-xs font-semibold bg-orange-500/20 text-orange-400 border border-orange-500/30 flex items-center gap-1 w-fit">
                               <Download className="w-3 h-3" /> DL Paused {user.downloadPausedUntil ? `until ${new Date(user.downloadPausedUntil).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
-                            </span>
-                          )}
-                          {user.downloadFlaggedForReview && (
-                            <span className="px-2 py-1 rounded-full text-xs font-semibold bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1 w-fit">
-                              <Download className="w-3 h-3" /> DL Flagged
                             </span>
                           )}
                         </div>

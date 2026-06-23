@@ -19,7 +19,7 @@ export default function TermsPage() {
         </button>
 
         <h1 className="text-3xl font-bold text-white mb-2">{isEs ? 'Términos y Condiciones' : 'Terms and Conditions'}</h1>
-        <p className="text-sm text-brand-text-tertiary mb-10">{isEs ? 'Última actualización: enero de 2026' : 'Last updated: January 2026'}</p>
+        <p className="text-sm text-brand-text-tertiary mb-10">{isEs ? 'Última actualización: junio de 2026' : 'Last updated: June 2026'}</p>
 
         <div className="space-y-8 text-sm text-brand-text-secondary leading-relaxed">
 
@@ -309,7 +309,45 @@ export default function TermsPage() {
           </section>
 
           <section>
-            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '14. Contacto' : '14. Contact'}</h2>
+            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '14. Límites de Descarga y Protección Anti-Piratería' : '14. Download Limits and Anti-Piracy Protection'}</h2>
+            <p>
+              {isEs
+                ? 'Las descargas disponibles en TodoDJS están destinadas exclusivamente al uso personal y profesional relacionado con actuaciones de DJ. El sistema de la plataforma monitoriza los patrones de velocidad y frecuencia de descarga para detectar actividades incompatibles con un uso legítimo.'
+                : 'Downloads available on TodoDJS are intended exclusively for personal and professional use related to DJ performances. The platform system monitors download speed and frequency patterns to detect activities incompatible with legitimate use.'}
+            </p>
+            <p className="mt-3">{isEs ? 'El sistema de protección opera en dos niveles:' : 'The protection system operates at two levels:'}</p>
+            <div className="mt-3 space-y-3">
+              <div className="p-4 rounded-xl bg-yellow-500/5 border border-yellow-500/20">
+                <p className="font-semibold text-yellow-300 mb-1">{isEs ? 'Nivel 1 — Aviso' : 'Level 1 — Warning'}</p>
+                <p className="text-xs text-brand-text-tertiary">
+                  {isEs
+                    ? 'Se activa al detectar 10 descargas consecutivas rápidas de álbumes (ZIP) o 100 pistas individuales (MP3) en un corto período. El usuario recibe un aviso informativo y puede continuar descargando con normalidad.'
+                    : 'Triggered upon detecting 10 rapid consecutive album (ZIP) downloads or 100 individual track (MP3) downloads in a short period. The user receives an informational notice and may continue downloading normally.'}
+                </p>
+              </div>
+              <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/20">
+                <p className="font-semibold text-orange-300 mb-1">{isEs ? 'Nivel 2 — Pausa Temporal (24 horas)' : 'Level 2 — Temporary Pause (24 hours)'}</p>
+                <p className="text-xs text-brand-text-tertiary">
+                  {isEs
+                    ? 'Se activa al alcanzar 15 descargas rápidas de álbumes ZIP o 150 pistas MP3. Las descargas quedan suspendidas automáticamente durante 24 horas. La navegación y la escucha de contenido no se ven afectadas. Repetir este comportamiento puede resultar en la suspensión permanente de la cuenta sin derecho a reembolso.'
+                    : 'Triggered upon reaching 15 rapid ZIP album downloads or 150 MP3 tracks. Downloads are automatically suspended for 24 hours. Browsing and listening to content are not affected. Repeating this behavior may result in permanent account suspension without the right to a refund.'}
+                </p>
+              </div>
+            </div>
+            <p className="mt-3">
+              {isEs
+                ? 'A efectos de esta política, se considera descarga rápida aquella en la que el intervalo entre descargas consecutivas de álbumes (ZIP) es inferior a 60 segundos, o el intervalo entre pistas individuales (MP3) es inferior a 3 segundos.'
+                : 'For the purposes of this policy, a rapid download is one where the interval between consecutive album (ZIP) downloads is less than 60 seconds, or the interval between individual tracks (MP3) is less than 3 seconds.'}
+            </p>
+            <p className="mt-2">
+              {isEs
+                ? 'Las cuentas con reincidencia o actividad incompatible con el uso legítimo de la plataforma podrán ser suspendidas o canceladas de forma permanente por TodoDJS, sin derecho a reembolso.'
+                : 'Accounts with repeated violations or activity incompatible with legitimate platform use may be permanently suspended or cancelled by TodoDJS, without the right to a refund.'}
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-lg font-semibold text-white mb-3">{isEs ? '15. Contacto' : '15. Contact'}</h2>
             <p>
               {isEs ? 'Para cualquier consulta sobre estos Términos:' : 'For any inquiries about these Terms:'}{' '}
               <a href="mailto:contacto.tododjs@gmail.com" className="text-accent hover:underline">

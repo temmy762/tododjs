@@ -9,17 +9,15 @@ import s3Client from '../config/wasabi.js';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import archiver from 'archiver';
-import { notifyAdminSuspiciousDownloads } from '../services/emailService.js';
 
 // ── Download behaviour detection thresholds ──────────────────────────────
 const ZIP_RAPID_GAP_MS    = 60 * 1000;  // < 60s between ZIPs = rapid
 const MP3_RAPID_GAP_MS    = 3  * 1000;  // < 3s  between MP3s = rapid (bot-like)
 const ZIP_L1_THRESHOLD    = 10;          // 10 rapid ZIPs  → Level 1 warning
 const ZIP_L2_THRESHOLD    = 15;          // 15 rapid ZIPs  → Level 2 pause
-const ZIP_L3_THRESHOLD    = 30;          // 30 rapid ZIPs  → Level 3 review
-const MP3_L1_THRESHOLD    = 20;          // 20 rapid MP3s  → Level 1 warning
-const MP3_L2_THRESHOLD    = 50;          // 50 rapid MP3s  → Level 2 pause
-const LEVEL2_PAUSE_MS     = 12 * 60 * 60 * 1000; // 12 h
+const MP3_L1_THRESHOLD    = 100;         // 100 rapid MP3s → Level 1 warning
+const MP3_L2_THRESHOLD    = 150;         // 150 rapid MP3s → Level 2 pause
+const LEVEL2_PAUSE_MS     = 24 * 60 * 60 * 1000; // 24 h
 
 function countMaxConsecutiveRapid(docs, maxGapMs) {
   if (docs.length < 2) return docs.length;
@@ -33,7 +31,6 @@ function countMaxConsecutiveRapid(docs, maxGapMs) {
 }
 
 async function checkDownloadBehaviour(user) {
-  if (user.downloadFlaggedForReview) return null;
   const now = new Date();
   const [recentZips, recentMp3s] = await Promise.all([
     Download.find({ userId: user._id, fileType: 'ZIP', createdAt: { $gte: new Date(now - 10 * 60 * 1000) } }).sort({ createdAt: 1 }),
@@ -44,14 +41,10 @@ async function checkDownloadBehaviour(user) {
   const rapidMp3s = countMaxConsecutiveRapid(recentMp3s, MP3_RAPID_GAP_MS);
 
   let newLevel = 0;
-  if      (rapidZips >= ZIP_L3_THRESHOLD) newLevel = 3;
-  else if (rapidZips >= ZIP_L2_THRESHOLD) newLevel = Math.max(newLevel, 2);
+  if      (rapidZips >= ZIP_L2_THRESHOLD) newLevel = Math.max(newLevel, 2);
   else if (rapidZips >= ZIP_L1_THRESHOLD) newLevel = Math.max(newLevel, 1);
   if      (rapidMp3s >= MP3_L2_THRESHOLD) newLevel = Math.max(newLevel, 2);
   else if (rapidMp3s >= MP3_L1_THRESHOLD) newLevel = Math.max(newLevel, 1);
-
-  // Repeated Level-2 offence → escalate to Level 3
-  if (newLevel === 2 && (user.downloadWarningLevel || 0) >= 2) newLevel = 3;
 
   const currentLevel = user.downloadWarningLevel || 0;
   if (newLevel <= currentLevel) return null;
@@ -60,31 +53,21 @@ async function checkDownloadBehaviour(user) {
   if (newLevel === 1) {
     await user.save();
     return { level: 1 };
-  } else if (newLevel === 2) {
+  } else {
     user.downloadSuspended    = true;
     user.downloadSuspendedAt  = now;
     user.downloadPausedUntil  = new Date(now.getTime() + LEVEL2_PAUSE_MS);
     await user.save();
     return { level: 2, pausedUntil: user.downloadPausedUntil };
-  } else {
-    user.downloadSuspended         = true;
-    user.downloadSuspendedAt       = now;
-    user.downloadFlaggedForReview  = true;
-    await user.save();
-    notifyAdminSuspiciousDownloads(user, recentZips.length + recentMp3s.length, 10).catch(() => {});
-    return { level: 3 };
   }
 }
 
 function buildSuspensionResponse(user) {
-  if (user.downloadFlaggedForReview) {
-    return { success: false, downloadLevel: 3, flaggedForReview: true, message: 'Your account has been blocked and flagged for manual review. Contact support to request a review.' };
-  }
   return { success: false, downloadLevel: 2, pausedUntil: user.downloadPausedUntil, message: 'Downloads temporarily paused due to unusual activity. Try again after the pause expires.' };
 }
 
 async function applyAutoLift(user) {
-  if (user.downloadSuspended && user.downloadPausedUntil && !user.downloadFlaggedForReview && new Date() > new Date(user.downloadPausedUntil)) {
+  if (user.downloadSuspended && user.downloadPausedUntil && new Date() > new Date(user.downloadPausedUntil)) {
     user.downloadSuspended   = false;
     user.downloadPausedUntil = null;
     user.downloadWarningLevel = 0;

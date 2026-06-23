@@ -782,14 +782,11 @@
     "level1Button": "Entendido",
     "level2Title": "Descargas temporalmente pausadas",
     "level2Subtitle": "Actividad de descarga inusual detectada",
-    "level2Message": "Nuestro sistema ha detectado un patrón de descarga incompatible con el uso normal de la plataforma. Por razones de seguridad, las descargas han sido suspendidas durante 12 horas. Repetir este comportamiento puede resultar en la suspensión permanente de la cuenta y la pérdida definitiva de acceso a TODODJS.",
+    "level2Message": "Nuestro sistema ha detectado un patrón de descarga incompatible con el uso normal de la plataforma. Por razones de seguridad, las descargas han sido suspendidas durante 24 horas. Repetir este comportamiento puede resultar en la suspensión permanente de la cuenta y la pérdida definitiva de acceso a TODODJS.",
     "level2CanBrowse": "Aún puedes navegar y escuchar contenido con normalidad.",
     "level2Button": "Aceptar",
     "resumesAt": "El acceso se restaura el:",
-    "level3Title": "Cuenta bloqueada por razones de seguridad",
-    "level3Message": "Nuestro sistema ha detectado un patrón de actividad incompatible con el uso normal de la plataforma. Como medida de protección, esta cuenta ha sido bloqueada y marcada para revisión manual. Nuestro equipo revisará el historial de actividad, descargas y uso de la cuenta para verificar el cumplimiento de los términos de uso de TODODJS.",
-    "level3Contact": "Hasta que se complete la revisión, el acceso a las descargas permanecerá bloqueado. Si crees que es un error, puedes contactar con soporte para solicitar una revisión de tu caso.",
-    "level3Footer": "Acceso bloqueado pendiente de revisión"
+    "viewTerms": "Consultar nuestros Términos de Servicio"
   },
   "playlist": {
     "createPlaylist": "Crear Lista de Reproducción",
