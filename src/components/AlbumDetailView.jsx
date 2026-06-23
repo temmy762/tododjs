@@ -80,11 +80,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       return false;
     }
     if (user.role !== 'admin') {
-      if (user.downloadFlaggedForReview) {
-        onDownloadAlert?.({ level: 3 });
-        return false;
-      }
-      if (user.downloadSuspended) {
+      if (user.downloadSuspended || user.downloadFlaggedForReview) {
         const pausedUntil = user.downloadPausedUntil;
         if (!pausedUntil || new Date() <= new Date(pausedUntil)) {
           onDownloadAlert?.({ level: 2, pausedUntil });

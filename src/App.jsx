@@ -468,11 +468,7 @@ function App() {
       }
       // Admin bypasses all subscription restrictions
       if (user.role !== 'admin') {
-        if (user.downloadFlaggedForReview) {
-          setDownloadAlert({ level: 3 });
-          return;
-        }
-        if (user.downloadSuspended) {
+        if (user.downloadSuspended || user.downloadFlaggedForReview) {
           const pausedUntil = user.downloadPausedUntil;
           if (!pausedUntil || new Date() <= new Date(pausedUntil)) {
             setDownloadAlert({ level: 2, pausedUntil });
@@ -708,11 +704,7 @@ function App() {
     }
 
     if (user.role !== 'admin') {
-      if (user.downloadFlaggedForReview) {
-        setDownloadAlert({ level: 3 });
-        return;
-      }
-      if (user.downloadSuspended) {
+      if (user.downloadSuspended || user.downloadFlaggedForReview) {
         const pausedUntil = user.downloadPausedUntil;
         if (!pausedUntil || new Date() <= new Date(pausedUntil)) {
           setDownloadAlert({ level: 2, pausedUntil });
