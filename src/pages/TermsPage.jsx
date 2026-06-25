@@ -321,24 +321,19 @@ export default function TermsPage() {
                 <p className="font-semibold text-yellow-300 mb-1">{isEs ? 'Nivel 1 — Aviso' : 'Level 1 — Warning'}</p>
                 <p className="text-xs text-brand-text-tertiary">
                   {isEs
-                    ? 'Se activa al detectar 10 descargas consecutivas rápidas de álbumes (ZIP) o 100 pistas individuales (MP3) en un corto período. El usuario recibe un aviso informativo y puede continuar descargando con normalidad.'
-                    : 'Triggered upon detecting 10 rapid consecutive album (ZIP) downloads or 100 individual track (MP3) downloads in a short period. The user receives an informational notice and may continue downloading normally.'}
+                    ? 'Se activa al superar 10 descargas de álbumes (ZIP) en 30 minutos, o 100 pistas individuales (MP3) en 60 minutos. El usuario recibe un aviso informativo y puede continuar descargando con normalidad.'
+                    : 'Triggered upon exceeding 10 album (ZIP) downloads within 30 minutes, or 100 individual track (MP3) downloads within 60 minutes. The user receives an informational notice and may continue downloading normally.'}
                 </p>
               </div>
               <div className="p-4 rounded-xl bg-orange-500/5 border border-orange-500/20">
                 <p className="font-semibold text-orange-300 mb-1">{isEs ? 'Nivel 2 — Pausa Temporal (24 horas)' : 'Level 2 — Temporary Pause (24 hours)'}</p>
                 <p className="text-xs text-brand-text-tertiary">
                   {isEs
-                    ? 'Se activa al alcanzar 15 descargas rápidas de álbumes ZIP o 150 pistas MP3. Las descargas quedan suspendidas automáticamente durante 24 horas. La navegación y la escucha de contenido no se ven afectadas. Repetir este comportamiento puede resultar en la suspensión permanente de la cuenta sin derecho a reembolso.'
-                    : 'Triggered upon reaching 15 rapid ZIP album downloads or 150 MP3 tracks. Downloads are automatically suspended for 24 hours. Browsing and listening to content are not affected. Repeating this behavior may result in permanent account suspension without the right to a refund.'}
+                    ? 'Se activa al superar 15 descargas de álbumes ZIP en 30 minutos, o 150 pistas MP3 en 60 minutos. Las descargas quedan suspendidas automáticamente durante 24 horas. La navegación y la escucha de contenido no se ven afectadas. Repetir este comportamiento puede resultar en la suspensión permanente de la cuenta sin derecho a reembolso.'
+                    : 'Triggered upon exceeding 15 ZIP album downloads within 30 minutes, or 150 MP3 tracks within 60 minutes. Downloads are automatically suspended for 24 hours. Browsing and listening to content are not affected. Repeating this behavior may result in permanent account suspension without the right to a refund.'}
                 </p>
               </div>
             </div>
-            <p className="mt-3">
-              {isEs
-                ? 'A efectos de esta política, se considera descarga rápida aquella en la que el intervalo entre descargas consecutivas de álbumes (ZIP) es inferior a 60 segundos, o el intervalo entre pistas individuales (MP3) es inferior a 3 segundos.'
-                : 'For the purposes of this policy, a rapid download is one where the interval between consecutive album (ZIP) downloads is less than 60 seconds, or the interval between individual tracks (MP3) is less than 3 seconds.'}
-            </p>
             <p className="mt-2">
               {isEs
                 ? 'Las cuentas con reincidencia o actividad incompatible con el uso legítimo de la plataforma podrán ser suspendidas o canceladas de forma permanente por TodoDJS, sin derecho a reembolso.'

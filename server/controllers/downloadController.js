@@ -11,40 +11,26 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import archiver from 'archiver';
 
 // ── Download behaviour detection thresholds ──────────────────────────────
-const ZIP_RAPID_GAP_MS    = 60 * 1000;  // < 60s between ZIPs = rapid
-const MP3_RAPID_GAP_MS    = 3  * 1000;  // < 3s  between MP3s = rapid (bot-like)
-const ZIP_L1_THRESHOLD    = 10;          // 10 rapid ZIPs  → Level 1 warning
-const ZIP_L2_THRESHOLD    = 15;          // 15 rapid ZIPs  → Level 2 pause
-const MP3_L1_THRESHOLD    = 100;         // 100 rapid MP3s → Level 1 warning
-const MP3_L2_THRESHOLD    = 150;         // 150 rapid MP3s → Level 2 pause
+const ZIP_WINDOW_MS       = 30 * 60 * 1000; // 30-min rolling window for ZIPs
+const MP3_WINDOW_MS       = 60 * 60 * 1000; // 60-min rolling window for MP3s
+const ZIP_L1_THRESHOLD    = 10;              // 10 ZIPs in 30 min  → Level 1 warning
+const ZIP_L2_THRESHOLD    = 15;              // 15 ZIPs in 30 min  → Level 2 pause
+const MP3_L1_THRESHOLD    = 100;             // 100 MP3s in 60 min → Level 1 warning
+const MP3_L2_THRESHOLD    = 150;             // 150 MP3s in 60 min → Level 2 pause
 const LEVEL2_PAUSE_MS     = 24 * 60 * 60 * 1000; // 24 h
-
-function countMaxConsecutiveRapid(docs, maxGapMs) {
-  if (docs.length < 2) return docs.length;
-  let maxRun = 1, run = 1;
-  for (let i = 1; i < docs.length; i++) {
-    const gap = new Date(docs[i].createdAt) - new Date(docs[i - 1].createdAt);
-    if (gap < maxGapMs) { run++; if (run > maxRun) maxRun = run; }
-    else run = 1;
-  }
-  return maxRun;
-}
 
 async function checkDownloadBehaviour(user) {
   const now = new Date();
-  const [recentZips, recentMp3s] = await Promise.all([
-    Download.find({ userId: user._id, fileType: 'ZIP', createdAt: { $gte: new Date(now - 10 * 60 * 1000) } }).sort({ createdAt: 1 }),
-    Download.find({ userId: user._id, fileType: 'MP3', createdAt: { $gte: new Date(now -  5 * 60 * 1000) } }).sort({ createdAt: 1 })
+  const [totalZips, totalMp3s] = await Promise.all([
+    Download.countDocuments({ userId: user._id, fileType: 'ZIP', createdAt: { $gte: new Date(now - ZIP_WINDOW_MS) } }),
+    Download.countDocuments({ userId: user._id, fileType: 'MP3', createdAt: { $gte: new Date(now - MP3_WINDOW_MS) } })
   ]);
 
-  const rapidZips = countMaxConsecutiveRapid(recentZips, ZIP_RAPID_GAP_MS);
-  const rapidMp3s = countMaxConsecutiveRapid(recentMp3s, MP3_RAPID_GAP_MS);
-
   let newLevel = 0;
-  if      (rapidZips >= ZIP_L2_THRESHOLD) newLevel = Math.max(newLevel, 2);
-  else if (rapidZips >= ZIP_L1_THRESHOLD) newLevel = Math.max(newLevel, 1);
-  if      (rapidMp3s >= MP3_L2_THRESHOLD) newLevel = Math.max(newLevel, 2);
-  else if (rapidMp3s >= MP3_L1_THRESHOLD) newLevel = Math.max(newLevel, 1);
+  if      (totalZips >= ZIP_L2_THRESHOLD) newLevel = Math.max(newLevel, 2);
+  else if (totalZips >= ZIP_L1_THRESHOLD) newLevel = Math.max(newLevel, 1);
+  if      (totalMp3s >= MP3_L2_THRESHOLD) newLevel = Math.max(newLevel, 2);
+  else if (totalMp3s >= MP3_L1_THRESHOLD) newLevel = Math.max(newLevel, 1);
 
   const currentLevel = user.downloadWarningLevel || 0;
   if (newLevel <= currentLevel) return null;
