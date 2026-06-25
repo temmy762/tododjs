@@ -34,7 +34,12 @@ async function checkDownloadBehaviour(user) {
   else if (totalMp3s >= MP3_L1_THRESHOLD) newLevel = Math.max(newLevel, 1);
 
   const currentLevel = user.downloadWarningLevel || 0;
-  if (newLevel <= currentLevel) return null;
+  if (newLevel < currentLevel) {
+    user.downloadWarningLevel = newLevel;
+    await user.save();
+    return null;
+  }
+  if (newLevel === currentLevel) return null;
 
   user.downloadWarningLevel = newLevel;
   if (newLevel === 1) {

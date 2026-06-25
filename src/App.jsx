@@ -1068,7 +1068,10 @@ function App() {
       )}
       {upload && <ResumedUploadWidget upload={upload} />}
 
-      <DownloadProtectionModal alert={downloadAlert} onDismiss={() => setDownloadAlert(null)} />
+      <DownloadProtectionModal alert={downloadAlert} onDismiss={() => {
+        setDownloadAlert(null);
+        authService.getCurrentUser().then(fresh => { if (fresh) setUser(fresh); }).catch(() => {});
+      }} />
 
       <FloatingContact />
     </div>

@@ -627,7 +627,7 @@ export const liftDownloadSuspension = async (req, res) => {
 
     user.downloadSuspended        = false;
     user.downloadSuspendedAt      = null;
-    user.downloadWarningLevel     = 0;
+    user.downloadWarningLevel     = 2; // Keep at 2 — prevents immediate re-trigger while 24h window still has 150+ downloads
     user.downloadPausedUntil      = null;
     user.downloadFlaggedForReview = false;
     await user.save();
