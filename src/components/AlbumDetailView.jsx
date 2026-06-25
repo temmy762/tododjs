@@ -143,6 +143,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       } else {
         const data = await res.json();
         if (data.downloadUrl) window.open(data.downloadUrl, '_blank');
+        if (data.downloadWarning) onDownloadAlert?.(data.downloadWarning);
       }
     } catch (err) {
       console.error('Download error:', err);
