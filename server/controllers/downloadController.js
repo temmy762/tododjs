@@ -9,14 +9,15 @@ import s3Client from '../config/wasabi.js';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import archiver from 'archiver';
+import { notifyAdminSuspiciousDownloads } from '../services/emailService.js';
 
 // ── Download behaviour detection thresholds ──────────────────────────────
-const ZIP_WINDOW_MS       = 30 * 60 * 1000; // 30-min rolling window for ZIPs
-const MP3_WINDOW_MS       = 60 * 60 * 1000; // 60-min rolling window for MP3s
+const ZIP_WINDOW_MS       = 30 * 60 * 1000;         // 30-min rolling window for ZIPs
+const MP3_WINDOW_MS       = 24 * 60 * 60 * 1000;    // 24-h  rolling window for MP3s
 const ZIP_L1_THRESHOLD    = 10;              // 10 ZIPs in 30 min  → Level 1 warning
 const ZIP_L2_THRESHOLD    = 15;              // 15 ZIPs in 30 min  → Level 2 pause
-const MP3_L1_THRESHOLD    = 100;             // 100 MP3s in 60 min → Level 1 warning
-const MP3_L2_THRESHOLD    = 150;             // 150 MP3s in 60 min → Level 2 pause
+const MP3_L1_THRESHOLD    = 100;             // 100 MP3s in 24 h  → Level 1 warning
+const MP3_L2_THRESHOLD    = 150;             // 150 MP3s in 24 h  → Level 2 pause
 const LEVEL2_PAUSE_MS     = 24 * 60 * 60 * 1000; // 24 h
 
 async function checkDownloadBehaviour(user) {
@@ -44,6 +45,9 @@ async function checkDownloadBehaviour(user) {
     user.downloadSuspendedAt  = now;
     user.downloadPausedUntil  = new Date(now.getTime() + LEVEL2_PAUSE_MS);
     await user.save();
+    const dlCount = totalMp3s >= MP3_L2_THRESHOLD ? totalMp3s : totalZips;
+    const windowLabel = totalMp3s >= MP3_L2_THRESHOLD ? 1440 : 30;
+    notifyAdminSuspiciousDownloads(user, dlCount, windowLabel).catch(() => {});
     return { level: 2, pausedUntil: user.downloadPausedUntil };
   }
 }
