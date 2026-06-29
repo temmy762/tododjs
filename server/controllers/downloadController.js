@@ -22,9 +22,19 @@ const LEVEL2_PAUSE_MS     = 24 * 60 * 60 * 1000; // 24 h
 
 async function checkDownloadBehaviour(user) {
   const now = new Date();
+  const liftedAt = user.downloadLiftedAt;
+
+  // If an admin (or auto) lift happened, only count downloads that occurred
+  // after the lift — old downloads won't re-trigger the protection, but any
+  // new abuse after the lift is still enforced normally.
+  const mp3Cutoff = new Date(now - MP3_WINDOW_MS);
+  const zipCutoff = new Date(now - ZIP_WINDOW_MS);
+  const effectiveMp3Cutoff = liftedAt && liftedAt > mp3Cutoff ? liftedAt : mp3Cutoff;
+  const effectiveZipCutoff = liftedAt && liftedAt > zipCutoff ? liftedAt : zipCutoff;
+
   const [totalZips, totalMp3s] = await Promise.all([
-    Download.countDocuments({ userId: user._id, fileType: 'ZIP', createdAt: { $gte: new Date(now - ZIP_WINDOW_MS) } }),
-    Download.countDocuments({ userId: user._id, fileType: 'MP3', createdAt: { $gte: new Date(now - MP3_WINDOW_MS) } })
+    Download.countDocuments({ userId: user._id, fileType: 'ZIP', createdAt: { $gte: effectiveZipCutoff } }),
+    Download.countDocuments({ userId: user._id, fileType: 'MP3', createdAt: { $gte: effectiveMp3Cutoff } })
   ]);
 
   let newLevel = 0;
@@ -63,9 +73,10 @@ function buildSuspensionResponse(user) {
 
 async function applyAutoLift(user) {
   if (user.downloadSuspended && user.downloadPausedUntil && new Date() > new Date(user.downloadPausedUntil)) {
-    user.downloadSuspended   = false;
-    user.downloadPausedUntil = null;
+    user.downloadSuspended    = false;
+    user.downloadPausedUntil  = null;
     user.downloadWarningLevel = 0;
+    user.downloadLiftedAt     = new Date(); // Fresh window from this point
     await user.save();
   }
 }

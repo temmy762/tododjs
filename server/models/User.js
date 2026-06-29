@@ -186,6 +186,10 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  downloadLiftedAt: {
+    type: Date,
+    default: null
+  },
   preferredLanguage: {
     type: String,
     enum: ['en', 'es'],

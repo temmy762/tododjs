@@ -627,9 +627,10 @@ export const liftDownloadSuspension = async (req, res) => {
 
     user.downloadSuspended        = false;
     user.downloadSuspendedAt      = null;
-    user.downloadWarningLevel     = 2; // Keep at 2 — prevents immediate re-trigger while 24h window still has 150+ downloads
+    user.downloadWarningLevel     = 0;
     user.downloadPausedUntil      = null;
     user.downloadFlaggedForReview = false;
+    user.downloadLiftedAt         = new Date(); // Start counting fresh from this moment
     await user.save();
 
     res.status(200).json({ success: true, message: 'Download suspension lifted' });
