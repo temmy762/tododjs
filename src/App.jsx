@@ -721,14 +721,28 @@ function App() {
 
     apiFetch(`${API}/downloads/album/${albumId}/file`)
       .then(async res => {
-        const data = await res.json().catch(() => ({}));
         if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
           if (data.downloadLevel) setDownloadAlert({ level: data.downloadLevel, pausedUntil: data.pausedUntil });
           return;
         }
-        const url = data.downloadUrl || data.data?.downloadUrl;
-        if (url) window.open(url, '_blank');
-        if (data.downloadWarning) setDownloadAlert(data.downloadWarning);
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/zip')) {
+          const blob = await res.blob();
+          const blobUrl = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = blobUrl;
+          a.download = `${album.name || album.title || 'Album'}.zip`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+        } else {
+          const data = await res.json().catch(() => ({}));
+          const url = data.downloadUrl || data.data?.downloadUrl;
+          if (url) window.open(url, '_blank');
+          if (data.downloadWarning) setDownloadAlert(data.downloadWarning);
+        }
       })
       .catch(() => {});
   };
