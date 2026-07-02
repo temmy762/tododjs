@@ -11,7 +11,7 @@ import { useUpload } from './context/UploadContext';
 import BulkUploadModal from './components/admin/BulkUploadModal';
 import { AlbumUploadModal } from './components/admin/AdminRecordPool';
 import { startTokenRefreshScheduler, stopTokenRefreshScheduler, apiFetch } from './services/apiFetch';
-import { triggerBrowserDownload } from './services/downloadService';
+import { triggerBrowserDownload, triggerNativeDownload } from './services/downloadService';
 import ArtistAlbumView from './components/ArtistAlbumView';
 import TonalityFilter from './components/TonalityFilter';
 import GenreFilterHorizontal from './components/GenreFilterHorizontal';
@@ -729,49 +729,32 @@ function App() {
       showDownloadError();
       return;
     }
-    // Ignore repeat clicks while this album's download is already in flight
+    // Ignore repeat clicks while this album's download is being handed off
     if (downloadingAlbumIds.has(albumId)) return;
 
+    const token = authService.getToken();
+    if (!token) {
+      setAuthModalOpen(true);
+      return;
+    }
+
+    // Hand the ZIP to the browser's own download manager (?token= auth).
+    // Fetching it into a JS blob (the old approach) buffered the whole file
+    // behind a progress-less spinner and needed a timeout that aborted large
+    // albums mid-transfer — natively the browser shows real progress and has
+    // no deadline.
     setDownloadingAlbumIds(prev => new Set(prev).add(albumId));
+    triggerNativeDownload(`${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&section=record-pool`);
 
-    // On-the-fly ZIP builds can stall; without a deadline the card spinner
-    // (and the download) would hang forever with no way to retry.
-    const ZIP_TIMEOUT_MS = 5 * 60 * 1000;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), ZIP_TIMEOUT_MS);
-
-    try {
-      const res = await apiFetch(`${API}/downloads/album/${albumId}/file`, { signal: controller.signal });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (data.downloadLevel) setDownloadAlert({ level: data.downloadLevel, pausedUntil: data.pausedUntil });
-        else showDownloadError();
-        return;
-      }
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/zip')) {
-        const blob = await res.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        triggerBrowserDownload(blobUrl, `${album.name || album.title || 'Album'}.zip`);
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-      } else {
-        const data = await res.json().catch(() => ({}));
-        const url = data.downloadUrl || data.data?.downloadUrl;
-        if (url) triggerBrowserDownload(url, data.filename);
-        else showDownloadError();
-        if (data.downloadWarning) setDownloadAlert(data.downloadWarning);
-      }
-    } catch (err) {
-      console.error('Album download error:', err);
-      showDownloadError();
-    } finally {
-      clearTimeout(timeoutId);
+    // The browser takes over from here; keep the spinner just long enough to
+    // acknowledge the click and absorb accidental double-clicks.
+    setTimeout(() => {
       setDownloadingAlbumIds(prev => {
         const next = new Set(prev);
         next.delete(albumId);
         return next;
       });
-    }
+    }, 4000);
   };
 
   const allTracks = useMemo(() => {

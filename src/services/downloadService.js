@@ -19,3 +19,22 @@ export function triggerBrowserDownload(url, filename) {
   a.click();
   document.body.removeChild(a);
 }
+
+/**
+ * Hand a download entirely to the browser via a hidden iframe pointed at an
+ * authenticated API URL (?token=). The server streams the file (or redirects
+ * to a signed URL) with Content-Disposition: attachment, so the browser's own
+ * download manager takes over — real progress in the downloads shelf, no
+ * fetch timeout, and no buffering hundreds of MB into a JS blob. If the
+ * server responds with a JSON error instead, it renders invisibly in the
+ * iframe rather than corrupting the page or saving a junk file.
+ */
+export function triggerNativeDownload(url) {
+  const iframe = document.createElement('iframe');
+  iframe.style.display = 'none';
+  iframe.src = url;
+  document.body.appendChild(iframe);
+  // Keep it attached long enough for slow on-the-fly ZIP builds to hand off
+  // to the download manager; removing it has no effect on completed handoffs.
+  setTimeout(() => iframe.remove(), 10 * 60 * 1000);
+}

@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import PremiumPrompt from './PremiumPrompt';
 import API_URL from '../config/api';
 import { apiFetch } from '../services/apiFetch';
-import { triggerBrowserDownload } from '../services/downloadService';
+import { triggerBrowserDownload, triggerNativeDownload } from '../services/downloadService';
 
 const getTonalityColor = (tonality) => {
   const colors = {
@@ -119,48 +119,28 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
     }
   }, [requireAuth]);
 
-  const handleDownloadZip = useCallback(async () => {
+  const handleDownloadZip = useCallback(() => {
     if (!album || !requireAuth('downloadZip')) return;
     const albumId = album.id || album._id;
     if (!albumId) return;
-    setDownloadingZip(true);
-    setDownloadZipError(false);
 
-    // Large on-the-fly ZIPs can stall indefinitely if the connection hangs
-    // (e.g. a dropped Wasabi fetch mid-archive) — without this the button
-    // gets stuck on "Downloading..." forever. Abort and let the user retry.
-    const ZIP_TIMEOUT_MS = 5 * 60 * 1000;
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), ZIP_TIMEOUT_MS);
-
-    try {
-      const res = await apiFetch(`${API_URL}/downloads/album/${albumId}/file`, { signal: controller.signal });
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        if (data.downloadLevel) onDownloadAlert?.({ level: data.downloadLevel, pausedUntil: data.pausedUntil });
-        else setDownloadZipError(true);
-        return;
-      }
-      const contentType = res.headers.get('content-type') || '';
-      if (contentType.includes('application/zip')) {
-        const blob = await res.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        triggerBrowserDownload(blobUrl, `${album.name || album.title || 'Album'}.zip`);
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-      } else {
-        const data = await res.json();
-        if (data.downloadUrl) triggerBrowserDownload(data.downloadUrl, data.filename);
-        else setDownloadZipError(true);
-        if (data.downloadWarning) onDownloadAlert?.(data.downloadWarning);
-      }
-    } catch (err) {
-      console.error('Download error:', err);
-      setDownloadZipError(true);
-    } finally {
-      clearTimeout(timeoutId);
-      setDownloadingZip(false);
-      setTimeout(() => setDownloadZipError(false), 4000);
+    const token = localStorage.getItem('token');
+    if (!token) {
+      setPromptType('signup');
+      return;
     }
+
+    // Hand the ZIP to the browser's own download manager (?token= auth).
+    // Fetching it into a JS blob (the old approach) buffered the whole file
+    // behind a progress-less spinner and needed a timeout that aborted large
+    // albums mid-transfer — natively the browser shows real progress and has
+    // no deadline.
+    setDownloadingZip(true);
+    triggerNativeDownload(`${API_URL}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&section=record-pool`);
+
+    // The browser takes over from here; keep the spinner just long enough to
+    // acknowledge the click and absorb accidental double-clicks.
+    setTimeout(() => setDownloadingZip(false), 4000);
   }, [album, requireAuth]);
 
   const toggleLike = useCallback((track, e) => {
