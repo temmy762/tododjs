@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import PremiumPrompt from './PremiumPrompt';
 import API_URL from '../config/api';
 import { apiFetch } from '../services/apiFetch';
+import { triggerBrowserDownload } from '../services/downloadService';
 
 const getTonalityColor = (tonality) => {
   const colors = {
@@ -109,7 +110,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
         return;
       }
       const data = await res.json();
-      if (data.downloadUrl) window.open(data.downloadUrl, '_blank');
+      if (data.downloadUrl) triggerBrowserDownload(data.downloadUrl, data.filename);
       if (data.downloadWarning) onDownloadAlert?.(data.downloadWarning);
     } catch (err) {
       console.error('Download error:', err);
@@ -144,16 +145,12 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       if (contentType.includes('application/zip')) {
         const blob = await res.blob();
         const blobUrl = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = blobUrl;
-        a.download = `${album.name || album.title || 'Album'}.zip`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        triggerBrowserDownload(blobUrl, `${album.name || album.title || 'Album'}.zip`);
         setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
       } else {
         const data = await res.json();
-        if (data.downloadUrl) window.open(data.downloadUrl, '_blank');
+        if (data.downloadUrl) triggerBrowserDownload(data.downloadUrl, data.filename);
+        else setDownloadZipError(true);
         if (data.downloadWarning) onDownloadAlert?.(data.downloadWarning);
       }
     } catch (err) {

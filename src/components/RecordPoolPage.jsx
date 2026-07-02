@@ -26,7 +26,7 @@ const SORT_API_MAP = {
   tracks:  '-trackCount',
 };
 
-export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
+export default function RecordPoolPage({ onAlbumClick, onAlbumDownload, downloadingAlbumIds }) {
   const { t } = useTranslation();
 
   // ── category filter bar ──────────────────────────────────────────────────────
@@ -268,6 +268,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
                 onClick={() => onAlbumClick?.(album)}
                 onPlay={() => onAlbumClick?.(album, { autoPlay: true })}
                 onDownload={() => onAlbumDownload?.(album)}
+                downloading={downloadingAlbumIds?.has(album._id)}
               />
             ))}
           </div>
@@ -277,6 +278,7 @@ export default function RecordPoolPage({ onAlbumClick, onAlbumDownload }) {
               <AlbumRow key={album._id} album={album} index={i}
                 onClick={() => onAlbumClick?.(album)}
                 onDownload={() => onAlbumDownload?.(album)}
+                downloading={downloadingAlbumIds?.has(album._id)}
               />
             ))}
           </div>
@@ -444,7 +446,7 @@ function albumCover(album) {
 }
 
 // Album Card with hover animation
-function AlbumCard({ album, index, onClick, onPlay, onDownload }) {
+function AlbumCard({ album, index, onClick, onPlay, onDownload, downloading = false }) {
   const { t } = useTranslation();
   const [imgError, setImgError] = useState(false);
   const cover = albumCover(album);
@@ -469,15 +471,18 @@ function AlbumCard({ album, index, onClick, onPlay, onDownload }) {
           </div>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-        {/* Hover actions */}
-        <div className="absolute inset-0 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300">
+        {/* Hover actions — stay visible while a download is in flight */}
+        <div className={`absolute inset-0 flex items-center justify-center gap-2 transition-all duration-300 ${downloading ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
           <button type="button" onClick={e => { e.stopPropagation(); onPlay?.(); }}
             className="w-11 h-11 rounded-full bg-accent shadow-lg shadow-accent/40 flex items-center justify-center scale-75 group-hover:scale-100 transition-transform duration-300">
             <Play size={18} className="text-white ml-0.5" fill="white" />
           </button>
-          <button type="button" onClick={e => { e.stopPropagation(); e.preventDefault(); onDownload?.(); }}
-            className="w-11 h-11 rounded-full bg-white/90 shadow-lg flex items-center justify-center scale-75 group-hover:scale-100 transition-transform duration-300">
-            <Download size={16} className="text-black" />
+          <button type="button" disabled={downloading}
+            onClick={e => { e.stopPropagation(); e.preventDefault(); onDownload?.(); }}
+            className={`w-11 h-11 rounded-full bg-white/90 shadow-lg flex items-center justify-center transition-transform duration-300 ${downloading ? 'scale-100 cursor-wait' : 'scale-75 group-hover:scale-100'}`}>
+            {downloading
+              ? <Loader size={16} className="text-black animate-spin" />
+              : <Download size={16} className="text-black" />}
           </button>
         </div>
         {/* New badge for recent uploads */}
@@ -499,7 +504,7 @@ function AlbumCard({ album, index, onClick, onPlay, onDownload }) {
 }
 
 // Album list-view row
-function AlbumRow({ album, index, onClick, onDownload }) {
+function AlbumRow({ album, index, onClick, onDownload, downloading = false }) {
   const { t } = useTranslation();
   const [imgError, setImgError] = useState(false);
   const cover = albumCover(album);
@@ -520,11 +525,12 @@ function AlbumRow({ album, index, onClick, onDownload }) {
       </div>
       <button
         type="button"
+        disabled={downloading}
         onClick={e => { e.stopPropagation(); onDownload?.(); }}
-        className="p-2 rounded-lg bg-white/5 hover:bg-accent/20 hover:text-accent text-brand-text-tertiary transition-all opacity-0 group-hover:opacity-100"
+        className={`p-2 rounded-lg bg-white/5 hover:bg-accent/20 hover:text-accent text-brand-text-tertiary transition-all ${downloading ? 'opacity-100 cursor-wait' : 'opacity-0 group-hover:opacity-100'}`}
         title={t('actions.download')}
       >
-        <Download size={15} />
+        {downloading ? <Loader size={15} className="animate-spin" /> : <Download size={15} />}
       </button>
       <ChevronRight size={16} className="text-white/20 group-hover:text-accent group-hover:translate-x-0.5 transition-all flex-shrink-0" />
     </div>

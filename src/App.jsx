@@ -11,6 +11,7 @@ import { useUpload } from './context/UploadContext';
 import BulkUploadModal from './components/admin/BulkUploadModal';
 import { AlbumUploadModal } from './components/admin/AdminRecordPool';
 import { startTokenRefreshScheduler, stopTokenRefreshScheduler, apiFetch } from './services/apiFetch';
+import { triggerBrowserDownload } from './services/downloadService';
 import ArtistAlbumView from './components/ArtistAlbumView';
 import TonalityFilter from './components/TonalityFilter';
 import GenreFilterHorizontal from './components/GenreFilterHorizontal';
@@ -151,6 +152,15 @@ function App() {
   const [albumDetailLoading, setAlbumDetailLoading] = useState(false);
   const [albumAutoPlay, setAlbumAutoPlay] = useState(false);
   const [downloadAlert, setDownloadAlert] = useState(null);
+  const [downloadingAlbumIds, setDownloadingAlbumIds] = useState(() => new Set());
+  const [downloadErrorToast, setDownloadErrorToast] = useState(false);
+  const downloadErrorTimerRef = useRef(null);
+
+  const showDownloadError = useCallback(() => {
+    setDownloadErrorToast(true);
+    clearTimeout(downloadErrorTimerRef.current);
+    downloadErrorTimerRef.current = setTimeout(() => setDownloadErrorToast(false), 4000);
+  }, []);
 
   // Clear album detail when navigating away from the record-pool page
   useEffect(() => {
@@ -504,12 +514,13 @@ function App() {
           const data = await res.json().catch(() => ({}));
           if (!res.ok) {
             if (data.downloadLevel) setDownloadAlert({ level: data.downloadLevel, pausedUntil: data.pausedUntil });
+            else showDownloadError();
             return;
           }
-          if (data.downloadUrl) window.open(data.downloadUrl, '_blank');
+          if (data.downloadUrl) triggerBrowserDownload(data.downloadUrl, data.filename);
           if (data.downloadWarning) setDownloadAlert(data.downloadWarning);
         })
-        .catch(() => {});
+        .catch(() => showDownloadError());
       return;
     }
   };
@@ -715,36 +726,52 @@ function App() {
 
     const albumId = album?._id || album?.id;
     if (!albumId) {
-      alert('Album id is missing');
+      showDownloadError();
       return;
     }
+    // Ignore repeat clicks while this album's download is already in flight
+    if (downloadingAlbumIds.has(albumId)) return;
 
-    apiFetch(`${API}/downloads/album/${albumId}/file`)
-      .then(async res => {
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          if (data.downloadLevel) setDownloadAlert({ level: data.downloadLevel, pausedUntil: data.pausedUntil });
-          return;
-        }
-        const contentType = res.headers.get('content-type') || '';
-        if (contentType.includes('application/zip')) {
-          const blob = await res.blob();
-          const blobUrl = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = blobUrl;
-          a.download = `${album.name || album.title || 'Album'}.zip`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-        } else {
-          const data = await res.json().catch(() => ({}));
-          const url = data.downloadUrl || data.data?.downloadUrl;
-          if (url) window.open(url, '_blank');
-          if (data.downloadWarning) setDownloadAlert(data.downloadWarning);
-        }
-      })
-      .catch(() => {});
+    setDownloadingAlbumIds(prev => new Set(prev).add(albumId));
+
+    // On-the-fly ZIP builds can stall; without a deadline the card spinner
+    // (and the download) would hang forever with no way to retry.
+    const ZIP_TIMEOUT_MS = 5 * 60 * 1000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), ZIP_TIMEOUT_MS);
+
+    try {
+      const res = await apiFetch(`${API}/downloads/album/${albumId}/file`, { signal: controller.signal });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data.downloadLevel) setDownloadAlert({ level: data.downloadLevel, pausedUntil: data.pausedUntil });
+        else showDownloadError();
+        return;
+      }
+      const contentType = res.headers.get('content-type') || '';
+      if (contentType.includes('application/zip')) {
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        triggerBrowserDownload(blobUrl, `${album.name || album.title || 'Album'}.zip`);
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        const url = data.downloadUrl || data.data?.downloadUrl;
+        if (url) triggerBrowserDownload(url, data.filename);
+        else showDownloadError();
+        if (data.downloadWarning) setDownloadAlert(data.downloadWarning);
+      }
+    } catch (err) {
+      console.error('Album download error:', err);
+      showDownloadError();
+    } finally {
+      clearTimeout(timeoutId);
+      setDownloadingAlbumIds(prev => {
+        const next = new Set(prev);
+        next.delete(albumId);
+        return next;
+      });
+    }
   };
 
   const allTracks = useMemo(() => {
@@ -850,6 +877,7 @@ function App() {
             onAlbumClick={handleAlbumPageClick}
             onAlbumDownload={handleAlbumDownload}
             onTrackInteraction={handleTrackInteraction}
+            downloadingAlbumIds={downloadingAlbumIds}
           />
         ) : activePage === 'mashup' ? (
           <LiveMashUpPage 
@@ -1086,6 +1114,12 @@ function App() {
         setDownloadAlert(null);
         authService.getCurrentUser().then(fresh => { if (fresh) setUser(fresh); }).catch(() => {});
       }} />
+
+      {downloadErrorToast && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-2.5 rounded-xl bg-red-500 text-white text-sm font-semibold shadow-lg shadow-red-500/30 animate-in fade-in slide-in-from-bottom-2 duration-200">
+          {t('album.downloadFailed')}
+        </div>
+      )}
 
       <FloatingContact />
     </div>
