@@ -60,6 +60,12 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
       const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
       if (plan) {
         maxDevices = plan.features.maxDevices;
+      } else {
+        // SubscriptionPlan doc missing/renamed for this planId — don't silently
+        // treat a paying user as free-tier and skip device registration.
+        // Mirrors the fallback in checkDeviceLimit (subscription.js).
+        console.warn(`⚠️  sendTokenResponse: no SubscriptionPlan doc for planId="${user.subscription.planId}" — falling back to user.maxDevices`);
+        maxDevices = user.maxDevices || 2;
       }
     }
     

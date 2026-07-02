@@ -45,6 +45,7 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
   const [shareToast, setShareToast] = useState(false);
   const [downloadingTrackId, setDownloadingTrackId] = useState(null);
   const [downloadingZip, setDownloadingZip] = useState(false);
+  const [downloadZipError, setDownloadZipError] = useState(false);
 
   const isAdmin = user?.role === 'admin';
   const isWithinPeriod = !!(user?.subscription?.endDate) && new Date(user.subscription.endDate) > new Date();
@@ -122,11 +123,21 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
     const albumId = album.id || album._id;
     if (!albumId) return;
     setDownloadingZip(true);
+    setDownloadZipError(false);
+
+    // Large on-the-fly ZIPs can stall indefinitely if the connection hangs
+    // (e.g. a dropped Wasabi fetch mid-archive) — without this the button
+    // gets stuck on "Downloading..." forever. Abort and let the user retry.
+    const ZIP_TIMEOUT_MS = 5 * 60 * 1000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), ZIP_TIMEOUT_MS);
+
     try {
-      const res = await apiFetch(`${API_URL}/downloads/album/${albumId}/file`);
+      const res = await apiFetch(`${API_URL}/downloads/album/${albumId}/file`, { signal: controller.signal });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         if (data.downloadLevel) onDownloadAlert?.({ level: data.downloadLevel, pausedUntil: data.pausedUntil });
+        else setDownloadZipError(true);
         return;
       }
       const contentType = res.headers.get('content-type') || '';
@@ -147,8 +158,11 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
       }
     } catch (err) {
       console.error('Download error:', err);
+      setDownloadZipError(true);
     } finally {
+      clearTimeout(timeoutId);
       setDownloadingZip(false);
+      setTimeout(() => setDownloadZipError(false), 4000);
     }
   }, [album, requireAuth]);
 
@@ -274,8 +288,13 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
                       <button
                         onClick={handleDownloadZip}
                         disabled={downloadingZip}
-                        className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 lg:px-4 lg:py-3 rounded-lg bg-gradient-to-r from-accent to-purple-500 hover:from-accent-hover hover:to-purple-600 transition-all duration-200 hover:scale-105 shadow-lg shadow-accent/30 disabled:opacity-60 disabled:hover:scale-100"
+                        className="relative flex-1 flex items-center justify-center gap-1.5 px-3 py-2 lg:px-4 lg:py-3 rounded-lg bg-gradient-to-r from-accent to-purple-500 hover:from-accent-hover hover:to-purple-600 transition-all duration-200 hover:scale-105 shadow-lg shadow-accent/30 disabled:opacity-60 disabled:hover:scale-100"
                       >
+                        {downloadZipError && (
+                          <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-3 py-1 rounded-lg bg-red-500 text-white text-[10px] font-semibold whitespace-nowrap shadow-lg animate-in fade-in zoom-in-95 duration-200 flex items-center gap-1">
+                            <AlertTriangle className="w-3 h-3" /> {t('album.downloadFailed')}
+                          </div>
+                        )}
                         {downloadingZip ? (
                           <svg className="animate-spin w-3.5 h-3.5 text-white" viewBox="0 0 24 24">
                             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />

@@ -401,39 +401,44 @@ export const downloadAlbumFile = async (req, res) => {
     }
 
     const { browser: b4, os: o4, device: d4 } = parseUA(req.get('user-agent'));
-    await Download.create({
-      userId: user._id,
-      albumId: album._id,
-      sourceId: album.sourceId,
-      type: 'bulk',
-      fileType: 'ZIP',
-      fileName: `${album.name || 'Album'}.zip`,
-      email: user.email || '',
-      section: req.headers['x-download-section'] || req.query.section || 'record-pool',
-      planId: user.subscription?.planId || user.subscription?.plan || 'free',
-      deviceBrowser: b4,
-      deviceOS: o4,
-      deviceName: d4,
-      fileSize: album.totalSize,
-      ipAddress: req.ip,
-      userAgent: req.get('user-agent')
-    });
+    const logAlbumDownload = async () => {
+      await Download.create({
+        userId: user._id,
+        albumId: album._id,
+        sourceId: album.sourceId,
+        type: 'bulk',
+        fileType: 'ZIP',
+        fileName: `${album.name || 'Album'}.zip`,
+        email: user.email || '',
+        section: req.headers['x-download-section'] || req.query.section || 'record-pool',
+        planId: user.subscription?.planId || user.subscription?.plan || 'free',
+        deviceBrowser: b4,
+        deviceOS: o4,
+        deviceName: d4,
+        fileSize: album.totalSize,
+        ipAddress: req.ip,
+        userAgent: req.get('user-agent')
+      });
 
-    album.totalDownloads += 1;
-    await album.save();
+      album.totalDownloads += 1;
+      await album.save();
 
-    if (album.sourceId) {
-      const source = await Source.findById(album.sourceId);
-      if (source) {
-        source.totalDownloads += album.trackCount;
-        await source.save();
+      if (album.sourceId) {
+        const source = await Source.findById(album.sourceId);
+        if (source) {
+          source.totalDownloads += album.trackCount;
+          await source.save();
+        }
       }
-    }
 
-    const behaviourResult4 = user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(() => null) : null;
+      return user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(() => null) : null;
+    };
 
-    // If a pre-built ZIP exists on Wasabi, redirect to a signed URL for fast direct download
+    // If a pre-built ZIP exists on Wasabi, redirect to a signed URL for fast direct download.
+    // The server can't observe whether the client's subsequent fetch of the signed URL
+    // actually succeeds, so — same as the single-track flow — we log at hand-off time.
     if (album.zipKey) {
+      const behaviourResult4 = await logAlbumDownload();
       const zipFilename = buildSafeFilename(`${album.name || 'Album'}.zip`);
       const command = new GetObjectCommand({
         Bucket: process.env.WASABI_BUCKET_NAME,
@@ -464,12 +469,31 @@ export const downloadAlbumFile = async (req, res) => {
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
 
-    const archive = archiver('zip', { zlib: { level: 5 } });
+    // MP3/audio content is already compressed — re-deflating it costs real CPU time
+    // and latency for near-zero size savings. Store-only makes large albums build
+    // dramatically faster (this was a big contributor to "takes a very long time").
+    const archive = archiver('zip', { zlib: { level: 0 } });
 
     archive.on('error', (err) => {
       console.error('Archiver error:', err);
       if (!res.headersSent) {
         res.status(500).json({ success: false, message: 'ZIP creation failed' });
+      }
+    });
+
+    // Only count this as a download once the ZIP has actually finished streaming
+    // to the client. Logging eagerly (the old behaviour) meant every retry of a
+    // stalled/aborted download — see the frontend timeout fix — registered as a
+    // fresh completed download even though the user never received the file.
+    let logged = false;
+    res.on('finish', () => {
+      if (logged) return;
+      logged = true;
+      logAlbumDownload().catch((err) => console.error('Failed to log completed ZIP download:', err.message));
+    });
+    res.on('close', () => {
+      if (!res.writableEnded) {
+        console.warn(`ZIP download for album ${album._id} aborted before completion (user ${user._id})`);
       }
     });
 
