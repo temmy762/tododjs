@@ -1,6 +1,6 @@
 import User from '../models/User.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
-import { parseDeviceInfo, cleanupInactiveDevices } from '../utils/deviceParser.js';
+import { pruneInactiveDevices } from '../utils/deviceRegistry.js';
 import { sendEmail, getDeviceRemovedEmailTemplate, getSignOutAllEmailTemplate } from '../services/emailService.js';
 
 /**
@@ -67,21 +67,21 @@ export const removeDevice = async (req, res) => {
     }
 
     // Find device
-    const deviceIndex = user.subscription.devices.findIndex(d => d.deviceId === deviceId);
+    const removedDevice = user.subscription.devices.find(d => d.deviceId === deviceId);
 
-    if (deviceIndex === -1) {
+    if (!removedDevice) {
       return res.status(404).json({
         success: false,
         message: 'Device not found'
       });
     }
 
-    // Get device info before removing
-    const removedDevice = user.subscription.devices[deviceIndex];
-
-    // Remove device
-    user.subscription.devices.splice(deviceIndex, 1);
-    await user.save();
+    // Remove atomically ($pull) so a concurrent device registration on another
+    // request can't be clobbered by writing back a stale devices array.
+    await User.updateOne(
+      { _id: user._id },
+      { $pull: { 'subscription.devices': { deviceId } } }
+    );
 
     // Send email notification
     try {
@@ -96,7 +96,7 @@ export const removeDevice = async (req, res) => {
       success: true,
       message: 'Device removed successfully',
       data: {
-        remainingDevices: user.subscription.devices.length
+        remainingDevices: Math.max(0, user.subscription.devices.length - 1)
       }
     });
   } catch (error) {
@@ -142,14 +142,17 @@ export const renameDevice = async (req, res) => {
       });
     }
 
-    // Update device name
-    device.deviceName = deviceName.trim();
-    await user.save();
+    // Update device name atomically (positional $set) — no full-array rewrite.
+    const trimmed = deviceName.trim();
+    await User.updateOne(
+      { _id: user._id, 'subscription.devices.deviceId': deviceId },
+      { $set: { 'subscription.devices.$.deviceName': trimmed } }
+    );
 
     res.status(200).json({
       success: true,
       message: 'Device renamed successfully',
-      data: device
+      data: { ...device.toObject(), deviceName: trimmed }
     });
   } catch (error) {
     res.status(500).json({
@@ -177,9 +180,11 @@ export const signOutAllDevices = async (req, res) => {
 
     const deviceCount = user.subscription.devices.length;
 
-    // Clear all devices
-    user.subscription.devices = [];
-    await user.save();
+    // Clear all devices atomically
+    await User.updateOne(
+      { _id: user._id },
+      { $set: { 'subscription.devices': [] } }
+    );
 
     // Send email notification
     try {
@@ -222,21 +227,19 @@ export const cleanupDevices = async (req, res) => {
     }
 
     const originalCount = user.subscription.devices.length;
-    user.subscription.devices = cleanupInactiveDevices(user.subscription.devices);
-    const removedCount = originalCount - user.subscription.devices.length;
-
-    if (removedCount > 0) {
-      await user.save();
-    }
+    await pruneInactiveDevices(user._id);
+    const refreshed = await User.findById(user._id).select('subscription.devices');
+    const remaining = refreshed?.subscription?.devices?.length ?? originalCount;
+    const removedCount = originalCount - remaining;
 
     res.status(200).json({
       success: true,
-      message: removedCount > 0 
-        ? `Removed ${removedCount} inactive device(s)` 
+      message: removedCount > 0
+        ? `Removed ${removedCount} inactive device(s)`
         : 'No inactive devices to remove',
       data: {
         devicesRemoved: removedCount,
-        remainingDevices: user.subscription.devices.length
+        remainingDevices: remaining
       }
     });
   } catch (error) {

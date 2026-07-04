@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { getSignedDownloadUrl } from '../config/wasabi.js';
 import { sendEmail, sendWelcomeEmail, sendPasswordResetEmail, notifyAdminNewSignup, getDeviceBlockedEmailTemplate } from '../services/emailService.js';
+import { registerDevice, pruneInactiveDevices, recordBlockedAttempt } from '../utils/deviceRegistry.js';
 
 // Sign avatar URL if it's stored in Wasabi
 const signAvatarUrl = async (user) => {
@@ -37,15 +38,17 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
     sameSite: 'lax'
   };
 
-  // Register or update device using consolidated subscription.devices
+  // Register or update device atomically (see utils/deviceRegistry.js).
+  // Previously this loaded → mutated subscription.devices → user.save(), which
+  // lost devices when two logins/requests raced. Atomic ops can't clobber.
   if (deviceId) {
     const { parseDeviceInfo } = await import('../utils/deviceParser.js');
     const SubscriptionPlan = (await import('../models/SubscriptionPlan.js')).default;
     const deviceInfo = parseDeviceInfo(userAgent);
-    
+
     // Determine max devices based on subscription status
     let maxDevices = 0; // Free accounts get 0 devices (no downloads)
-    
+
     const _isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
     const _GRACE_MS = 10 * 24 * 60 * 60 * 1000;
     const _isPastDueInGrace = user.subscription.status === 'past_due' &&
@@ -68,25 +71,14 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
         maxDevices = user.maxDevices || 2;
       }
     }
-    
-    const existingDevice = user.subscription.devices.find(d => d.deviceId === deviceId);
-    if (existingDevice) {
-      // Update existing device (only if user has active subscription)
-      if (maxDevices > 0) {
-        existingDevice.lastActive = new Date();
-        existingDevice.deviceInfo = deviceInfo;
-        existingDevice.ipAddress = ipAddress;
-      }
-    } else {
-      // Free users cannot register devices
-      if (maxDevices === 0) {
-        // Don't register device for free users
-      } else if (user.subscription.devices.length >= maxDevices) {
-        // Device limit reached — BLOCK the new device and notify the account owner
-        const ipAddress = req?.ip || req?.connection?.remoteAddress || 'unknown';
-        const deviceInfo = parseDeviceInfo(userAgent);
 
-        // Email the account owner with details of the blocked attempt
+    // Only enforce device registration for paying users; free accounts get none.
+    if (maxDevices > 0) {
+      await pruneInactiveDevices(user._id);
+      const result = await registerDevice(user._id, deviceId, { ...deviceInfo, ipAddress }, { maxDevices });
+
+      if (result === 'limit') {
+        // Device limit reached — notify the account owner and block this device.
         try {
           const lang = user.preferredLanguage || 'es';
           const { subject, html, text } = getDeviceBlockedEmailTemplate(user, maxDevices, deviceInfo, ipAddress, lang);
@@ -94,9 +86,7 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
         } catch (emailError) {
           console.error('Failed to send device block email:', emailError);
         }
-
-        // Record blocked attempt for admin panel visibility
-        user.blockedLoginAttempts.push({
+        await recordBlockedAttempt(user._id, {
           deviceName: deviceInfo.deviceName,
           browser: deviceInfo.browser,
           os: deviceInfo.os,
@@ -104,32 +94,27 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
           userAgent,
           attemptedAt: new Date()
         });
-        await user.save();
-
         return res.status(403).json({
           success: false,
           deviceLimitReached: true,
           maxDevices,
           message: `This account has reached its device limit (${maxDevices} device${maxDevices > 1 ? 's' : ''}). The account owner has been notified by email. Please ask the account owner to remove a device from their settings.`
         });
-      } else {
-        // Under limit - add new device
-        user.subscription.devices.push({
-          deviceId,
-          deviceName: deviceInfo.deviceName,
-          deviceType: deviceInfo.deviceType,
-          browser: deviceInfo.browser,
-          os: deviceInfo.os,
-          deviceInfo,
-          ipAddress,
-          lastActive: new Date(),
-          addedAt: new Date()
-        });
       }
     }
   }
 
-  await user.save();
+  // Persist any caller-set fields (e.g. lastLogin). Device registration above
+  // is already committed atomically and is NOT re-written here — sendTokenResponse
+  // no longer mutates subscription.devices in memory, so save() leaves it untouched.
+  if (user.isModified()) {
+    await user.save();
+  }
+  // Reflect the freshly-registered device back to the client.
+  if (deviceId) {
+    const refreshed = await User.findById(user._id).select('subscription');
+    if (refreshed) user.subscription = refreshed.subscription;
+  }
 
   const avatar = await signAvatarUrl(user);
 

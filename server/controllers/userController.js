@@ -298,16 +298,17 @@ export const revokeDevice = async (req, res) => {
     const user = await User.findById(req.params.id);
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    const before = user.subscription.devices.length;
-    user.subscription.devices = user.subscription.devices.filter(
-      d => d.deviceId !== req.params.deviceId
+    // Atomic $pull so an admin revoke can't clobber a concurrent device
+    // registration by writing back a stale devices array.
+    const result = await User.updateOne(
+      { _id: req.params.id },
+      { $pull: { 'subscription.devices': { deviceId: req.params.deviceId } } }
     );
 
-    if (user.subscription.devices.length === before) {
+    if (result.modifiedCount === 0) {
       return res.status(404).json({ success: false, message: 'Device not found' });
     }
 
-    await user.save();
     res.status(200).json({ success: true, message: 'Device revoked successfully' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

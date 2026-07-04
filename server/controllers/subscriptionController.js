@@ -2,6 +2,8 @@ import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import User from '../models/User.js';
 import stripe from '../config/stripe.js';
 import { sendSubscriptionCancelledEmail, notifyAdminCancelledSubscription } from '../services/emailService.js';
+import { parseDeviceInfo } from '../utils/deviceParser.js';
+import { registerDevice as registerDeviceAtomic } from '../utils/deviceRegistry.js';
 
 // @desc    Get all subscription plans
 // @route   GET /api/subscriptions/plans
@@ -330,49 +332,34 @@ export const registerDevice = async (req, res) => {
     
     const user = await User.findById(req.user.id);
     const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
-    
+
     if (!plan) {
       return res.status(400).json({
         success: false,
         message: 'No active subscription plan'
       });
     }
-    
-    // Check if device already exists
-    const existingDeviceIndex = user.subscription.devices.findIndex(
-      d => d.deviceId === deviceId
-    );
-    
-    if (existingDeviceIndex !== -1) {
-      // Update existing device
-      user.subscription.devices[existingDeviceIndex].lastActive = new Date();
-      user.subscription.devices[existingDeviceIndex].ipAddress = ipAddress;
-    } else {
-      // Check device limit
-      if (user.subscription.devices.length >= plan.features.maxDevices) {
-        return res.status(403).json({
-          success: false,
-          message: `Device limit reached (${plan.features.maxDevices} devices max). Remove a device to continue.`,
-          devices: user.subscription.devices
-        });
-      }
-      
-      // Add new device
-      user.subscription.devices.push({
-        deviceId,
-        deviceInfo: deviceInfo || 'Unknown Device',
-        ipAddress,
-        lastActive: new Date(),
-        addedAt: new Date()
+
+    // Atomic registration — no load-modify-save race (see utils/deviceRegistry.js)
+    const parsed = parseDeviceInfo(req.headers['user-agent'] || '');
+    const meta = { ...parsed, deviceInfo: deviceInfo || parsed.deviceInfo, ipAddress };
+    const result = await registerDeviceAtomic(user._id, deviceId, meta, { maxDevices: plan.features.maxDevices });
+
+    const refreshed = await User.findById(user._id).select('subscription.devices');
+    const devices = refreshed?.subscription?.devices || [];
+
+    if (result === 'limit') {
+      return res.status(403).json({
+        success: false,
+        message: `Device limit reached (${plan.features.maxDevices} devices max). Remove a device to continue.`,
+        devices
       });
     }
-    
-    await user.save();
-    
+
     res.status(200).json({
       success: true,
       message: 'Device registered successfully',
-      data: user.subscription.devices
+      data: devices
     });
   } catch (error) {
     res.status(500).json({

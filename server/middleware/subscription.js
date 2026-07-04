@@ -1,7 +1,8 @@
 import User from '../models/User.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import stripe from '../config/stripe.js';
-import { parseDeviceInfo, cleanupInactiveDevices } from '../utils/deviceParser.js';
+import { parseDeviceInfo } from '../utils/deviceParser.js';
+import { registerDevice, pruneInactiveDevices } from '../utils/deviceRegistry.js';
 import { sendEmail, getDeviceBlockedEmailTemplate, getNewDeviceEmailTemplate } from '../services/emailService.js';
 
 // Check if user has active subscription
@@ -128,80 +129,44 @@ export const checkDeviceLimit = async (req, res, next) => {
       return next();
     }
 
-    // Auto-cleanup inactive devices (90+ days)
-    const originalDeviceCount = user.subscription.devices.length;
-    user.subscription.devices = cleanupInactiveDevices(user.subscription.devices);
-    const cleanedUp = originalDeviceCount - user.subscription.devices.length;
-    if (cleanedUp > 0) {
-      console.log(`   🧹 Cleaned up ${cleanedUp} inactive device(s)`);
-    }
+    const maxDevices = plan.features.maxDevices;
+    const ipAddress = req.ip || req.connection.remoteAddress;
+    const userAgent = req.headers['user-agent'] || 'Unknown Device';
+    const deviceInfo = parseDeviceInfo(userAgent);
 
-    // Check if device is already registered
-    const existingDevice = user.subscription.devices.find(d => d.deviceId === deviceId);
+    // Atomically prune inactive devices (90+ days) and register this one.
+    // Atomic ops avoid the load-modify-save race that could drop a device that
+    // a concurrent request had just added (see utils/deviceRegistry.js).
+    await pruneInactiveDevices(user._id);
+    const result = await registerDevice(user._id, deviceId, { ...deviceInfo, ipAddress }, { maxDevices });
 
-    if (existingDevice) {
-      // Update last active time
-      existingDevice.lastActive = new Date();
-      await user.save();
-      return next();
-    }
-
-    // Check if device limit reached (after cleanup)
-    if (user.subscription.devices.length >= plan.features.maxDevices) {
+    if (result === 'limit') {
       console.log(`   ❌ Device limit reached for user ${user.email}. Blocking unrecognized device.`);
-
-      // Notify account owner
-      const ipAddress = req.ip || req.connection.remoteAddress;
-      const userAgent = req.headers['user-agent'] || 'Unknown Device';
-      const { parseDeviceInfo } = await import('../utils/deviceParser.js');
-      const deviceInfo = parseDeviceInfo(userAgent);
-
       try {
         const lang = user.preferredLanguage || 'es';
-        const { subject, html, text } = getDeviceBlockedEmailTemplate(user, plan.features.maxDevices, deviceInfo, ipAddress, lang);
+        const { subject, html, text } = getDeviceBlockedEmailTemplate(user, maxDevices, deviceInfo, ipAddress, lang);
         await sendEmail({ to: user.email, subject, html, text });
       } catch (emailError) {
         console.error('Failed to send device block email:', emailError);
       }
-
       return res.status(403).json({
         success: false,
         deviceLimitReached: true,
-        message: `Device limit reached (${plan.features.maxDevices} device${plan.features.maxDevices > 1 ? 's' : ''} allowed). The account owner has been notified. Please ask the account owner to remove a device from their settings.`
+        message: `Device limit reached (${maxDevices} device${maxDevices > 1 ? 's' : ''} allowed). The account owner has been notified. Please ask the account owner to remove a device from their settings.`
       });
     }
 
-    // Parse device information for new device registration
-    const userAgent2 = req.headers['user-agent'] || 'Unknown Device';
-    const ipAddress2 = req.ip || req.connection.remoteAddress;
-    const deviceInfo = parseDeviceInfo(userAgent2);
-
-    // Auto-register device if under limit
-    const newDevice = {
-      deviceId,
-      deviceName: deviceInfo.deviceName,
-      deviceType: deviceInfo.deviceType,
-      browser: deviceInfo.browser,
-      os: deviceInfo.os,
-      deviceInfo: deviceInfo.deviceInfo,
-      ipAddress: ipAddress2,
-      lastActive: new Date(),
-      addedAt: new Date()
-    };
-
-    user.subscription.devices.push(newDevice);
-    await user.save();
-
-    console.log(`   ✅ New device registered: ${deviceInfo.deviceName}`);
-
-    // Send email notification for new device
-    try {
-      const lang = user.preferredLanguage || 'es';
-      const { subject, html, text } = getNewDeviceEmailTemplate(user, deviceInfo, ipAddress2, lang);
-      await sendEmail({ to: user.email, subject, html, text });
-    } catch (emailError) {
-      console.error('Failed to send new device email:', emailError);
-      // Don't block the request if email fails
+    if (result === 'added') {
+      console.log(`   ✅ New device registered: ${deviceInfo.deviceName}`);
+      // Send email notification for new device (non-blocking)
+      try {
+        const lang = user.preferredLanguage || 'es';
+        const { subject, html, text } = getNewDeviceEmailTemplate(user, deviceInfo, ipAddress, lang);
+        await sendEmail({ to: user.email, subject, html, text });
+      } catch (emailError) {
+        console.error('Failed to send new device email:', emailError);
+        // Don't block the request if email fails
+      }
     }
 
     next();

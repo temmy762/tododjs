@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import User from '../models/User.js';
 import { parseDeviceInfo } from '../utils/deviceParser.js';
+import { registerDevice } from '../utils/deviceRegistry.js';
 
 // Protect routes - verify JWT token
 export const protect = async (req, res, next) => {
@@ -45,32 +46,14 @@ export const protect = async (req, res, next) => {
       });
     }
 
-    // Register/upsert device for ALL authenticated users (fire-and-forget, never blocks)
+    // Register/upsert device for ALL authenticated users (fire-and-forget, never blocks).
+    // Atomic so concurrent requests from different devices can't clobber each other.
     const deviceId = req.headers['x-device-id'];
     if (deviceId) {
-      setImmediate(async () => {
-        try {
-          const freshUser = await User.findById(decoded.id).select('subscription role');
-          if (!freshUser) return;
-          const existing = freshUser.subscription.devices.find(d => d.deviceId === deviceId);
-          if (existing) {
-            existing.lastActive = new Date();
-          } else {
-            const info = parseDeviceInfo(req.headers['user-agent'] || '');
-            freshUser.subscription.devices.push({
-              deviceId,
-              deviceName: info.deviceName,
-              deviceType: info.deviceType,
-              browser: info.browser,
-              os: info.os,
-              deviceInfo: info.deviceInfo,
-              ipAddress: req.ip,
-              lastActive: new Date(),
-              addedAt: new Date()
-            });
-          }
-          await freshUser.save();
-        } catch { /* fire-and-forget — never block the request */ }
+      const info = parseDeviceInfo(req.headers['user-agent'] || '');
+      setImmediate(() => {
+        registerDevice(decoded.id, deviceId, { ...info, ipAddress: req.ip })
+          .catch(() => { /* fire-and-forget — never block the request */ });
       });
     }
 
