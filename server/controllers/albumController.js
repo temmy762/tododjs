@@ -1,5 +1,6 @@
 import Album from '../models/Album.js';
 import Source from '../models/Source.js';
+import Collection from '../models/Collection.js';
 import DatePack from '../models/DatePack.js';
 import Track from '../models/Track.js';
 import { uploadToWasabi, deleteFromWasabi, getSignedDownloadUrl } from '../config/wasabi.js';
@@ -840,6 +841,93 @@ export const bulkUpdateCategory = async (req, res) => {
       { $set: { category: categoryName, categoryRaw: null } }
     );
     res.status(200).json({ success: true, message: `${ids.length} albums assigned to "${categoryName}"` });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Bulk assign a category to every album inside the selected
+//          collections/sources (top-level Record Pool cards), so their albums
+//          appear under the chosen chip without drilling into each one.
+// @route   PUT /api/albums/bulk-category-by-parent
+// @access  Private/Admin
+export const bulkCategoryByParent = async (req, res) => {
+  try {
+    const { collectionIds = [], sourceIds = [], category } = req.body;
+    if (!collectionIds.length && !sourceIds.length) {
+      return res.status(400).json({ success: false, message: 'No collections or sources selected' });
+    }
+    if (!category || !String(category).trim()) {
+      return res.status(400).json({ success: false, message: 'Category is required' });
+    }
+    const categoryName = String(category).trim();
+
+    // Cascade to every album belonging to any selected collection/source.
+    const albumResult = await Album.updateMany(
+      { $or: [{ collectionId: { $in: collectionIds } }, { sourceId: { $in: sourceIds } }] },
+      { $set: { category: categoryName, categoryRaw: null } }
+    );
+    // Tag the collections themselves for record-keeping / admin display.
+    if (collectionIds.length) {
+      await Collection.updateMany({ _id: { $in: collectionIds } }, { $set: { poolCategory: categoryName } });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: `${albumResult.modifiedCount} album(s) assigned to "${categoryName}"`,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Bulk cover for the selected collections/sources: updates the card
+//          thumbnail AND the cover art of every album inside them (upload once,
+//          apply to all).
+// @route   PUT /api/albums/bulk-cover-by-parent
+// @access  Private/Admin
+export const bulkCoverByParent = async (req, res) => {
+  try {
+    let collectionIds, sourceIds;
+    try { collectionIds = JSON.parse(req.body.collectionIds); } catch { collectionIds = req.body.collectionIds; }
+    try { sourceIds = JSON.parse(req.body.sourceIds); } catch { sourceIds = req.body.sourceIds; }
+    collectionIds = Array.isArray(collectionIds) ? collectionIds : [];
+    sourceIds = Array.isArray(sourceIds) ? sourceIds : [];
+
+    if (!collectionIds.length && !sourceIds.length) {
+      return res.status(400).json({ success: false, message: 'No collections or sources selected' });
+    }
+    if (!req.file) return res.status(400).json({ success: false, message: 'No cover image provided' });
+
+    const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
+    const key = `covers/bulk-parent-${Date.now()}.${ext}`;
+    const uploadResult = await uploadToWasabi(req.file.buffer, key, req.file.mimetype);
+    const url = uploadResult.location;
+
+    // Card thumbnails (thumbnail = URL, thumbnailKey = key — the read path signs the key).
+    if (collectionIds.length) {
+      await Collection.updateMany(
+        { _id: { $in: collectionIds } },
+        { $set: { thumbnail: url, thumbnailKey: key, missingThumbnail: false } }
+      );
+    }
+    if (sourceIds.length) {
+      await Source.updateMany(
+        { _id: { $in: sourceIds } },
+        { $set: { thumbnail: url, thumbnailKey: key } }
+      );
+    }
+    // Album covers inside those collections/sources (so public album cards update too).
+    const albumResult = await Album.updateMany(
+      { $or: [{ collectionId: { $in: collectionIds } }, { sourceId: { $in: sourceIds } }] },
+      { $set: { coverArt: url, coverArtKey: key } }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: `Cover applied to ${collectionIds.length + sourceIds.length} card(s) and ${albumResult.modifiedCount} album(s)`,
+      data: { coverArt: url },
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -14,7 +14,9 @@ import {
   bulkDeleteAlbums,
   bulkAssignAlbums,
   bulkUpdateCover,
-  bulkUpdateCategory
+  bulkUpdateCategory,
+  bulkCategoryByParent,
+  bulkCoverByParent
 } from '../controllers/albumController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
@@ -60,7 +62,9 @@ router.route('/featured')
 router.delete('/bulk', protect, authorize('admin'), bulkDeleteAlbums);
 router.put('/bulk-assign', protect, authorize('admin'), bulkAssignAlbums);
 router.put('/bulk-category', protect, authorize('admin'), bulkUpdateCategory);
+router.put('/bulk-category-by-parent', protect, authorize('admin'), bulkCategoryByParent);
 router.put('/bulk-cover', protect, authorize('admin'), coverUpload.single('coverArt'), bulkUpdateCover);
+router.put('/bulk-cover-by-parent', protect, authorize('admin'), coverUpload.single('coverArt'), bulkCoverByParent);
 
 router.route('/:id')
   .get(getAlbum)

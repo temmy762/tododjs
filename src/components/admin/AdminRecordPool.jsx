@@ -292,9 +292,21 @@ export default function AdminRecordPool() {
               </div>
 
               {totalSelected > 0 && (
-                <div className="flex items-center gap-3 mb-5 p-3 rounded-lg bg-accent/10 border border-accent/20">
+                <div className="flex items-center gap-3 mb-5 p-3 rounded-lg bg-accent/10 border border-accent/20 flex-wrap">
                   <span className="text-xs text-accent font-medium flex-shrink-0">{totalSelected} selected</span>
                   <div className="flex-1" />
+                  <button
+                    onClick={() => setBulkModal('poolCategory')}
+                    className="px-4 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 rounded-lg text-xs font-medium text-emerald-400 transition-colors flex items-center gap-1.5"
+                  >
+                    <Star size={12} /> Assign Category
+                  </button>
+                  <button
+                    onClick={() => setBulkModal('poolCover')}
+                    className="px-4 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 rounded-lg text-xs font-medium text-purple-400 transition-colors flex items-center gap-1.5"
+                  >
+                    <ImageIcon size={12} /> Change Cover
+                  </button>
                   <button
                     onClick={handleBulkDeletePool}
                     disabled={bulkDeleting}
@@ -527,6 +539,24 @@ export default function AdminRecordPool() {
             ids={[...selectedAlbumIds]}
             onClose={() => setBulkModal(null)}
             onSuccess={() => { setBulkModal(null); setSelectedAlbumIds(new Set()); if (selectedDateCard) fetchAlbums(selectedDateCard._id); }}
+          />
+        )}
+
+        {/* Top-level (collection/source card) bulk modals — cascade to albums inside */}
+        {bulkModal === 'poolCategory' && (
+          <BulkCategoryModal
+            parents={{ collectionIds: [...selectedCollIds], sourceIds: [...selectedSrcIds] }}
+            count={totalSelected}
+            onClose={() => setBulkModal(null)}
+            onSuccess={() => { setBulkModal(null); setSelectedCollIds(new Set()); setSelectedSrcIds(new Set()); fetchAll(); }}
+          />
+        )}
+        {bulkModal === 'poolCover' && (
+          <BulkCoverModal
+            parents={{ collectionIds: [...selectedCollIds], sourceIds: [...selectedSrcIds] }}
+            count={totalSelected}
+            onClose={() => setBulkModal(null)}
+            onSuccess={() => { setBulkModal(null); setSelectedCollIds(new Set()); setSelectedSrcIds(new Set()); fetchAll(); }}
           />
         )}
       </div>
@@ -1628,7 +1658,8 @@ function BulkAssignModal({ ids, onClose, onSuccess }) {
 }
 
 // ── Bulk Cover Modal ─────────────────────────────────────────────────────────
-function BulkCoverModal({ ids, onClose, onSuccess }) {
+function BulkCoverModal({ ids, parents = null, count, onClose, onSuccess }) {
+  const total = count ?? ids?.length ?? 0;
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -1651,9 +1682,18 @@ function BulkCoverModal({ ids, onClose, onSuccess }) {
     setError('');
     try {
       const fd = new FormData();
-      fd.append('ids', JSON.stringify(ids));
       fd.append('coverArt', file);
-      const res = await fetch(`${API}/albums/bulk-cover`, {
+      let url;
+      if (parents) {
+        // Parent mode: update the card thumbnail + album covers inside.
+        fd.append('collectionIds', JSON.stringify(parents.collectionIds || []));
+        fd.append('sourceIds', JSON.stringify(parents.sourceIds || []));
+        url = `${API}/albums/bulk-cover-by-parent`;
+      } else {
+        fd.append('ids', JSON.stringify(ids));
+        url = `${API}/albums/bulk-cover`;
+      }
+      const res = await fetch(url, {
         method: 'PUT',
         headers: authHeaders(),
         body: fd
@@ -1671,7 +1711,7 @@ function BulkCoverModal({ ids, onClose, onSuccess }) {
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-lg font-bold flex items-center gap-2"><ImageIcon size={18} className="text-purple-400" /> Change Cover Art</h2>
-            <p className="text-xs text-brand-text-tertiary mt-0.5">{ids.length} album{ids.length > 1 ? 's' : ''} selected</p>
+            <p className="text-xs text-brand-text-tertiary mt-0.5">{total} {parents ? 'card' : 'album'}{total > 1 ? 's' : ''} selected</p>
           </div>
           <button onClick={onClose} className="text-brand-text-tertiary hover:text-white"><X size={20} /></button>
         </div>
@@ -1692,14 +1732,16 @@ function BulkCoverModal({ ids, onClose, onSuccess }) {
         <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
         <p className="text-xs text-yellow-400/80 mb-4 flex items-start gap-1.5">
           <AlertCircle size={12} className="flex-shrink-0 mt-0.5" />
-          This replaces the cover art on all {ids.length} selected albums with the same image.
+          {parents
+            ? `This replaces the cover on all ${total} selected card(s) and the albums inside them with the same image.`
+            : `This replaces the cover art on all ${total} selected albums with the same image.`}
         </p>
         <div className="flex gap-3">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-lg font-medium transition-colors text-sm">Cancel</button>
           <button onClick={handleConfirm} disabled={!file || saving}
             className="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 flex items-center justify-center gap-2">
             {saving && <Loader size={14} className="animate-spin" />}
-            Apply to {ids.length}
+            Apply to {total}
           </button>
         </div>
       </div>
@@ -1711,7 +1753,8 @@ function BulkCoverModal({ ids, onClose, onSuccess }) {
 // Sets each selected album's `category` — the field the public record-pool page
 // filters on — so several albums can be dropped under the same chip at once
 // (e.g. "Pack Premium") without editing each one.
-function BulkCategoryModal({ ids, onClose, onSuccess }) {
+function BulkCategoryModal({ ids, parents = null, count, onClose, onSuccess }) {
+  const total = count ?? ids?.length ?? 0;
   const [categories, setCategories] = useState([]);
   const [selected, setSelected] = useState('');
   const [loading, setLoading] = useState(false);
@@ -1738,10 +1781,13 @@ function BulkCategoryModal({ ids, onClose, onSuccess }) {
     setSaving(true);
     setError('');
     try {
-      const res = await fetch(`${API}/albums/bulk-category`, {
+      // Parent mode: cascade to albums inside selected collections/sources.
+      const url = parents ? `${API}/albums/bulk-category-by-parent` : `${API}/albums/bulk-category`;
+      const body = parents ? { ...parents, category: selected } : { ids, category: selected };
+      const res = await fetch(url, {
         method: 'PUT',
         headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, category: selected })
+        body: JSON.stringify(body)
       });
       const data = await res.json();
       if (data.success) onSuccess();
@@ -1756,13 +1802,17 @@ function BulkCategoryModal({ ids, onClose, onSuccess }) {
         <div className="flex items-center justify-between mb-5">
           <div>
             <h2 className="text-lg font-bold flex items-center gap-2"><Star size={18} className="text-emerald-400" /> Assign Category</h2>
-            <p className="text-xs text-brand-text-tertiary mt-0.5">{ids.length} album{ids.length > 1 ? 's' : ''} selected</p>
+            <p className="text-xs text-brand-text-tertiary mt-0.5">{total} {parents ? 'card' : 'album'}{total > 1 ? 's' : ''} selected</p>
           </div>
           <button onClick={onClose} className="text-brand-text-tertiary hover:text-white"><X size={20} /></button>
         </div>
         {error && <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm flex items-center gap-2"><AlertCircle size={14} />{error}</div>}
 
-        <p className="text-sm text-brand-text-tertiary mb-3">Pick the record-pool category to apply to all selected albums:</p>
+        <p className="text-sm text-brand-text-tertiary mb-3">
+          {parents
+            ? 'Pick a category to apply to every album inside the selected collections/sources:'
+            : 'Pick the record-pool category to apply to all selected albums:'}
+        </p>
         {loading ? (
           <div className="flex justify-center py-8"><Loader size={24} className="animate-spin text-accent" /></div>
         ) : (
@@ -1783,7 +1833,7 @@ function BulkCategoryModal({ ids, onClose, onSuccess }) {
           <button onClick={handleConfirm} disabled={!selected || saving}
             className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 flex items-center justify-center gap-2">
             {saving && <Loader size={14} className="animate-spin" />}
-            Assign to {ids.length}
+            Assign to {total}
           </button>
         </div>
       </div>
