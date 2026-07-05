@@ -806,9 +806,40 @@ export const bulkUpdateCover = async (req, res) => {
     if (!req.file) return res.status(400).json({ success: false, message: 'No cover image provided' });
     const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
     const key = `covers/bulk-${Date.now()}.${ext}`;
-    const coverUrl = await uploadToWasabi(req.file.buffer, key, req.file.mimetype);
-    await Album.updateMany({ _id: { $in: ids } }, { $set: { coverArt: coverUrl } });
-    res.status(200).json({ success: true, message: `Cover updated for ${ids.length} albums`, data: { coverArt: coverUrl } });
+    const uploadResult = await uploadToWasabi(req.file.buffer, key, req.file.mimetype);
+    // Store BOTH the URL and the S3 key — the read path (resolveSignedUrls)
+    // signs coverArtKey first, so without updating it the albums would keep
+    // showing their OLD cover. uploadToWasabi returns { key, location }, so we
+    // must use .location (a string), not the whole object.
+    await Album.updateMany(
+      { _id: { $in: ids } },
+      { $set: { coverArt: uploadResult.location, coverArtKey: key } }
+    );
+    res.status(200).json({ success: true, message: `Cover updated for ${ids.length} albums`, data: { coverArt: uploadResult.location } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Bulk assign a record-pool category to multiple albums
+// @route   PUT /api/albums/bulk-category
+// @access  Private/Admin
+export const bulkUpdateCategory = async (req, res) => {
+  try {
+    const { ids, category } = req.body;
+    if (!ids?.length) return res.status(400).json({ success: false, message: 'No album IDs provided' });
+    if (!category || !String(category).trim()) {
+      return res.status(400).json({ success: false, message: 'Category is required' });
+    }
+    const categoryName = String(category).trim();
+    // Set the album's category — this is the field the public record-pool page
+    // filters on (?category=...), so it drives which chip the album appears under.
+    // categoryRaw is cleared so the admin choice is treated as authoritative.
+    await Album.updateMany(
+      { _id: { $in: ids } },
+      { $set: { category: categoryName, categoryRaw: null } }
+    );
+    res.status(200).json({ success: true, message: `${ids.length} albums assigned to "${categoryName}"` });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

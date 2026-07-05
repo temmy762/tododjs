@@ -623,16 +623,24 @@ export const unblockUser = async (req, res) => {
 // @access  Private/Admin
 export const liftDownloadSuspension = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id);
-    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
-
-    user.downloadSuspended        = false;
-    user.downloadSuspendedAt      = null;
-    user.downloadWarningLevel     = 0;
-    user.downloadPausedUntil      = null;
-    user.downloadFlaggedForReview = false;
-    user.downloadLiftedAt         = new Date(); // Start counting fresh from this moment
-    await user.save();
+    // Atomic $set so the lift can't be clobbered by a concurrent download
+    // request, and downloadLiftedAt reliably becomes the fresh-count baseline.
+    const result = await User.updateOne(
+      { _id: req.params.id },
+      {
+        $set: {
+          downloadSuspended: false,
+          downloadSuspendedAt: null,
+          downloadWarningLevel: 0,
+          downloadPausedUntil: null,
+          downloadFlaggedForReview: false,
+          downloadLiftedAt: new Date(), // Start counting fresh from this moment
+        },
+      }
+    );
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
 
     res.status(200).json({ success: true, message: 'Download suspension lifted' });
   } catch (error) {

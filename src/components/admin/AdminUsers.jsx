@@ -20,7 +20,7 @@ export default function AdminUsers() {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 25, pages: 1 });
-  const [stats, setStats] = useState({ totalUsers: 0, premiumCount: 0, proCount: 0, newThisMonth: 0 });
+  const [stats, setStats] = useState({ totalUsers: 0, freeCount: 0, individualMonthlyCount: 0, individualQuarterlyCount: 0, sharedMonthlyCount: 0, sharedQuarterlyCount: 0, newThisMonth: 0 });
   const [editingUser, setEditingUser] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [bulkSyncing, setBulkSyncing] = useState(false);
@@ -248,25 +248,37 @@ export default function AdminUsers() {
         </div>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-          <div className="text-3xl font-bold text-white mb-1">{(stats?.totalUsers ?? 0).toLocaleString()}</div>
-          <p className="text-sm text-brand-text-tertiary">{t('admin.totalMembers')}</p>
-        </div>
-        <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-          <div className="text-3xl font-bold text-white mb-1">{(stats?.premiumCount ?? 0).toLocaleString()}</div>
-          <p className="text-sm text-brand-text-tertiary">{t('admin.individualMembers', 'Individual Plans')}</p>
-        </div>
-        <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-          <div className="text-3xl font-bold text-white mb-1">{(stats?.proCount ?? 0).toLocaleString()}</div>
-          <p className="text-sm text-brand-text-tertiary">{t('admin.sharedMembers', 'Shared Plans')}</p>
-        </div>
-        <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-          <div className="text-3xl font-bold text-white mb-1">{(stats?.newThisMonth ?? 0).toLocaleString()}</div>
-          <p className="text-sm text-brand-text-tertiary">{t('admin.newThisMonth')}</p>
-        </div>
-      </div>
+      {/* Stats — derived from the granular plan counts the API returns.
+          Individual/Shared each sum their monthly + quarterly tiers. */}
+      {(() => {
+        const individualPlans = (stats?.individualMonthlyCount ?? 0) + (stats?.individualQuarterlyCount ?? 0);
+        const sharedPlans = (stats?.sharedMonthlyCount ?? 0) + (stats?.sharedQuarterlyCount ?? 0);
+        const freeUsers = stats?.freeCount ?? 0;
+        return (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
+            <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
+              <div className="text-3xl font-bold text-white mb-1">{(stats?.totalUsers ?? 0).toLocaleString()}</div>
+              <p className="text-sm text-brand-text-tertiary">{t('admin.totalMembers')}</p>
+            </div>
+            <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
+              <div className="text-3xl font-bold text-white mb-1">{freeUsers.toLocaleString()}</div>
+              <p className="text-sm text-brand-text-tertiary">{t('admin.freeMembers', 'Free Users')}</p>
+            </div>
+            <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
+              <div className="text-3xl font-bold text-white mb-1">{individualPlans.toLocaleString()}</div>
+              <p className="text-sm text-brand-text-tertiary">{t('admin.individualMembers', 'Individual Plans')}</p>
+            </div>
+            <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
+              <div className="text-3xl font-bold text-white mb-1">{sharedPlans.toLocaleString()}</div>
+              <p className="text-sm text-brand-text-tertiary">{t('admin.sharedMembers', 'Shared Plans')}</p>
+            </div>
+            <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
+              <div className="text-3xl font-bold text-white mb-1">{(stats?.newThisMonth ?? 0).toLocaleString()}</div>
+              <p className="text-sm text-brand-text-tertiary">{t('admin.newThisMonth')}</p>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Search */}
       <div className="bg-dark-elevated rounded-xl p-4 border border-white/10 mb-6">

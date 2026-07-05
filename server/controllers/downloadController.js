@@ -20,6 +20,22 @@ const MP3_L1_THRESHOLD    = 100;             // 100 MP3s in 24 h  → Level 1 wa
 const MP3_L2_THRESHOLD    = 150;             // 150 MP3s in 24 h  → Level 2 pause
 const LEVEL2_PAUSE_MS     = 24 * 60 * 60 * 1000; // 24 h
 
+// Atomically bump download counters. Previously this was
+// user.incrementDownload() + user.save(), which rewrote the WHOLE user doc —
+// under concurrent "very fast" downloading a stale save could clobber the
+// downloadSuspended / downloadWarningLevel flags set by another in-flight
+// request, so re-abuse (especially right after an admin lift) failed to
+// re-suspend. A targeted $inc touches only the counters.
+async function incrementDownloadCounters(userId) {
+  await User.updateOne(
+    { _id: userId },
+    {
+      $inc: { 'downloads.today': 1, 'downloads.total': 1 },
+      $set: { 'downloads.lastDownloadDate': new Date() },
+    }
+  );
+}
+
 async function checkDownloadBehaviour(user) {
   const now = new Date();
   const liftedAt = user.downloadLiftedAt;
@@ -38,33 +54,57 @@ async function checkDownloadBehaviour(user) {
   ]);
 
   let newLevel = 0;
-  if      (totalZips >= ZIP_L2_THRESHOLD) newLevel = Math.max(newLevel, 2);
-  else if (totalZips >= ZIP_L1_THRESHOLD) newLevel = Math.max(newLevel, 1);
-  if      (totalMp3s >= MP3_L2_THRESHOLD) newLevel = Math.max(newLevel, 2);
-  else if (totalMp3s >= MP3_L1_THRESHOLD) newLevel = Math.max(newLevel, 1);
+  if      (totalZips >= ZIP_L2_THRESHOLD) newLevel = 2;
+  else if (totalZips >= ZIP_L1_THRESHOLD) newLevel = 1;
+  if      (totalMp3s >= MP3_L2_THRESHOLD) newLevel = 2;
+  else if (totalMp3s >= MP3_L1_THRESHOLD && newLevel < 1) newLevel = 1;
 
-  const currentLevel = user.downloadWarningLevel || 0;
-  if (newLevel < currentLevel) {
-    user.downloadWarningLevel = newLevel;
-    await user.save();
-    return null;
+  // Escalation is done with atomic, conditional, idempotent updates so it can
+  // never be lost to a concurrent save and never double-notifies. Levels are
+  // "sticky" until a lift (admin or auto) resets them — the correct behaviour
+  // for abuse detection (we don't auto-forgive mid-window).
+  if (newLevel === 2) {
+    // Flip to suspended exactly once. The downloadSuspended:{$ne:true} guard
+    // means only the first crossing request transitions the state (and emails
+    // the admin); everything else is a no-op.
+    const pausedUntil = new Date(now.getTime() + LEVEL2_PAUSE_MS);
+    const res = await User.updateOne(
+      { _id: user._id, downloadSuspended: { $ne: true } },
+      {
+        $set: {
+          downloadWarningLevel: 2,
+          downloadSuspended: true,
+          downloadSuspendedAt: now,
+          downloadPausedUntil: pausedUntil,
+        },
+      }
+    );
+    // Keep the in-memory copy consistent for the rest of this request.
+    user.downloadSuspended = true;
+    user.downloadWarningLevel = 2;
+    user.downloadPausedUntil = pausedUntil;
+    if (res.modifiedCount > 0) {
+      const dlCount = totalMp3s >= MP3_L2_THRESHOLD ? totalMp3s : totalZips;
+      const windowLabel = totalMp3s >= MP3_L2_THRESHOLD ? 1440 : 30;
+      notifyAdminSuspiciousDownloads(user, dlCount, windowLabel).catch(() => {});
+    }
+    return { level: 2, pausedUntil };
   }
-  if (newLevel === currentLevel) return null;
 
-  user.downloadWarningLevel = newLevel;
   if (newLevel === 1) {
-    await user.save();
-    return { level: 1 };
-  } else {
-    user.downloadSuspended    = true;
-    user.downloadSuspendedAt  = now;
-    user.downloadPausedUntil  = new Date(now.getTime() + LEVEL2_PAUSE_MS);
-    await user.save();
-    const dlCount = totalMp3s >= MP3_L2_THRESHOLD ? totalMp3s : totalZips;
-    const windowLabel = totalMp3s >= MP3_L2_THRESHOLD ? 1440 : 30;
-    notifyAdminSuspiciousDownloads(user, dlCount, windowLabel).catch(() => {});
-    return { level: 2, pausedUntil: user.downloadPausedUntil };
+    // Raise to the level-1 warning only if not already warned/suspended, so
+    // the popup fires once per abuse epoch.
+    const res = await User.updateOne(
+      { _id: user._id, downloadSuspended: { $ne: true }, downloadWarningLevel: { $lt: 1 } },
+      { $set: { downloadWarningLevel: 1 } }
+    );
+    if (res.modifiedCount > 0) {
+      user.downloadWarningLevel = 1;
+      return { level: 1 };
+    }
   }
+
+  return null;
 }
 
 function buildSuspensionResponse(user) {
@@ -73,11 +113,24 @@ function buildSuspensionResponse(user) {
 
 async function applyAutoLift(user) {
   if (user.downloadSuspended && user.downloadPausedUntil && new Date() > new Date(user.downloadPausedUntil)) {
-    user.downloadSuspended    = false;
-    user.downloadPausedUntil  = null;
+    const now = new Date();
+    // Atomic so a concurrent download save can't resurrect the suspension.
+    await User.updateOne(
+      { _id: user._id, downloadSuspended: true, downloadPausedUntil: { $lte: now } },
+      {
+        $set: {
+          downloadSuspended: false,
+          downloadPausedUntil: null,
+          downloadWarningLevel: 0,
+          downloadLiftedAt: now, // Fresh window from this point
+        },
+      }
+    );
+    // Reflect on the in-memory copy so the caller's suspended check passes.
+    user.downloadSuspended = false;
+    user.downloadPausedUntil = null;
     user.downloadWarningLevel = 0;
-    user.downloadLiftedAt     = new Date(); // Fresh window from this point
-    await user.save();
+    user.downloadLiftedAt = now;
   }
 }
 
@@ -179,9 +232,9 @@ export const downloadTrack = async (req, res) => {
     if (track.sourceId) downloadDoc.sourceId = track.sourceId;
     await Download.create(downloadDoc);
 
-    // Update counters
-    user.incrementDownload();
-    await user.save();
+    // Update counters (atomic $inc — never rewrites the whole user doc, so it
+    // can't clobber suspension flags set by a concurrent download request)
+    await incrementDownloadCounters(user._id);
 
     track.downloads += 1;
     await track.save();
@@ -263,9 +316,9 @@ export const downloadTrackFile = async (req, res) => {
     if (track.sourceId) downloadDoc.sourceId = track.sourceId;
     await Download.create(downloadDoc);
 
-    // Update counters
-    user.incrementDownload();
-    await user.save();
+    // Update counters (atomic $inc — never rewrites the whole user doc, so it
+    // can't clobber suspension flags set by a concurrent download request)
+    await incrementDownloadCounters(user._id);
 
     track.downloads += 1;
     await track.save();

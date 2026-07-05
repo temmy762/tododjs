@@ -412,6 +412,12 @@ export default function AdminRecordPool() {
                     <Layers size={12} /> Assign Record Pool
                   </button>
                   <button
+                    onClick={() => setBulkModal('assignCategory')}
+                    className="px-4 py-1.5 bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 rounded-lg text-xs font-medium text-emerald-400 transition-colors flex items-center gap-1.5"
+                  >
+                    <Star size={12} /> Assign Category
+                  </button>
+                  <button
                     onClick={() => setBulkModal('bulkCover')}
                     className="px-4 py-1.5 bg-purple-500/20 hover:bg-purple-500/30 border border-purple-500/40 rounded-lg text-xs font-medium text-purple-400 transition-colors flex items-center gap-1.5"
                   >
@@ -504,6 +510,13 @@ export default function AdminRecordPool() {
 
         {bulkModal === 'assignPool' && (
           <BulkAssignModal
+            ids={[...selectedAlbumIds]}
+            onClose={() => setBulkModal(null)}
+            onSuccess={() => { setBulkModal(null); setSelectedAlbumIds(new Set()); if (selectedDateCard) fetchAlbums(selectedDateCard._id); }}
+          />
+        )}
+        {bulkModal === 'assignCategory' && (
+          <BulkCategoryModal
             ids={[...selectedAlbumIds]}
             onClose={() => setBulkModal(null)}
             onSuccess={() => { setBulkModal(null); setSelectedAlbumIds(new Set()); if (selectedDateCard) fetchAlbums(selectedDateCard._id); }}
@@ -1687,6 +1700,90 @@ function BulkCoverModal({ ids, onClose, onSuccess }) {
             className="flex-1 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 flex items-center justify-center gap-2">
             {saving && <Loader size={14} className="animate-spin" />}
             Apply to {ids.length}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Bulk Category Modal ──────────────────────────────────────────────────────
+// Sets each selected album's `category` — the field the public record-pool page
+// filters on — so several albums can be dropped under the same chip at once
+// (e.g. "Pack Premium") without editing each one.
+function BulkCategoryModal({ ids, onClose, onSuccess }) {
+  const [categories, setCategories] = useState([]);
+  const [selected, setSelected] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(`${API}/categories`);
+        const data = await res.json();
+        // /categories may return an array directly or { success, data }
+        const list = Array.isArray(data) ? data : (data.data || []);
+        setCategories(list);
+      } catch { /* leave empty */ }
+      finally { setLoading(false); }
+    };
+    load();
+  }, []);
+
+  const handleConfirm = async () => {
+    if (!selected) return;
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch(`${API}/albums/bulk-category`, {
+        method: 'PUT',
+        headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, category: selected })
+      });
+      const data = await res.json();
+      if (data.success) onSuccess();
+      else setError(data.message || 'Failed to assign category');
+    } catch { setError('Network error'); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[60] p-4 overflow-y-auto">
+      <div className="bg-dark-elevated rounded-xl max-w-md w-full p-6 my-8 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h2 className="text-lg font-bold flex items-center gap-2"><Star size={18} className="text-emerald-400" /> Assign Category</h2>
+            <p className="text-xs text-brand-text-tertiary mt-0.5">{ids.length} album{ids.length > 1 ? 's' : ''} selected</p>
+          </div>
+          <button onClick={onClose} className="text-brand-text-tertiary hover:text-white"><X size={20} /></button>
+        </div>
+        {error && <div className="mb-4 p-3 bg-red-500/20 border border-red-500/50 rounded-lg text-red-400 text-sm flex items-center gap-2"><AlertCircle size={14} />{error}</div>}
+
+        <p className="text-sm text-brand-text-tertiary mb-3">Pick the record-pool category to apply to all selected albums:</p>
+        {loading ? (
+          <div className="flex justify-center py-8"><Loader size={24} className="animate-spin text-accent" /></div>
+        ) : (
+          <div className="space-y-2 max-h-72 overflow-y-auto">
+            {categories.map(cat => (
+              <label key={cat._id || cat.name} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${selected === cat.name ? 'bg-emerald-500/15 border-emerald-500/50' : 'bg-white/5 border-white/10 hover:border-white/20'}`}>
+                <input type="radio" name="category" value={cat.name} checked={selected === cat.name} onChange={() => setSelected(cat.name)} className="accent-emerald-500" />
+                <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color || '#10B981' }} />
+                <span className="font-medium text-sm truncate flex-1">{cat.name}</span>
+              </label>
+            ))}
+            {categories.length === 0 && <p className="text-sm text-brand-text-tertiary text-center py-6">No categories found</p>}
+          </div>
+        )}
+
+        <div className="flex gap-3 mt-5">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 bg-white/5 hover:bg-white/10 rounded-lg font-medium transition-colors text-sm">Cancel</button>
+          <button onClick={handleConfirm} disabled={!selected || saving}
+            className="flex-1 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 rounded-lg font-medium transition-colors text-sm disabled:opacity-50 flex items-center justify-center gap-2">
+            {saving && <Loader size={14} className="animate-spin" />}
+            Assign to {ids.length}
           </button>
         </div>
       </div>
