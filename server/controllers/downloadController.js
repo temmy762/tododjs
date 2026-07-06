@@ -12,12 +12,18 @@ import archiver from 'archiver';
 import { notifyAdminSuspiciousDownloads } from '../services/emailService.js';
 
 // ── Download behaviour detection thresholds ──────────────────────────────
-const ZIP_WINDOW_MS       = 30 * 60 * 1000;         // 30-min rolling window for ZIPs
-const MP3_WINDOW_MS       = 24 * 60 * 60 * 1000;    // 24-h  rolling window for MP3s
-const ZIP_L1_THRESHOLD    = 10;              // 10 ZIPs in 30 min  → Level 1 warning
-const ZIP_L2_THRESHOLD    = 15;              // 15 ZIPs in 30 min  → Level 2 pause
+// Both ZIP and MP3 use a 24-hour rolling window so the limit is a true "per
+// day" quota: after the 24h pause expires, downloadLiftedAt resets the count
+// baseline and the full daily allowance applies again. (ZIP was previously a
+// 30-min window, which a user could evade by spreading downloads across the
+// day — so after the first block the limit appeared to stop applying.)
+// To change the daily limits, edit the L2 (block) / L1 (warn) numbers below.
+const ZIP_WINDOW_MS       = 24 * 60 * 60 * 1000;    // 24-h rolling window for ZIPs
+const MP3_WINDOW_MS       = 24 * 60 * 60 * 1000;    // 24-h rolling window for MP3s
+const ZIP_L1_THRESHOLD    = 80;              // 80 ZIPs in 24 h   → Level 1 warning
+const ZIP_L2_THRESHOLD    = 100;             // 100 ZIPs in 24 h  → Level 2 pause (24h)
 const MP3_L1_THRESHOLD    = 100;             // 100 MP3s in 24 h  → Level 1 warning
-const MP3_L2_THRESHOLD    = 150;             // 150 MP3s in 24 h  → Level 2 pause
+const MP3_L2_THRESHOLD    = 150;             // 150 MP3s in 24 h  → Level 2 pause (24h)
 const LEVEL2_PAUSE_MS     = 24 * 60 * 60 * 1000; // 24 h
 
 // Atomically bump download counters. Previously this was
@@ -85,7 +91,7 @@ async function checkDownloadBehaviour(user) {
     user.downloadPausedUntil = pausedUntil;
     if (res.modifiedCount > 0) {
       const dlCount = totalMp3s >= MP3_L2_THRESHOLD ? totalMp3s : totalZips;
-      const windowLabel = totalMp3s >= MP3_L2_THRESHOLD ? 1440 : 30;
+      const windowLabel = 1440; // both ZIP and MP3 now use a 24h (1440-min) window
       notifyAdminSuspiciousDownloads(user, dlCount, windowLabel).catch(() => {});
     }
     return { level: 2, pausedUntil };

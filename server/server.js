@@ -88,19 +88,21 @@ app.use(cors({
   credentials: true
 }));
 
-// Body parser (except for webhook and file upload routes)
+// Body parser.
+// Skip by CONTENT-TYPE, not by URL: the Stripe webhook needs its raw body for
+// signature verification, and multipart/form-data uploads are parsed by multer
+// per-route. Everything else (including JSON bodies on /api/albums,
+// /api/collections, etc. — bulk-category, bulk-assign, bulk delete) must be
+// JSON-parsed here, otherwise req.body is undefined and those routes throw.
+// (The previous URL-based skip disabled JSON parsing for every /api/albums
+// route, which is why bulk category assignment failed.)
 app.use((req, res, next) => {
-  // Skip body parser for routes that handle multipart/form-data (file uploads) or raw body (webhooks)
+  const contentType = req.headers['content-type'] || '';
   if (req.originalUrl === '/api/stripe/webhook' ||
-      req.originalUrl.includes('/api/collections') ||
-      req.originalUrl.includes('/api/albums') ||
-      req.originalUrl.startsWith('/api/tracks/upload') ||
-      req.originalUrl.includes('/api/sources') ||
-      req.originalUrl.includes('/api/date-packs')) {
-    next();
-  } else {
-    express.json({ limit: '50mb' })(req, res, next);
+      contentType.includes('multipart/form-data')) {
+    return next();
   }
+  express.json({ limit: '50mb' })(req, res, next);
 });
 
 // Cookie parser

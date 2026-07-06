@@ -917,11 +917,12 @@ export const bulkCoverByParent = async (req, res) => {
         { $set: { thumbnail: url, thumbnailKey: key } }
       );
     }
+    const parentFilter = { $or: [{ collectionId: { $in: collectionIds } }, { sourceId: { $in: sourceIds } }] };
+    // Date cards shown when you "enter" the pack — update these too so the
+    // cover is consistent at every level, not just on the outer card.
+    await DatePack.updateMany(parentFilter, { $set: { thumbnail: url, thumbnailKey: key } });
     // Album covers inside those collections/sources (so public album cards update too).
-    const albumResult = await Album.updateMany(
-      { $or: [{ collectionId: { $in: collectionIds } }, { sourceId: { $in: sourceIds } }] },
-      { $set: { coverArt: url, coverArtKey: key } }
-    );
+    const albumResult = await Album.updateMany(parentFilter, { $set: { coverArt: url, coverArtKey: key } });
 
     res.status(200).json({
       success: true,
