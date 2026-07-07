@@ -65,6 +65,13 @@ async function checkDownloadBehaviour(user) {
   if      (totalMp3s >= MP3_L2_THRESHOLD) newLevel = 2;
   else if (totalMp3s >= MP3_L1_THRESHOLD && newLevel < 1) newLevel = 1;
 
+  // Diagnostic: visible in `pm2 logs` so abuse-detection behaviour can be
+  // verified in production (counts, window baseline, computed level).
+  console.log(
+    `[download-protection] user=${user.email || user._id} zips=${totalZips}/${ZIP_L2_THRESHOLD} mp3s=${totalMp3s}/${MP3_L2_THRESHOLD} ` +
+    `level=${newLevel} currentLevel=${user.downloadWarningLevel || 0} liftedAt=${liftedAt ? new Date(liftedAt).toISOString() : 'none'}`
+  );
+
   // Escalation is done with atomic, conditional, idempotent updates so it can
   // never be lost to a concurrent save and never double-notifies. Levels are
   // "sticky" until a lift (admin or auto) resets them — the correct behaviour
@@ -255,7 +262,7 @@ export const downloadTrack = async (req, res) => {
       if (source) { source.totalDownloads += 1; await source.save(); }
     }
 
-    const behaviourResult = user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(() => null) : null;
+    const behaviourResult = user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(err => { console.error('[download-protection] check failed:', err.message); return null; }) : null;
     const response = { success: true, data: { downloadUrl, track: { id: track._id, title: track.title, artist: track.artist, format: track.audioFile.format, size: track.audioFile.size }, expiresIn: 3600 } };
     if (behaviourResult) response.downloadWarning = behaviourResult;
     return res.status(200).json(response);
@@ -345,7 +352,7 @@ export const downloadTrackFile = async (req, res) => {
       }
     }
 
-    const behaviourResult2 = user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(() => null) : null;
+    const behaviourResult2 = user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(err => { console.error('[download-protection] check failed:', err.message); return null; }) : null;
 
     const filename = buildSafeFilename(`${track.artist || 'Unknown Artist'} - ${track.title || 'Unknown Title'}.mp3`);
     const command = new GetObjectCommand({
@@ -430,7 +437,7 @@ export const downloadAlbum = async (req, res) => {
       await source.save();
     }
 
-    const behaviourResult3 = user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(() => null) : null;
+    const behaviourResult3 = user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(err => { console.error('[download-protection] check failed:', err.message); return null; }) : null;
     const resp3 = { success: true, data: { downloadUrl, album: { id: album._id, name: album.name, trackCount: album.trackCount, size: album.totalSize }, expiresIn: 3600 } };
     if (behaviourResult3) resp3.downloadWarning = behaviourResult3;
     return res.status(200).json(resp3);
@@ -490,7 +497,7 @@ export const downloadAlbumFile = async (req, res) => {
         }
       }
 
-      return user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(() => null) : null;
+      return user.role !== 'admin' ? await checkDownloadBehaviour(user).catch(err => { console.error('[download-protection] check failed:', err.message); return null; }) : null;
     };
 
     // If a pre-built ZIP exists on Wasabi, redirect to a signed URL for fast direct download.

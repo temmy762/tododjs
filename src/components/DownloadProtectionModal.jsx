@@ -24,7 +24,7 @@ export default function DownloadProtectionModal({ alert, onDismiss }) {
             {t('downloadProtection.level1Message', 'We have detected a download speed higher than usual. You can continue downloading content normally, but avoid making consecutive large downloads to avoid triggering a temporary security pause. This measure helps protect TODODJS against mass downloads.')}
           </p>
           <p className="text-xs text-brand-text-tertiary text-center mb-4">
-            <a href="/terms" className="text-accent hover:underline">{t('downloadProtection.viewTerms', 'Review our Terms of Service')}</a>
+            <a href="/terminos" className="text-accent hover:underline">{t('downloadProtection.viewTerms', 'Review our Terms of Service')}</a>
           </p>
           <button
             onClick={onDismiss}
@@ -62,7 +62,7 @@ export default function DownloadProtectionModal({ alert, onDismiss }) {
             </p>
           )}
           <p className="text-xs text-brand-text-tertiary text-center mb-6">
-            <a href="/terms" className="text-accent hover:underline">{t('downloadProtection.viewTerms', 'Review our Terms of Service')}</a>
+            <a href="/terminos" className="text-accent hover:underline">{t('downloadProtection.viewTerms', 'Review our Terms of Service')}</a>
           </p>
           <button
             onClick={onDismiss}
