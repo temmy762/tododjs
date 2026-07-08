@@ -463,7 +463,16 @@ export const downloadAlbumFile = async (req, res) => {
 
     if (user.role !== 'admin') {
       await applyAutoLift(user);
-      if (user.downloadSuspended) return res.status(403).json(buildSuspensionResponse(user));
+      if (user.downloadSuspended) {
+        // Browser navigation (?token=): a JSON 403 would replace the SPA with a
+        // raw error page (or be silently dropped). Bounce back into the app with
+        // query params so the protection modal is shown instead.
+        if (req.query.token) {
+          const pausedUntil = user.downloadPausedUntil ? new Date(user.downloadPausedUntil).toISOString() : '';
+          return res.redirect(`/record-pool?downloadBlocked=2&pausedUntil=${encodeURIComponent(pausedUntil)}`);
+        }
+        return res.status(403).json(buildSuspensionResponse(user));
+      }
     }
 
     const { browser: b4, os: o4, device: d4 } = parseUA(req.get('user-agent'));
@@ -514,6 +523,13 @@ export const downloadAlbumFile = async (req, res) => {
       const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
       // If opened directly in browser (token via query param), redirect so the browser downloads natively
       if (req.query.token) {
+        // A redirect can't carry the protection warning as JSON, so hand it to
+        // the SPA via a short-lived, JS-readable cookie it polls for.
+        if (behaviourResult4) {
+          res.cookie('dl_warning', JSON.stringify(behaviourResult4), {
+            maxAge: 30 * 1000, httpOnly: false, sameSite: 'lax', path: '/'
+          });
+        }
         return res.redirect(signedUrl);
       }
       const resp4 = { success: true, downloadUrl: signedUrl, filename: zipFilename };

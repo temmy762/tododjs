@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import PremiumPrompt from './PremiumPrompt';
 import API_URL from '../config/api';
 import { apiFetch } from '../services/apiFetch';
-import { triggerBrowserDownload, triggerNativeDownload } from '../services/downloadService';
+import { triggerBrowserDownload, triggerNativeDownload, pollDownloadWarning } from '../services/downloadService';
 
 const getTonalityColor = (tonality) => {
   const colors = {
@@ -137,11 +137,14 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
     // no deadline.
     setDownloadingZip(true);
     triggerNativeDownload(`${API_URL}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&section=record-pool`);
+    // Native hand-offs can't return JSON, so protection warnings arrive via a
+    // short-lived cookie — surface them as the usual modal.
+    if (onDownloadAlert) pollDownloadWarning(onDownloadAlert);
 
     // The browser takes over from here; keep the spinner just long enough to
     // acknowledge the click and absorb accidental double-clicks.
     setTimeout(() => setDownloadingZip(false), 4000);
-  }, [album, requireAuth]);
+  }, [album, requireAuth, onDownloadAlert]);
 
   const toggleLike = useCallback((track, e) => {
     e?.stopPropagation();

@@ -1693,15 +1693,25 @@ function BulkCoverModal({ ids, parents = null, count, onClose, onSuccess }) {
         fd.append('ids', JSON.stringify(ids));
         url = `${API}/albums/bulk-cover`;
       }
+      // 60s deadline so a stalled request surfaces as an error instead of an
+      // infinite spinner (reported by the admin on production).
+      const controller = new AbortController();
+      const deadline = setTimeout(() => controller.abort(), 60 * 1000);
       const res = await fetch(url, {
         method: 'PUT',
         headers: authHeaders(),
-        body: fd
+        body: fd,
+        signal: controller.signal
       });
-      const data = await res.json();
+      clearTimeout(deadline);
+      let data;
+      try { data = await res.json(); }
+      catch { setError(`Server error (HTTP ${res.status})`); return; }
       if (data.success) onSuccess();
       else setError(data.message || 'Failed to update covers');
-    } catch { setError('Network error'); }
+    } catch (err) {
+      setError(err.name === 'AbortError' ? 'Request timed out — please try again' : 'Network error');
+    }
     finally { setSaving(false); }
   };
 

@@ -807,7 +807,11 @@ export const bulkUpdateCover = async (req, res) => {
     if (!req.file) return res.status(400).json({ success: false, message: 'No cover image provided' });
     const ext = (req.file.originalname.split('.').pop() || 'jpg').toLowerCase();
     const key = `covers/bulk-${Date.now()}.${ext}`;
+    // Step logging: the admin reported the request hanging with no response,
+    // so make each stage visible in pm2 logs to pinpoint where it stalls.
+    console.log(`[bulk-cover] ${ids.length} album(s), image ${req.file.size} bytes — uploading to Wasabi as ${key}`);
     const uploadResult = await uploadToWasabi(req.file.buffer, key, req.file.mimetype);
+    console.log(`[bulk-cover] Wasabi upload done (${uploadResult.location}) — updating albums`);
     // Store BOTH the URL and the S3 key — the read path (resolveSignedUrls)
     // signs coverArtKey first, so without updating it the albums would keep
     // showing their OLD cover. uploadToWasabi returns { key, location }, so we

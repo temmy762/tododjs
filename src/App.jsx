@@ -11,7 +11,7 @@ import { useUpload } from './context/UploadContext';
 import BulkUploadModal from './components/admin/BulkUploadModal';
 import { AlbumUploadModal } from './components/admin/AdminRecordPool';
 import { startTokenRefreshScheduler, stopTokenRefreshScheduler, apiFetch } from './services/apiFetch';
-import { triggerBrowserDownload, triggerNativeDownload } from './services/downloadService';
+import { triggerBrowserDownload, triggerNativeDownload, pollDownloadWarning } from './services/downloadService';
 import ArtistAlbumView from './components/ArtistAlbumView';
 import TonalityFilter from './components/TonalityFilter';
 import GenreFilterHorizontal from './components/GenreFilterHorizontal';
@@ -247,6 +247,21 @@ function App() {
   // Live data from API (no mock fallback)
   const tracks = liveTracks;
   const albums = liveAlbums;
+
+  // If a native (?token=) ZIP download was blocked, the server bounces the
+  // browser back here with query params instead of a raw JSON 403 — show the
+  // protection modal and clean the URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const blockedLevel = parseInt(params.get('downloadBlocked'), 10);
+    if (blockedLevel) {
+      setDownloadAlert({ level: blockedLevel, pausedUntil: params.get('pausedUntil') || null });
+      params.delete('downloadBlocked');
+      params.delete('pausedUntil');
+      const qs = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+    }
+  }, []);
 
   // Check for authenticated user on mount
   useEffect(() => {
@@ -745,6 +760,9 @@ function App() {
     // no deadline.
     setDownloadingAlbumIds(prev => new Set(prev).add(albumId));
     triggerNativeDownload(`${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&section=record-pool`);
+    // Native hand-offs can't return JSON, so protection warnings arrive via a
+    // short-lived cookie — surface them as the usual modal.
+    pollDownloadWarning(setDownloadAlert);
 
     // The browser takes over from here; keep the spinner just long enough to
     // acknowledge the click and absorb accidental double-clicks.

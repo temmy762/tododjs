@@ -21,20 +21,50 @@ export function triggerBrowserDownload(url, filename) {
 }
 
 /**
- * Hand a download entirely to the browser via a hidden iframe pointed at an
+ * Hand a download entirely to the browser via anchor navigation to an
  * authenticated API URL (?token=). The server streams the file (or redirects
  * to a signed URL) with Content-Disposition: attachment, so the browser's own
  * download manager takes over — real progress in the downloads shelf, no
- * fetch timeout, and no buffering hundreds of MB into a JS blob. If the
- * server responds with a JSON error instead, it renders invisibly in the
- * iframe rather than corrupting the page or saving a junk file.
+ * fetch timeout, and no buffering hundreds of MB into a JS blob.
+ *
+ * IMPORTANT: this must be an ANCHOR, not a hidden iframe. Safari (macOS and
+ * iOS/iPadOS) never hands iframe navigations to the download manager, so the
+ * previous iframe approach silently did nothing on every Apple device —
+ * while the MP3 flow (anchor navigation via triggerBrowserDownload) worked
+ * everywhere. Content-Disposition: attachment keeps the SPA on the page.
+ * If the user is blocked, the server 302s back into the SPA with query
+ * params (?downloadBlocked=...) so the protection modal is shown instead of
+ * a raw JSON error page.
  */
 export function triggerNativeDownload(url) {
-  const iframe = document.createElement('iframe');
-  iframe.style.display = 'none';
-  iframe.src = url;
-  document.body.appendChild(iframe);
-  // Keep it attached long enough for slow on-the-fly ZIP builds to hand off
-  // to the download manager; removing it has no effect on completed handoffs.
-  setTimeout(() => iframe.remove(), 10 * 60 * 1000);
+  const a = document.createElement('a');
+  a.href = url;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+}
+
+/**
+ * Poll for the short-lived `dl_warning` cookie the server sets when a ZIP
+ * hand-off crosses a download-protection threshold. Native (anchor/redirect)
+ * downloads can't carry a JSON payload back to the SPA, so the warning
+ * travels via this cookie instead. Calls onWarning({ level, pausedUntil })
+ * once and clears the cookie.
+ */
+export function pollDownloadWarning(onWarning, { timeoutMs = 20000, intervalMs = 1000 } = {}) {
+  const started = Date.now();
+  const timer = setInterval(() => {
+    const match = document.cookie.match(/(?:^|;\s*)dl_warning=([^;]*)/);
+    if (match) {
+      clearInterval(timer);
+      document.cookie = 'dl_warning=; Max-Age=0; path=/';
+      try {
+        const warning = JSON.parse(decodeURIComponent(match[1]));
+        if (warning && warning.level) onWarning(warning);
+      } catch { /* malformed cookie — ignore */ }
+    } else if (Date.now() - started > timeoutMs) {
+      clearInterval(timer);
+    }
+  }, intervalMs);
 }
