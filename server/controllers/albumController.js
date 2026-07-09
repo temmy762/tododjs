@@ -495,6 +495,27 @@ export const getAlbumTracks = async (req, res) => {
   }
 };
 
+// Keep the Date Card / Collection / Source thumbnail in sync whenever one or
+// more album covers change, so the same pack never shows a different image
+// at different levels (Date Card vs. Album vs. outer card). Cover art is
+// duplicated across 4 documents (Source/Collection.thumbnail,
+// DatePack.thumbnail, Album.coverArt) for read-performance reasons, so every
+// write path that touches an album's cover must fan out to its direct
+// parents — this only updates the SPECIFIC DatePack/Collection/Source that
+// own the given albums (not every pack under a shared Source/Collection).
+async function syncParentThumbnails(albumIds, url, key) {
+  const albums = await Album.find({ _id: { $in: albumIds } }).select('sourceId collectionId datePackId').lean();
+  const datePackIds = [...new Set(albums.map(a => a.datePackId).filter(Boolean).map(String))];
+  const sourceIds = [...new Set(albums.map(a => a.sourceId).filter(Boolean).map(String))];
+  const collectionIds = [...new Set(albums.map(a => a.collectionId).filter(Boolean).map(String))];
+
+  await Promise.all([
+    datePackIds.length && DatePack.updateMany({ _id: { $in: datePackIds } }, { $set: { thumbnail: url, thumbnailKey: key } }),
+    sourceIds.length && Source.updateMany({ _id: { $in: sourceIds } }, { $set: { thumbnail: url, thumbnailKey: key } }),
+    collectionIds.length && Collection.updateMany({ _id: { $in: collectionIds } }, { $set: { thumbnail: url, thumbnailKey: key, missingThumbnail: false } }),
+  ].filter(Boolean));
+}
+
 // @desc    Update album (name, genre, cover art)
 // @route   PUT /api/albums/:id
 // @access  Private/Admin
@@ -518,6 +539,13 @@ export const updateAlbum = async (req, res) => {
     }
 
     await album.save();
+
+    // Keep the Date Card / Collection / Source thumbnail consistent with
+    // this album's new cover (see syncParentThumbnails for why this exists).
+    if (req.file) {
+      await syncParentThumbnails([album._id], album.coverArt, album.coverArtKey);
+    }
+
     const albumWithUrl = await resolveSignedUrl(album, ['coverArt']);
     res.status(200).json({ success: true, data: albumWithUrl });
   } catch (error) {
@@ -820,6 +848,10 @@ export const bulkUpdateCover = async (req, res) => {
       { _id: { $in: ids } },
       { $set: { coverArt: uploadResult.location, coverArtKey: key } }
     );
+    // Keep the Date Card / Collection / Source thumbnail consistent with these
+    // albums' new cover — otherwise the pack shows one image at the Date Card
+    // level and a different one at the Album level (see syncParentThumbnails).
+    await syncParentThumbnails(ids, uploadResult.location, key);
     res.status(200).json({ success: true, message: `Cover updated for ${ids.length} albums`, data: { coverArt: uploadResult.location } });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

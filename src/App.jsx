@@ -763,9 +763,11 @@ function App() {
     // no deadline.
     setDownloadingAlbumIds(prev => new Set(prev).add(albumId));
     triggerNativeDownload(`${API}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&section=record-pool`);
-    // Native hand-offs can't return JSON, so protection warnings arrive via a
-    // short-lived cookie — surface them as the usual modal.
-    pollDownloadWarning(setDownloadAlert);
+    // Native hand-offs can't return JSON, so a Level-1 warning is detected by
+    // polling /api/auth/me for a rise in downloadWarningLevel — surface it as
+    // the usual modal. (Level-2 suspension arrives via the redirect's query
+    // params instead, handled by the downloadBlocked effect above.)
+    pollDownloadWarning(setDownloadAlert, user?.downloadWarningLevel);
 
     // The browser takes over from here; keep the spinner just long enough to
     // acknowledge the click and absorb accidental double-clicks.

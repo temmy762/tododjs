@@ -46,25 +46,38 @@ export function triggerNativeDownload(url) {
 }
 
 /**
- * Poll for the short-lived `dl_warning` cookie the server sets when a ZIP
- * hand-off crosses a download-protection threshold. Native (anchor/redirect)
- * downloads can't carry a JSON payload back to the SPA, so the warning
- * travels via this cookie instead. Calls onWarning({ level, pausedUntil })
- * once and clears the cookie.
+ * Detect a Level-1 download-protection warning after a native (anchor/token)
+ * ZIP hand-off, by re-fetching the current user and checking whether
+ * downloadWarningLevel rose above what it was before this download started.
+ *
+ * A native anchor navigation can't carry a JSON payload back to the SPA, so
+ * an in-band response isn't possible. An earlier version tried to relay the
+ * warning via a `dl_warning` cookie set by the API — that doesn't work in
+ * production because the API is served from a different subdomain
+ * (api.tododjs.com) than the frontend (tododjs.com): cookies don't cross
+ * subdomains without an explicit Domain attribute, and for pre-built ZIPs the
+ * redirect goes straight to the Wasabi file URL, so the browser never even
+ * revisits our domain to read it. Polling /api/auth/me instead uses the same
+ * Bearer-token auth every other API call already uses, so it works
+ * regardless of subdomain. (Level-2 suspension doesn't need this — the
+ * server bounces the browser back to the frontend with a query param when
+ * downloads are blocked outright.)
  */
-export function pollDownloadWarning(onWarning, { timeoutMs = 20000, intervalMs = 1000 } = {}) {
+export function pollDownloadWarning(onWarning, beforeLevel, { timeoutMs = 15000, intervalMs = 2000 } = {}) {
   const started = Date.now();
-  const timer = setInterval(() => {
-    const match = document.cookie.match(/(?:^|;\s*)dl_warning=([^;]*)/);
-    if (match) {
+  const baseline = beforeLevel || 0;
+  const timer = setInterval(async () => {
+    if (Date.now() - started > timeoutMs) {
       clearInterval(timer);
-      document.cookie = 'dl_warning=; Max-Age=0; path=/';
-      try {
-        const warning = JSON.parse(decodeURIComponent(match[1]));
-        if (warning && warning.level) onWarning(warning);
-      } catch { /* malformed cookie — ignore */ }
-    } else if (Date.now() - started > timeoutMs) {
-      clearInterval(timer);
+      return;
     }
+    try {
+      const { authService } = await import('./authService');
+      const fresh = await authService.getCurrentUser();
+      if (fresh && fresh.downloadWarningLevel === 1 && baseline < 1) {
+        clearInterval(timer);
+        onWarning({ level: 1 });
+      }
+    } catch { /* transient — try again on the next tick */ }
   }, intervalMs);
 }

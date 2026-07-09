@@ -12,18 +12,20 @@ import archiver from 'archiver';
 import { notifyAdminSuspiciousDownloads } from '../services/emailService.js';
 
 // ── Download behaviour detection thresholds ──────────────────────────────
-// Both ZIP and MP3 use a 24-hour rolling window so the limit is a true "per
-// day" quota: after the 24h pause expires, downloadLiftedAt resets the count
-// baseline and the full daily allowance applies again. (ZIP was previously a
-// 30-min window, which a user could evade by spreading downloads across the
-// day — so after the first block the limit appeared to stop applying.)
-// To change the daily limits, edit the L2 (block) / L1 (warn) numbers below.
-const ZIP_WINDOW_MS       = 24 * 60 * 60 * 1000;    // 24-h rolling window for ZIPs
-const MP3_WINDOW_MS       = 24 * 60 * 60 * 1000;    // 24-h rolling window for MP3s
-const ZIP_L1_THRESHOLD    = 80;              // 80 ZIPs in 24 h   → Level 1 warning
-const ZIP_L2_THRESHOLD    = 100;             // 100 ZIPs in 24 h  → Level 2 pause (24h)
-const MP3_L1_THRESHOLD    = 100;             // 100 MP3s in 24 h  → Level 1 warning
-const MP3_L2_THRESHOLD    = 150;             // 150 MP3s in 24 h  → Level 2 pause (24h)
+// These MUST match the Terms & Conditions exactly — two independent rules,
+// each with its own window and its own Level 1 (warn, allow to continue) /
+// Level 2 (24h suspension) thresholds:
+//   ZIP:  10 in 30 min → warn   | 15 in 30 min → suspend 24h
+//   MP3: 100 in 60 min → warn   | 150 in 60 min → suspend 24h
+// A prior revision widened these to a 24h/80/100 "daily quota" to close a
+// perceived evasion gap, but that contradicted the published ToS numbers —
+// reverted here to the ToS values.
+const ZIP_WINDOW_MS       = 30 * 60 * 1000;         // 30-min rolling window for ZIPs
+const MP3_WINDOW_MS       = 60 * 60 * 1000;         // 60-min rolling window for MP3s
+const ZIP_L1_THRESHOLD    = 10;              // 10 ZIPs in 30 min  → Level 1 warning
+const ZIP_L2_THRESHOLD    = 15;              // 15 ZIPs in 30 min  → Level 2 pause (24h)
+const MP3_L1_THRESHOLD    = 100;             // 100 MP3s in 60 min → Level 1 warning
+const MP3_L2_THRESHOLD    = 150;             // 150 MP3s in 60 min → Level 2 pause (24h)
 const LEVEL2_PAUSE_MS     = 24 * 60 * 60 * 1000; // 24 h
 
 // Atomically bump download counters. Previously this was
@@ -97,8 +99,9 @@ async function checkDownloadBehaviour(user) {
     user.downloadWarningLevel = 2;
     user.downloadPausedUntil = pausedUntil;
     if (res.modifiedCount > 0) {
-      const dlCount = totalMp3s >= MP3_L2_THRESHOLD ? totalMp3s : totalZips;
-      const windowLabel = 1440; // both ZIP and MP3 now use a 24h (1440-min) window
+      const mp3Triggered = totalMp3s >= MP3_L2_THRESHOLD;
+      const dlCount = mp3Triggered ? totalMp3s : totalZips;
+      const windowLabel = mp3Triggered ? MP3_WINDOW_MS / 60000 : ZIP_WINDOW_MS / 60000;
       notifyAdminSuspiciousDownloads(user, dlCount, windowLabel).catch(() => {});
     }
     return { level: 2, pausedUntil };
@@ -287,7 +290,18 @@ export const downloadTrackFile = async (req, res) => {
     // Admin bypasses all download restrictions
     if (user.role !== 'admin') {
       await applyAutoLift(user);
-      if (user.downloadSuspended) return res.status(403).json(buildSuspensionResponse(user));
+      if (user.downloadSuspended) {
+        // Same fix as downloadAlbumFile: a relative redirect resolves against
+        // the API's own origin (api.tododjs.com), not the frontend
+        // (tododjs.com) — must be absolute or the SPA never mounts to show
+        // the popup.
+        if (req.query.token) {
+          const pausedUntil = user.downloadPausedUntil ? new Date(user.downloadPausedUntil).toISOString() : '';
+          const frontendUrl = process.env.FRONTEND_URL || 'https://tododjs.com';
+          return res.redirect(`${frontendUrl}/record-pool?downloadBlocked=2&pausedUntil=${encodeURIComponent(pausedUntil)}`);
+        }
+        return res.status(403).json(buildSuspensionResponse(user));
+      }
       if (!user.canDownload()) {
         const isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
         const hasSubscription = (user.subscription.status === 'active' || (user.subscription.status === 'cancelled' && isWithinPeriod)) && user.subscription.planId;
@@ -464,12 +478,19 @@ export const downloadAlbumFile = async (req, res) => {
     if (user.role !== 'admin') {
       await applyAutoLift(user);
       if (user.downloadSuspended) {
+        console.log(`[download-protection] BLOCKED zip request for user=${user.email || user._id} (pausedUntil=${user.downloadPausedUntil})`);
         // Browser navigation (?token=): a JSON 403 would replace the SPA with a
         // raw error page (or be silently dropped). Bounce back into the app with
         // query params so the protection modal is shown instead.
+        // MUST be an absolute URL: the API is served from a different subdomain
+        // than the frontend in production (api.tododjs.com vs tododjs.com), so a
+        // relative redirect resolves against the API's own origin and 404s there
+        // — the SPA never mounts and the popup never appears. This was the actual
+        // cause of "ZIP suspension detected but popup/block never shows".
         if (req.query.token) {
           const pausedUntil = user.downloadPausedUntil ? new Date(user.downloadPausedUntil).toISOString() : '';
-          return res.redirect(`/record-pool?downloadBlocked=2&pausedUntil=${encodeURIComponent(pausedUntil)}`);
+          const frontendUrl = process.env.FRONTEND_URL || 'https://tododjs.com';
+          return res.redirect(`${frontendUrl}/record-pool?downloadBlocked=2&pausedUntil=${encodeURIComponent(pausedUntil)}`);
         }
         return res.status(403).json(buildSuspensionResponse(user));
       }
@@ -521,15 +542,13 @@ export const downloadAlbumFile = async (req, res) => {
         ResponseContentDisposition: `attachment; filename="${zipFilename}"`
       });
       const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 });
-      // If opened directly in browser (token via query param), redirect so the browser downloads natively
+      // If opened directly in browser (token via query param), redirect so the browser downloads natively.
+      // Level-1 warnings for this hand-off aren't carried on this response (a
+      // cookie set here would be scoped to the API's own subdomain and
+      // unreadable by the frontend, and this redirect goes straight to
+      // Wasabi, not back to our domain) — the frontend instead polls
+      // /api/auth/me after triggering the download (see pollDownloadWarning).
       if (req.query.token) {
-        // A redirect can't carry the protection warning as JSON, so hand it to
-        // the SPA via a short-lived, JS-readable cookie it polls for.
-        if (behaviourResult4) {
-          res.cookie('dl_warning', JSON.stringify(behaviourResult4), {
-            maxAge: 30 * 1000, httpOnly: false, sameSite: 'lax', path: '/'
-          });
-        }
         return res.redirect(signedUrl);
       }
       const resp4 = { success: true, downloadUrl: signedUrl, filename: zipFilename };

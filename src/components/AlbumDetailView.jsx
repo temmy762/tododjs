@@ -137,9 +137,11 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
     // no deadline.
     setDownloadingZip(true);
     triggerNativeDownload(`${API_URL}/downloads/album/${albumId}/file?token=${encodeURIComponent(token)}&section=record-pool`);
-    // Native hand-offs can't return JSON, so protection warnings arrive via a
-    // short-lived cookie — surface them as the usual modal.
-    if (onDownloadAlert) pollDownloadWarning(onDownloadAlert);
+    // Native hand-offs can't return JSON, so a Level-1 warning is detected by
+    // polling /api/auth/me for a rise in downloadWarningLevel — surface it as
+    // the usual modal. (Level-2 suspension arrives via the redirect's query
+    // params instead, handled in App.jsx.)
+    if (onDownloadAlert) pollDownloadWarning(onDownloadAlert, user?.downloadWarningLevel);
 
     // The browser takes over from here; keep the spinner just long enough to
     // acknowledge the click and absorb accidental double-clicks.
