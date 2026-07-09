@@ -22,29 +22,32 @@ import AlbumDetailView from './components/AlbumDetailView';
 import FloatingContact from './components/FloatingContact';
 import DownloadProtectionModal from './components/DownloadProtectionModal';
 import BlockedScreen from './components/BlockedScreen';
+import lazyWithRetry from './utils/lazyWithRetry';
 
-// Lazy-loaded pages for code splitting
-const LibraryPage = lazy(() => import('./components/LibraryPage'));
-const AlbumPage = lazy(() => import('./components/AlbumPage'));
-const RecordPoolPage = lazy(() => import('./components/RecordPoolPage'));
-const LiveMashUpPage = lazy(() => import('./components/LiveMashUpPage'));
-const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard'));
-const CheckoutPage = lazy(() => import('./components/CheckoutPage'));
-const ProfilePage = lazy(() => import('./pages/ProfilePage'));
-const UserDashboard = lazy(() => import('./components/UserDashboard'));
+// Lazy-loaded pages for code splitting. lazyWithRetry reloads the page once
+// if a chunk 404s after a new deploy (stale index.html in the user's cache),
+// instead of crashing with "Failed to fetch dynamically imported module".
+const LibraryPage = lazyWithRetry(() => import('./components/LibraryPage'));
+const AlbumPage = lazyWithRetry(() => import('./components/AlbumPage'));
+const RecordPoolPage = lazyWithRetry(() => import('./components/RecordPoolPage'));
+const LiveMashUpPage = lazyWithRetry(() => import('./components/LiveMashUpPage'));
+const AdminDashboard = lazyWithRetry(() => import('./components/admin/AdminDashboard'));
+const CheckoutPage = lazyWithRetry(() => import('./components/CheckoutPage'));
+const ProfilePage = lazyWithRetry(() => import('./pages/ProfilePage'));
+const UserDashboard = lazyWithRetry(() => import('./components/UserDashboard'));
 import BackgroundGradients from './components/BackgroundGradients';
 import { PlayerContext } from './context/PlayerContext';
 import MusicControlPanel from './components/MusicControlPanel';
 import TrendingSection from './components/TrendingSection';
 import CheckoutModal from './components/CheckoutModal';
-const PricingPage = lazy(() => import('./components/PricingPage'));
-const SubscriptionDashboard = lazy(() => import('./components/SubscriptionDashboard'));
-const CategoryTrackSection = lazy(() => import('./components/CategoryTrackSection'));
-const SettingsPage = lazy(() => import('./pages/SettingsPage'));
-const LegalNoticePage = lazy(() => import('./pages/LegalNoticePage'));
-const PrivacyPolicyPage = lazy(() => import('./pages/PrivacyPolicyPage'));
-const CookiePolicyPage = lazy(() => import('./pages/CookiePolicyPage'));
-const TermsPage = lazy(() => import('./pages/TermsPage'));
+const PricingPage = lazyWithRetry(() => import('./components/PricingPage'));
+const SubscriptionDashboard = lazyWithRetry(() => import('./components/SubscriptionDashboard'));
+const CategoryTrackSection = lazyWithRetry(() => import('./components/CategoryTrackSection'));
+const SettingsPage = lazyWithRetry(() => import('./pages/SettingsPage'));
+const LegalNoticePage = lazyWithRetry(() => import('./pages/LegalNoticePage'));
+const PrivacyPolicyPage = lazyWithRetry(() => import('./pages/PrivacyPolicyPage'));
+const CookiePolicyPage = lazyWithRetry(() => import('./pages/CookiePolicyPage'));
+const TermsPage = lazyWithRetry(() => import('./pages/TermsPage'));
 import Footer from './components/Footer';
 import API_URL from './config/api';
 
