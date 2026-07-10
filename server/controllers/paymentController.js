@@ -1,8 +1,18 @@
 import stripe from '../config/stripe.js';
+import { isStaging, testConfig } from '../config/stripeTest.js';
 import User from '../models/User.js';
 import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentReceiptEmail, sendSubscriptionCancelledEmail, sendPaymentFailedEmail } from '../services/emailService.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 
+// On staging, resolve the Stripe price ID from the test-mode config instead
+// of the shared production DB's SubscriptionPlan.stripePriceId (a live-mode
+// price ID would be rejected outright by the test-mode secret key anyway).
+// Production is unaffected — isStaging is false there, so this always falls
+// through to dbPriceId exactly as before.
+function resolvePriceId(planId, dbPriceId) {
+  if (isStaging) return testConfig.priceIds[planId] || dbPriceId;
+  return dbPriceId;
+}
 
 // @desc    Subscribe using saved default payment method (skips hosted checkout form)
 // @route   POST /api/payment/subscribe-with-saved-card
@@ -18,7 +28,8 @@ export const subscribeWithSavedCard = async (req, res) => {
     if (!plan) {
       return res.status(400).json({ success: false, message: 'Invalid subscription plan' });
     }
-    if (!plan.stripePriceId) {
+    const stripePriceId = resolvePriceId(plan.planId, plan.stripePriceId);
+    if (!stripePriceId) {
       return res.status(400).json({ success: false, message: 'Plan not configured for online payment' });
     }
 
@@ -60,7 +71,7 @@ export const subscribeWithSavedCard = async (req, res) => {
     try {
       subscription = await stripe.subscriptions.create({
         customer: customerId,
-        items: [{ price: plan.stripePriceId }],
+        items: [{ price: stripePriceId }],
         default_payment_method: pmId,
         payment_behavior: 'error_if_incomplete',
         metadata: {
@@ -152,7 +163,8 @@ export const createCheckoutSession = async (req, res) => {
       });
     }
 
-    if (!planDoc.stripePriceId) {
+    const stripePriceId = resolvePriceId(planDoc.planId, planDoc.stripePriceId);
+    if (!stripePriceId) {
       return res.status(400).json({
         success: false,
         message: 'This plan is not configured for online payment. Please contact support.'
@@ -208,7 +220,7 @@ export const createCheckoutSession = async (req, res) => {
       customer: stripeCustomerId,
       line_items: [
         {
-          price: planDoc.stripePriceId,
+          price: stripePriceId,
           quantity: 1
         }
       ],

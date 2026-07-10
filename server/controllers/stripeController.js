@@ -1,4 +1,5 @@
 import stripe from '../config/stripe.js';
+import { isStaging, testConfig } from '../config/stripeTest.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import User from '../models/User.js';
 import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentReceiptEmail, sendSubscriptionCancelledEmail, sendPaymentFailedEmail } from '../services/emailService.js';
@@ -53,7 +54,9 @@ export const verifyPayment = async (req, res) => {
 // @access  Public (but verified with Stripe signature)
 export const handleWebhook = async (req, res) => {
   const sig = req.headers['stripe-signature'];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  // Test-mode webhooks (staging's own endpoint in the Stripe test dashboard)
+  // sign with a different secret than the live-mode endpoint.
+  const webhookSecret = isStaging ? testConfig.webhookSecret : process.env.STRIPE_WEBHOOK_SECRET;
 
   let event;
 
@@ -568,7 +571,10 @@ async function handleSubscriptionUpdated(subscription) {
 export const getStripeConfig = async (req, res) => {
   res.status(200).json({
     success: true,
-    publishableKey: process.env.STRIPE_PUBLISHABLE_KEY
+    // A pk_live_ publishable key paired with a sk_test_ secret key (or vice
+    // versa) makes Stripe.js reject every request, so this must track the
+    // same isStaging switch as the secret key in config/stripe.js.
+    publishableKey: isStaging ? testConfig.publishableKey : process.env.STRIPE_PUBLISHABLE_KEY
   });
 };
 
