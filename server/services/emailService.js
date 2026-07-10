@@ -30,7 +30,11 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers }) {
   try {
     const payload = {
       from: FROM_EMAIL,
-      reply_to: replyTo || REPLY_TO_EMAIL,
+      // Resend SDK v3+ expects camelCase `replyTo` — the legacy `reply_to`
+      // field is silently IGNORED, which left every outgoing email with no
+      // Reply-To header. Gmail replies then went to the From address
+      // (info@tododjs.com, no mailbox) and bounced with 550 5.1.1.
+      replyTo: replyTo || REPLY_TO_EMAIL,
       to: Array.isArray(to) ? to : [to],
       subject,
       html,

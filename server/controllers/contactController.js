@@ -1,6 +1,11 @@
 import { sendEmail } from '../services/emailService.js';
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'contacto.tododjs@gmail.com';
+// Comma-separated list — lets the notification land in BOTH the Gmail inbox
+// and the Hostinger mailbox (e.g. "contacto.tododjs@gmail.com,contacto@tododjs.com").
+const ADMIN_EMAILS = (process.env.ADMIN_EMAIL || 'contacto.tododjs@gmail.com')
+  .split(',')
+  .map(e => e.trim())
+  .filter(Boolean);
 
 // @desc    Submit contact form
 // @route   POST /api/contact
@@ -23,7 +28,7 @@ export const submitContact = async (req, res) => {
       : '';
 
     await sendEmail({
-      to: ADMIN_EMAIL,
+      to: ADMIN_EMAILS,
       subject: `[Contacto] ${subject?.trim() || 'Sin asunto'} — ${name}`,
       html: `
         <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;background:#111;color:#eee;padding:24px;border-radius:12px;">
