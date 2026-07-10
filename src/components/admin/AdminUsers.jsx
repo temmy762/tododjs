@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Search, UserPlus, Edit, Trash2, Shield, Crown, User, Loader, X, ChevronLeft, ChevronRight, Users, RefreshCw, Ban, CheckCircle, Download } from 'lucide-react';
+import { Search, UserPlus, Edit, Trash2, Shield, Crown, User, Loader, X, ChevronLeft, ChevronRight, Users, RefreshCw, Ban, CheckCircle, Download, FileDown } from 'lucide-react';
 import API_URL from '../../config/api';
 
 const API = API_URL;
@@ -13,19 +13,24 @@ const authHeaders = (json = false) => {
   return h;
 };
 
-export default function AdminUsers() {
+// `forcedSegment` locks the view to one segment and hides the stat cards —
+// used to power the standalone "Piracy Detection" tab without duplicating
+// this whole component.
+export default function AdminUsers({ forcedSegment = null, title, subtitle } = {}) {
   const { t, i18n } = useTranslation();
   const [searchQuery, setSearchQuery] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [activeSegment, setActiveSegment] = useState(forcedSegment);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pagination, setPagination] = useState({ total: 0, page: 1, limit: 25, pages: 1 });
-  const [stats, setStats] = useState({ totalUsers: 0, freeCount: 0, individualMonthlyCount: 0, individualQuarterlyCount: 0, sharedMonthlyCount: 0, sharedQuarterlyCount: 0, newThisMonth: 0 });
+  const [stats, setStats] = useState({ totalUsers: 0, freeCount: 0, individualMonthlyCount: 0, individualQuarterlyCount: 0, sharedMonthlyCount: 0, sharedQuarterlyCount: 0, flaggedCount: 0, newThisMonth: 0 });
   const [editingUser, setEditingUser] = useState(null);
   const [deleteConfirm, setDeleteConfirm] = useState(null);
   const [bulkSyncing, setBulkSyncing] = useState(false);
   const [bulkResult, setBulkResult] = useState(null);
   const [blockModal, setBlockModal] = useState(null);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
@@ -37,6 +42,7 @@ export default function AdminUsers() {
     try {
       const params = new URLSearchParams({ page, limit: 25 });
       if (debouncedSearch) params.set('search', debouncedSearch);
+      if (activeSegment) params.set('segment', activeSegment);
       const res = await fetch(`${API}/users?${params}`, { headers: authHeaders() });
       if (!res.ok) {
         console.error('Users API HTTP error:', res.status, await res.text());
@@ -53,9 +59,38 @@ export default function AdminUsers() {
     } finally {
       setLoading(false);
     }
-  }, [debouncedSearch]);
+  }, [debouncedSearch, activeSegment]);
 
   useEffect(() => { fetchUsers(1); }, [fetchUsers]);
+
+  const handleSegmentClick = (segment) => {
+    if (forcedSegment) return; // locked view (Piracy Detection tab)
+    setActiveSegment(prev => (prev === segment ? null : segment));
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (debouncedSearch) params.set('search', debouncedSearch);
+      if (activeSegment) params.set('segment', activeSegment);
+      const res = await fetch(`${API}/users/export?${params}`, { headers: authHeaders() });
+      if (!res.ok) { console.error('Export failed:', res.status); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `users-export-${activeSegment || 'all'}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 30000);
+    } catch (err) {
+      console.error('Export error:', err);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleBulkSync = async () => {
     setBulkSyncing(true);
@@ -226,63 +261,85 @@ export default function AdminUsers() {
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h2 className="text-3xl font-bold text-white mb-2">{t('admin.memberManagement')}</h2>
-          <p className="text-brand-text-tertiary">{t('admin.managePermissions')}</p>
+          <h2 className="text-3xl font-bold text-white mb-2">{title || t('admin.memberManagement')}</h2>
+          <p className="text-brand-text-tertiary">{subtitle || t('admin.managePermissions')}</p>
         </div>
-        <div className="flex flex-col items-end gap-1">
+        <div className="flex items-start gap-3">
           <button
-            onClick={handleBulkSync}
-            disabled={bulkSyncing}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-sm font-medium transition-colors disabled:opacity-50"
+            onClick={handleExport}
+            disabled={exporting}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl bg-green-600/20 hover:bg-green-600/30 border border-green-500/30 text-green-300 text-sm font-medium transition-colors disabled:opacity-50"
+            title="Export the currently filtered list as CSV"
           >
-            <RefreshCw className={`w-4 h-4 ${bulkSyncing ? 'animate-spin' : ''}`} />
-            {bulkSyncing ? 'Syncing all...' : 'Sync All from Stripe'}
+            {exporting ? <Loader className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />}
+            {exporting ? 'Exporting...' : 'Export CSV'}
           </button>
-          {bulkResult && (
-            <p className={`text-[11px] font-semibold ${bulkResult.success ? 'text-green-400' : 'text-red-400'}`}>
-              {bulkResult.success
-                ? `✓ ${bulkResult.data?.synced ?? 0} synced, ${bulkResult.data?.skipped ?? 0} skipped, ${bulkResult.data?.failed ?? 0} failed`
-                : `✗ ${bulkResult.message}`}
-            </p>
-          )}
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={handleBulkSync}
+              disabled={bulkSyncing}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-sm font-medium transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${bulkSyncing ? 'animate-spin' : ''}`} />
+              {bulkSyncing ? 'Syncing all...' : 'Sync All from Stripe'}
+            </button>
+            {bulkResult && (
+              <p className={`text-[11px] font-semibold ${bulkResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                {bulkResult.success
+                  ? `✓ ${bulkResult.data?.synced ?? 0} synced, ${bulkResult.data?.skipped ?? 0} skipped, ${bulkResult.data?.failed ?? 0} failed`
+                  : `✗ ${bulkResult.message}`}
+              </p>
+            )}
+          </div>
         </div>
       </div>
 
       {/* Stats — derived from the granular plan counts the API returns.
-          Individual/Shared each sum their monthly + quarterly tiers. */}
-      {(() => {
+          Individual/Shared each sum their monthly + quarterly tiers.
+          Each card is a quick filter: clicking it re-fetches the table below
+          scoped to that segment; clicking the active card clears the filter. */}
+      {!forcedSegment && (() => {
         const individualPlans = (stats?.individualMonthlyCount ?? 0) + (stats?.individualQuarterlyCount ?? 0);
         const sharedPlans = (stats?.sharedMonthlyCount ?? 0) + (stats?.sharedQuarterlyCount ?? 0);
         const freeUsers = stats?.freeCount ?? 0;
+        const flaggedUsers = stats?.flaggedCount ?? 0;
+        const cards = [
+          { segment: null, value: stats?.totalUsers ?? 0, label: t('admin.totalMembers') },
+          { segment: 'free', value: freeUsers, label: t('admin.freeMembers', 'Free Users') },
+          { segment: 'individual', value: individualPlans, label: t('admin.individualMembers', 'Individual Plans') },
+          { segment: 'shared', value: sharedPlans, label: t('admin.sharedMembers', 'Shared Plans') },
+          { segment: 'flagged', value: flaggedUsers, label: 'Flagged / Piracy', accent: true },
+          { segment: 'new', value: stats?.newThisMonth ?? 0, label: t('admin.newThisMonth') },
+        ];
         return (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 mb-8">
-            <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-              <div className="text-3xl font-bold text-white mb-1">{(stats?.totalUsers ?? 0).toLocaleString()}</div>
-              <p className="text-sm text-brand-text-tertiary">{t('admin.totalMembers')}</p>
-            </div>
-            <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-              <div className="text-3xl font-bold text-white mb-1">{freeUsers.toLocaleString()}</div>
-              <p className="text-sm text-brand-text-tertiary">{t('admin.freeMembers', 'Free Users')}</p>
-            </div>
-            <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-              <div className="text-3xl font-bold text-white mb-1">{individualPlans.toLocaleString()}</div>
-              <p className="text-sm text-brand-text-tertiary">{t('admin.individualMembers', 'Individual Plans')}</p>
-            </div>
-            <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-              <div className="text-3xl font-bold text-white mb-1">{sharedPlans.toLocaleString()}</div>
-              <p className="text-sm text-brand-text-tertiary">{t('admin.sharedMembers', 'Shared Plans')}</p>
-            </div>
-            <div className="bg-dark-elevated rounded-xl p-6 border border-white/10">
-              <div className="text-3xl font-bold text-white mb-1">{(stats?.newThisMonth ?? 0).toLocaleString()}</div>
-              <p className="text-sm text-brand-text-tertiary">{t('admin.newThisMonth')}</p>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 mb-8">
+            {cards.map((c) => {
+              const isActive = activeSegment === c.segment;
+              return (
+                <button
+                  key={c.label}
+                  type="button"
+                  onClick={() => handleSegmentClick(c.segment)}
+                  className={`text-left bg-dark-elevated rounded-xl p-6 border transition-all ${
+                    isActive
+                      ? 'border-accent ring-2 ring-accent/40'
+                      : c.accent && c.value > 0
+                        ? 'border-orange-500/30 hover:border-orange-500/60'
+                        : 'border-white/10 hover:border-white/25'
+                  }`}
+                >
+                  <div className={`text-3xl font-bold mb-1 ${c.accent && c.value > 0 ? 'text-orange-400' : 'text-white'}`}>{c.value.toLocaleString()}</div>
+                  <p className="text-sm text-brand-text-tertiary">{c.label}</p>
+                </button>
+              );
+            })}
           </div>
         );
       })()}
 
       {/* Search */}
-      <div className="bg-dark-elevated rounded-xl p-4 border border-white/10 mb-6">
-        <div className="relative">
+      <div className="bg-dark-elevated rounded-xl p-4 border border-white/10 mb-6 flex items-center gap-3">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-brand-text-tertiary" />
           <input
             type="text"
@@ -292,6 +349,14 @@ export default function AdminUsers() {
             className="w-full pl-10 pr-4 py-2.5 bg-dark-surface border border-white/10 rounded-lg text-white placeholder-brand-text-tertiary focus:outline-none focus:border-accent transition-colors"
           />
         </div>
+        {!forcedSegment && activeSegment && (
+          <button
+            onClick={() => setActiveSegment(null)}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-accent/10 border border-accent/30 text-accent text-sm font-medium hover:bg-accent/20 transition-colors flex-shrink-0"
+          >
+            <X className="w-3.5 h-3.5" /> Clear filter
+          </button>
+        )}
       </div>
 
       {/* Loading */}

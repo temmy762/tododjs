@@ -4,6 +4,40 @@ import { uploadToWasabi, deleteFromWasabi, getSignedDownloadUrl } from '../confi
 import stripe from '../config/stripe.js';
 import { sendBlockedAccountEmail } from '../services/emailService.js';
 
+// Shared plan-id variant matcher (covers Stripe planIds, legacy hyphenated
+// values, and the admin-set `subscription.plan` field).
+const planMatch = (ids) => ({
+  'subscription.status': 'active',
+  $or: [
+    { 'subscription.plan': { $in: ids } },
+    { 'subscription.planId': { $in: ids } }
+  ]
+});
+const INDIVIDUAL_PLAN_IDS = ['premium', 'individual-monthly', 'individual_monthly', 'individual-quarterly', 'individual_quarterly'];
+const SHARED_PLAN_IDS = ['pro', 'shared-monthly', 'shared_monthly', 'shared-quarterly', 'shared_quarterly'];
+
+// Maps a stat-card "segment" to its Mongo filter. Kept in one place so the
+// displayed count (from getAllUsers' stats block) and the filtered table
+// (query built from this same function) can never disagree.
+function buildSegmentQuery(segment) {
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  switch (segment) {
+    case 'free':
+      return { 'subscription.status': { $ne: 'active' } };
+    case 'individual':
+      return planMatch(INDIVIDUAL_PLAN_IDS);
+    case 'shared':
+      return planMatch(SHARED_PLAN_IDS);
+    case 'flagged':
+      return { $or: [{ downloadSuspended: true }, { downloadFlaggedForReview: true }, { isBlocked: true }] };
+    case 'new':
+      return { createdAt: { $gte: startOfMonth } };
+    default:
+      return {};
+  }
+}
+
 // @desc    Get all users with search, pagination, stats
 // @route   GET /api/users
 // @access  Private/Admin
@@ -14,35 +48,38 @@ export const getAllUsers = async (req, res) => {
       role,
       plan,
       status,
+      segment,
       sort = '-createdAt',
       page = 1,
       limit = 25
     } = req.query;
 
-    const query = {};
+    const query = { role: { $ne: 'admin' } };
+    const andConditions = [];
 
     if (search) {
-      query.$or = [
+      andConditions.push({ $or: [
         { name: { $regex: search, $options: 'i' } },
         { email: { $regex: search, $options: 'i' } }
-      ];
+      ]});
     }
 
     if (role) query.role = role;
     if (plan) {
       const planVariants = [plan, plan.replace(/-/g, '_'), plan.replace(/_/g, '-')];
-      const planCondition = { $or: [
+      andConditions.push({ $or: [
         { 'subscription.planId': { $in: planVariants } },
         { 'subscription.plan': { $in: planVariants } }
-      ]};
-      if (query.$or) {
-        query.$and = [{ $or: query.$or }, planCondition];
-        delete query.$or;
-      } else {
-        query.$or = planCondition.$or;
-      }
+      ]});
     }
     if (status) query['subscription.status'] = status;
+
+    // segment=all (or omitted) shows everyone — the Total Members card.
+    if (segment && segment !== 'all') {
+      Object.assign(query, buildSegmentQuery(segment));
+    }
+
+    if (andConditions.length) query.$and = andConditions;
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const total = await User.countDocuments(query);
@@ -54,18 +91,9 @@ export const getAllUsers = async (req, res) => {
       .limit(parseInt(limit))
       .lean();
 
-    // Compute stats by subscription.plan (covers both Stripe and admin-granted plans)
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-
-    const planMatch = (ids) => ({
-      'subscription.status': 'active',
-      $or: [
-        { 'subscription.plan': { $in: ids } },
-        { 'subscription.planId': { $in: ids } }
-      ]
-    });
-
+    // Compute stats by subscription.plan (covers both Stripe and admin-granted plans).
+    // Each count uses buildSegmentQuery so the number on a stat card always
+    // matches exactly what clicking that card filters the table to.
     const [
       totalUsers,
       activeCount,
@@ -74,6 +102,7 @@ export const getAllUsers = async (req, res) => {
       sharedMonthlyCount,
       sharedQuarterlyCount,
       freeCount,
+      flaggedCount,
       newThisMonth,
       activePlans
     ] = await Promise.all([
@@ -83,8 +112,9 @@ export const getAllUsers = async (req, res) => {
       User.countDocuments(planMatch(['individual-quarterly', 'individual_quarterly'])),
       User.countDocuments(planMatch(['pro', 'shared-monthly', 'shared_monthly'])),
       User.countDocuments(planMatch(['shared-quarterly', 'shared_quarterly'])),
-      User.countDocuments({ 'subscription.status': { $ne: 'active' }, role: { $ne: 'admin' } }),
-      User.countDocuments({ createdAt: { $gte: startOfMonth }, role: { $ne: 'admin' } }),
+      User.countDocuments({ role: { $ne: 'admin' }, ...buildSegmentQuery('free') }),
+      User.countDocuments({ role: { $ne: 'admin' }, ...buildSegmentQuery('flagged') }),
+      User.countDocuments({ role: { $ne: 'admin' }, ...buildSegmentQuery('new') }),
       SubscriptionPlan.find({ isActive: true }).select('planId price duration').lean()
     ]);
 
@@ -107,6 +137,7 @@ export const getAllUsers = async (req, res) => {
         sharedMonthlyCount,
         sharedQuarterlyCount,
         freeCount,
+        flaggedCount,
         newThisMonth,
         estimatedRevenue: parseFloat(estimatedRevenue)
       },
@@ -117,6 +148,68 @@ export const getAllUsers = async (req, res) => {
         pages: Math.ceil(total / parseInt(limit))
       }
     });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// @desc    Export users (matching the current search/segment filter) as CSV
+// @route   GET /api/users/export
+// @access  Private/Admin
+const EXPORT_ROW_CAP = 10000;
+export const exportUsers = async (req, res) => {
+  try {
+    const { search = '', segment } = req.query;
+
+    const query = { role: { $ne: 'admin' } };
+    if (search) {
+      query.$and = [{ $or: [
+        { name: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } }
+      ]}];
+    }
+    if (segment && segment !== 'all') {
+      Object.assign(query, buildSegmentQuery(segment));
+    }
+
+    const users = await User.find(query)
+      .select('-password')
+      .sort('-createdAt')
+      .limit(EXPORT_ROW_CAP)
+      .lean();
+
+    const escapeCsv = (val) => {
+      const s = val === null || val === undefined ? '' : String(val);
+      return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    const planOf = (u) => u.subscription?.planId || u.subscription?.plan || 'free';
+    const statusOf = (u) => {
+      if (u.isBlocked) return `Blocked (${u.blockReason || 'unspecified'})`;
+      if (u.downloadSuspended) return 'Download suspended';
+      if (u.isActive === false) return 'Inactive';
+      return 'Active';
+    };
+
+    const header = ['Name', 'Email', 'Phone', 'Plan', 'Subscription Status', 'Joined', 'Last Login', 'Downloads Total', 'Downloads Today', 'Account Status'];
+    const rows = users.map(u => [
+      u.name || '',
+      u.email || '',
+      u.phoneNumber || '',
+      planOf(u),
+      u.subscription?.status || '',
+      u.createdAt ? new Date(u.createdAt).toISOString().slice(0, 10) : '',
+      u.lastLogin ? new Date(u.lastLogin).toISOString() : '',
+      u.downloads?.total || 0,
+      u.downloads?.today || 0,
+      statusOf(u)
+    ].map(escapeCsv).join(','));
+
+    const csv = [header.join(','), ...rows].join('\r\n');
+    const filename = `users-export-${segment || 'all'}-${new Date().toISOString().slice(0, 10)}.csv`;
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.status(200).send(csv);
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getAllUsers, updateUser, deleteUser, uploadAvatar, getDeviceOverview, revokeDevice, getSharingSuspects, syncUserStripeSubscription, bulkSyncStripeSubscriptions, blockUser, unblockUser, liftDownloadSuspension } from '../controllers/userController.js';
+import { getAllUsers, exportUsers, updateUser, deleteUser, uploadAvatar, getDeviceOverview, revokeDevice, getSharingSuspects, syncUserStripeSubscription, bulkSyncStripeSubscriptions, blockUser, unblockUser, liftDownloadSuspension } from '../controllers/userController.js';
 import { protect, authorize } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -18,6 +18,7 @@ const avatarUpload = multer({
 });
 
 router.get('/', protect, authorize('admin'), getAllUsers);
+router.get('/export', protect, authorize('admin'), exportUsers);
 router.get('/devices', protect, authorize('admin'), getDeviceOverview);
 router.get('/sharing-suspects', protect, authorize('admin'), getSharingSuspects);
 router.put('/avatar', protect, avatarUpload.single('avatar'), uploadAvatar);

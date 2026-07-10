@@ -11,6 +11,7 @@ import {
   Palette, 
   Settings, 
   Shield,
+  ShieldAlert,
   Monitor,
   CreditCard,
   FolderOpen,
@@ -107,6 +108,7 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
     { id: 'downloads', label: t('library.downloads'), icon: TrendingUp },
     { id: 'tracks', label: t('admin.tracks'), icon: Music },
     { id: 'users', label: t('admin.users'), icon: Users },
+    { id: 'piracy', label: 'Piracy Detection', icon: ShieldAlert },
     { id: 'devices', label: t('admin.devicesAndSessions'), icon: Monitor },
     { id: 'subscriptions', label: t('admin.subscriptions'), icon: CreditCard },
     { id: 'analytics', label: t('admin.analytics'), icon: Database },
@@ -137,6 +139,14 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
         return <AdminPlaylists />;
       case 'users':
         return <AdminUsers />;
+      case 'piracy':
+        return (
+          <AdminUsers
+            forcedSegment="flagged"
+            title="Piracy Detection"
+            subtitle="Users blocked or flagged by the anti-abuse system"
+          />
+        );
       case 'devices':
         return <AdminUserDevices />;
       case 'subscriptions':
