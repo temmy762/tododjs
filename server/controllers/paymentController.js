@@ -1,5 +1,10 @@
 import stripe from '../config/stripe.js';
 import { isStaging, testConfig } from '../config/stripeTest.js';
+
+// Strip trailing slashes so FRONTEND_URL=https://site.com/ doesn't produce
+// https://site.com//subscription/success — the double slash breaks the SPA's
+// route matching, so the success page never renders after checkout.
+const FRONTEND_BASE = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
 import User from '../models/User.js';
 import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentReceiptEmail, sendSubscriptionCancelledEmail, sendPaymentFailedEmail } from '../services/emailService.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
@@ -225,8 +230,8 @@ export const createCheckoutSession = async (req, res) => {
         }
       ],
       mode: 'subscription',
-      success_url: `${process.env.FRONTEND_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.FRONTEND_URL}/subscription/cancel`,
+      success_url: `${FRONTEND_BASE}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${FRONTEND_BASE}/subscription/cancel`,
       metadata: {
         userId: req.user._id.toString(),
         planId: planDoc.planId,

@@ -4,7 +4,9 @@ import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import User from '../models/User.js';
 import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentReceiptEmail, sendSubscriptionCancelledEmail, sendPaymentFailedEmail } from '../services/emailService.js';
 
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+// Trailing slashes stripped — FRONTEND_URL=https://site.com/ would otherwise
+// produce double-slash paths that break SPA route matching.
+const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
 
 // @desc    Verify payment and activate subscription
 // @route   POST /api/stripe/verify-payment
