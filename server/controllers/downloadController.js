@@ -566,6 +566,25 @@ export const downloadAlbumFile = async (req, res) => {
       });
     }
 
+    // Eager behaviour check BEFORE streaming. The post-completion check (on
+    // res 'finish') persists the warning level but can't block the response
+    // that crossed the line — headers are long gone. Without this, on-the-fly
+    // ZIPs showed the Level-1 popup late and a Level-2 crossing only took
+    // effect on the NEXT click. Counting here (this download not yet logged)
+    // means limits trigger on the attempt AFTER the threshold is exceeded,
+    // matching the ToS wording. checkDownloadBehaviour is idempotent per
+    // level, so the finish-time check never double-fires notifications.
+    if (user.role !== 'admin') {
+      const preCheck = await checkDownloadBehaviour(user).catch(() => null);
+      if (preCheck?.level === 2) {
+        if (req.query.token) {
+          const pausedUntil = preCheck.pausedUntil ? new Date(preCheck.pausedUntil).toISOString() : '';
+          return res.redirect(`/record-pool?downloadBlocked=2&pausedUntil=${encodeURIComponent(pausedUntil)}`);
+        }
+        return res.status(403).json(buildSuspensionResponse(user));
+      }
+    }
+
     const filename = buildSafeFilename(`${album.name || 'Album'}.zip`);
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
