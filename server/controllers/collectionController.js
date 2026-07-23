@@ -51,8 +51,11 @@ async function notifyAdminUncategorized(collectionId, collectionName) {
       { $limit: 10 }
     ]);
 
-    const adminEmail = process.env.ADMIN_EMAIL;
-    if (!adminEmail) return;
+    // ADMIN_EMAIL may be a comma-separated list — sendEmail needs an array,
+    // not the raw joined string (Resend rejects a comma-joined string as one
+    // malformed address and the send silently fails).
+    const adminEmails = (process.env.ADMIN_EMAIL || '').split(',').map(e => e.trim()).filter(Boolean);
+    if (!adminEmails.length) return;
 
     const labelRows = rawLabels.length
       ? rawLabels.map(r => `<tr><td style="padding:6px 12px;border-bottom:1px solid #1a1a1a;">${r._id}</td><td style="padding:6px 12px;border-bottom:1px solid #1a1a1a;text-align:center;">${r.count}</td></tr>`).join('')
@@ -90,7 +93,7 @@ async function notifyAdminUncategorized(collectionId, collectionName) {
       </div>`;
 
     await sendEmail({
-      to: adminEmail,
+      to: adminEmails,
       subject: `⚠ ${count} uncategorized track${count !== 1 ? 's' : ''} in "${collectionName}"`,
       html,
       text: `${count} tracks in "${collectionName}" were placed in "Others" and need category assignment. Log in to review them at ${process.env.FRONTEND_URL || 'https://tododjs.com'}.`

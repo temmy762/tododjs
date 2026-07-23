@@ -251,17 +251,26 @@ export async function sendPaymentFailedEmail(user) {
 
 // ─── Admin Notification Emails ───
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+// Comma-separated list supported (e.g. "contacto.tododjs@gmail.com,info@tododjs.com")
+// so notifications can land in multiple inboxes. Previously this was passed to
+// sendEmail as a single raw string; Resend rejects a comma-joined string as one
+// malformed address, so EVERY admin notification (suspicious downloads, new
+// signups, cancellations, expired subscriptions) silently stopped sending the
+// moment ADMIN_EMAIL was set to more than one address.
+const ADMIN_EMAILS = (process.env.ADMIN_EMAIL || '')
+  .split(',')
+  .map(e => e.trim())
+  .filter(Boolean);
 
 /**
  * Send admin notification (skips silently if ADMIN_EMAIL is not set)
  */
 async function sendAdminNotification({ subject, html, text }) {
-  if (!ADMIN_EMAIL) {
+  if (!ADMIN_EMAILS.length) {
     console.log('ADMIN_EMAIL not set — skipping admin notification:', subject);
     return { success: false, error: 'ADMIN_EMAIL not configured' };
   }
-  return sendEmail({ to: ADMIN_EMAIL, subject, html, text });
+  return sendEmail({ to: ADMIN_EMAILS, subject, html, text });
 }
 
 /**
