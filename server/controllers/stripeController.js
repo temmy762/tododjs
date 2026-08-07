@@ -10,17 +10,31 @@ const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5173').repla
 
 // @desc    Verify payment and activate subscription
 // @route   POST /api/stripe/verify-payment
-// @access  Private
+// @access  Public — the Stripe checkout session ID (unguessable, and only
+//          known to whoever just completed that checkout) is itself the proof
+//          of payment. This route MUST NOT require a JWT: after Stripe's
+//          hosted checkout the customer often returns without a usable token
+//          (logged out, different browser/device, or an account that was
+//          created by the checkout itself and has never logged in). Requiring
+//          auth here produced "Not authorized to access this route" on the
+//          success page for paying customers — one paid twice believing the
+//          first attempt had failed.
 export const verifyPayment = async (req, res) => {
   try {
     const { sessionId } = req.body;
+    if (!sessionId) {
+      return res.status(400).json({ success: false, message: 'Session ID is required' });
+    }
 
-    // Retrieve the session from Stripe — webhook is the sole source of truth for activation
+    // Retrieve the session from Stripe — Stripe is the source of truth
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-    // Validate the session belongs to the requesting user
+    // If the caller IS authenticated, still enforce that the session belongs
+    // to them (prevents a logged-in user probing someone else's session).
+    // Unauthenticated callers are allowed: possession of the session ID is
+    // the credential, and the response exposes no personal data.
     const sessionUserId = session.metadata?.userId;
-    if (sessionUserId && sessionUserId !== req.user.id.toString()) {
+    if (req.user && sessionUserId && sessionUserId !== req.user.id.toString()) {
       console.warn(`[SECURITY] verifyPayment session mismatch: sessionUser=${sessionUserId}, reqUser=${req.user.id}`);
       return res.status(403).json({
         success: false,
@@ -37,9 +51,23 @@ export const verifyPayment = async (req, res) => {
       });
     }
 
-    // Payment confirmed — no DB writes here; webhook handles full activation
+    // Safety net: the webhook is the normal activation path, but if it is
+    // delayed, disabled, or failing (as happened when the live endpoint was
+    // auto-disabled in Stripe), the customer would pay and stay on the free
+    // plan. Run the same idempotent handler here so a confirmed payment
+    // always activates. handleCheckoutCompleted dedups on session.id, so a
+    // later webhook delivery for this session is a no-op.
+    let activated = false;
+    try {
+      await handleCheckoutCompleted(session);
+      activated = true;
+    } catch (e) {
+      console.error('[verifyPayment] fallback activation failed:', e.message);
+    }
+
     res.status(200).json({
       success: true,
+      activated,
       message: 'Payment confirmed. Subscription will be activated shortly.'
     });
   } catch (error) {

@@ -13,6 +13,7 @@ export default function PaymentSuccessPage() {
   const [loading, setLoading] = useState(true);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [needsLogin, setNeedsLogin] = useState(false);
   const [subscriptionData, setSubscriptionData] = useState(null);
 
   useEffect(() => {
@@ -27,27 +28,41 @@ export default function PaymentSuccessPage() {
   const verifyPayment = async () => {
     try {
       const token = localStorage.getItem('token');
+      // Only send Authorization when a token actually exists — sending
+      // "Bearer null" made the server reject the request outright.
+      const headers = { 'Content-Type': 'application/json' };
+      if (token) headers.Authorization = `Bearer ${token}`;
+
       const res = await fetch(`${API_URL}/stripe/verify-payment`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers,
         body: JSON.stringify({ sessionId })
       });
 
       const data = await res.json();
 
       if (data.success) {
-        // Payment confirmed — now wait for the webhook to activate the subscription
-        await pollSubscriptionActivation(token);
+        if (token) {
+          // Logged in — wait for activation to land, then show success
+          await pollSubscriptionActivation(token);
+        } else {
+          // Paid while logged out (or the checkout created the account).
+          // Activation is handled server-side; tell them to log in rather
+          // than showing a failure for a payment that clearly succeeded.
+          setNeedsLogin(true);
+          setSuccess(true);
+          setLoading(false);
+        }
       } else {
-        setError(data.message || 'Payment verification failed');
+        setError(data.message || t('payment.verificationFailedGeneric'));
         setLoading(false);
       }
     } catch (err) {
       console.error('Verification error:', err);
-      setError('An error occurred while verifying your payment');
+      // The payment itself already succeeded at Stripe — never present this
+      // as a failed payment, or customers pay a second time (this happened).
+      setSuccess(true);
+      setNeedsLogin(!localStorage.getItem('token'));
       setLoading(false);
     }
   };
@@ -141,10 +156,11 @@ export default function PaymentSuccessPage() {
             {t('subscription.subscriptionActivated')}
           </p>
 
-
           {/* Thank You Message */}
           <p className="text-brand-text-tertiary mb-6">
-            {t('subscription.thankYou')}! {t('payment.unlimitedAccess')}
+            {needsLogin
+              ? t('payment.loginToAccess', 'Your subscription is active. Please log in with the email you used at checkout to start downloading.')
+              : `${t('subscription.thankYou')}! ${t('payment.unlimitedAccess')}`}
           </p>
 
           {/* CTA Button */}
@@ -152,14 +168,16 @@ export default function PaymentSuccessPage() {
             onClick={() => navigate('/')}
             className="w-full py-3 rounded-lg bg-accent hover:bg-accent-hover text-white font-semibold transition-all duration-150 shadow-lg shadow-accent/30 hover:shadow-xl hover:shadow-accent/40 flex items-center justify-center gap-2"
           >
-            {t('payment.startDownloading')}
+            {needsLogin ? t('auth.login', 'Log in') : t('payment.startDownloading')}
             <ArrowRight className="w-5 h-5" />
           </button>
 
-          {/* Auto Redirect Notice */}
-          <p className="text-xs text-brand-text-tertiary mt-4">
-            {t('payment.redirecting')}
-          </p>
+          {/* Auto Redirect Notice — only when we're actually redirecting */}
+          {!needsLogin && (
+            <p className="text-xs text-brand-text-tertiary mt-4">
+              {t('payment.redirecting')}
+            </p>
+          )}
         </div>
       </div>
     );
