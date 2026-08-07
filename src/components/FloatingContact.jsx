@@ -62,17 +62,22 @@ export default function FloatingContact() {
     setStatus('submitting');
     setErrorMsg('');
     try {
+      // multipart/form-data so the actual file bytes reach the server (not
+      // just filenames) — the admin email embeds these as inline image
+      // previews / download links, which needs the real file uploaded
+      // somewhere reachable. No Content-Type header here: the browser sets
+      // the multipart boundary itself.
+      const formData = new FormData();
+      formData.append('name', form.name);
+      formData.append('email', form.email);
+      formData.append('phone', form.phone);
+      formData.append('subject', form.subject);
+      formData.append('message', form.message);
+      files.forEach(f => formData.append('attachments', f));
+
       const res = await fetch(`${API_URL}/contact`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          subject: form.subject,
-          message: form.message,
-          attachments: files.map(f => f.name),
-        }),
+        body: formData,
       });
       const data = await res.json();
       if (data.success) {
