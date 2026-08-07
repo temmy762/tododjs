@@ -35,6 +35,7 @@ import deviceRoutes from './routes/device.js';
 import categoryRoutes from './routes/category.js';
 import mashupCategoryRoutes from './routes/mashupCategory.js';
 import contactRoutes from './routes/contact.js';
+import { startSubscriptionReconciler } from './services/subscriptionReconciler.js';
 
 const app = express();
 
@@ -178,6 +179,10 @@ const PORT = process.env.PORT || 5000;
 
 const server = app.listen(PORT, () => {
   console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  // Webhook-independent safety net: repairs any account whose Stripe
+  // subscription is active but whose local record disagrees (missed webhooks,
+  // disabled endpoint, downtime). See services/subscriptionReconciler.js.
+  startSubscriptionReconciler();
 });
 
 // Per-route req.setTimeout(0) already handles upload timeouts.
