@@ -35,7 +35,10 @@ import deviceRoutes from './routes/device.js';
 import categoryRoutes from './routes/category.js';
 import mashupCategoryRoutes from './routes/mashupCategory.js';
 import contactRoutes from './routes/contact.js';
+import mongoose from 'mongoose';
 import { startSubscriptionReconciler } from './services/subscriptionReconciler.js';
+import { startTempSweeper } from './utils/tempCleanup.js';
+import { recoverOrphanedJobs } from './services/processingQueue.js';
 
 const app = express();
 
@@ -157,11 +160,36 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/mashup-categories', mashupCategoryRoutes);
 app.use('/api/contact', contactRoutes);
 
-// Health check
+// Health check.
+// Reports real state rather than just "the process answered": it previously
+// returned 200 even with the database down, so an uptime monitor would have
+// seen nothing wrong during the outages that disabled the Stripe webhook.
+// Returns 503 when unhealthy so a monitor actually alerts.
+let lastLoopCheck = Date.now();
+let eventLoopLagMs = 0;
+setInterval(() => {
+  const now = Date.now();
+  eventLoopLagMs = Math.max(0, now - lastLoopCheck - 1000);
+  lastLoopCheck = now;
+}, 1000).unref?.();
+
 app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'TodoDJS API is running',
+  // 1 = connected (mongoose readyState)
+  const dbConnected = mongoose.connection?.readyState === 1;
+  // Sustained lag means CPU work is starving the event loop — the condition
+  // that timed out Stripe webhooks and stalled uploads.
+  const loopBlocked = eventLoopLagMs > 5000;
+  const healthy = dbConnected && !loopBlocked;
+
+  res.status(healthy ? 200 : 503).json({
+    success: healthy,
+    message: healthy ? 'TodoDJS API is running' : 'TodoDJS API is degraded',
+    checks: {
+      database: dbConnected ? 'connected' : 'disconnected',
+      eventLoopLagMs,
+      eventLoop: loopBlocked ? 'blocked' : 'ok',
+    },
+    uptimeSeconds: Math.round(process.uptime()),
     timestamp: new Date().toISOString()
   });
 });
@@ -183,6 +211,11 @@ const server = app.listen(PORT, () => {
   // subscription is active but whose local record disagrees (missed webhooks,
   // disabled endpoint, downtime). See services/subscriptionReconciler.js.
   startSubscriptionReconciler();
+  // Remove upload temp files orphaned by a crash or restart (23 GB had
+  // accumulated in production). Runs now and every 6h.
+  startTempSweeper();
+  // Fail uploads left "Server queue — waiting" forever by a previous restart.
+  recoverOrphanedJobs();
 });
 
 // Per-route req.setTimeout(0) already handles upload timeouts.

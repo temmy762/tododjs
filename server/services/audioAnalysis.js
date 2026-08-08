@@ -1,304 +1,131 @@
-import { Essentia, EssentiaWASM } from 'essentia.js';
-import decode from 'audio-decode';
+/**
+ * Audio analysis dispatcher.
+ *
+ * The Essentia work itself lives unchanged in audioAnalysisCore.js; this
+ * module's only job is to run it on a worker thread instead of the main one.
+ *
+ * Why: Essentia's KeyExtractor / RhythmExtractor2013 / Spectrum are
+ * SYNCHRONOUS WASM calls, and audio-decode is CPU-bound too. Running them
+ * inline froze the single Node event loop for the duration of every track.
+ * Nothing else could be served while that happened — which is how Stripe
+ * webhooks hit their ~20s timeout (184 failed deliveries over nine days,
+ * ending with Stripe disabling the endpoint) and why uploads appeared to
+ * stall. Moving the work to a worker keeps the event loop free to answer
+ * requests while tracks are analysed.
+ *
+ * The worker is long-lived and reused: initialising the WASM module costs
+ * real time, so spawning one per track would be slower than what it replaces.
+ * Collection processing is already serialised (processingQueue, one at a
+ * time), so a single worker matches the actual concurrency.
+ *
+ * Public API is unchanged, so callers (tonalityDetection, genreDetection)
+ * need no modification.
+ */
+import { Worker } from 'worker_threads';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-let essentiaInstance = null;
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const WORKER_PATH = path.join(__dirname, 'audioAnalysisWorker.js');
 
-async function getEssentia() {
-  if (essentiaInstance) return essentiaInstance;
-  // EssentiaWASM is already an instantiated WASM module object, not a factory function
-  essentiaInstance = new Essentia(EssentiaWASM);
-  console.log('✅ Essentia.js WASM initialized');
-  return essentiaInstance;
+// A track that cannot be analysed must not stall the whole upload pipeline.
+const JOB_TIMEOUT_MS = (() => {
+  const raw = parseInt(process.env.AUDIO_ANALYSIS_TIMEOUT_MS, 10);
+  return Number.isFinite(raw) && raw > 0 ? raw : 120000;
+})();
+
+const EMPTY_AUDIO = { key: null, scale: null, camelot: null, bpm: null, confidence: 0 };
+const EMPTY_GENRE = { genre: null, confidence: 0, features: null };
+
+let worker = null;
+let nextJobId = 1;
+const pending = new Map();
+
+function failAllPending(reason) {
+  for (const [, job] of pending) {
+    clearTimeout(job.timer);
+    job.resolve(job.empty);
+  }
+  pending.clear();
+  if (reason) console.error(`[audio-analysis] ${reason}`);
 }
 
-function getEssentiaMaxBytes() {
-  const raw = process.env.ESSENTIA_MAX_BYTES;
-  const parsed = raw ? parseInt(raw, 10) : NaN;
-  if (!Number.isFinite(parsed) || parsed <= 0) return 5 * 1024 * 1024;
-  return parsed;
+function getWorker() {
+  if (worker) return worker;
+
+  worker = new Worker(WORKER_PATH);
+
+  worker.on('message', ({ id, ok, result, error }) => {
+    const job = pending.get(id);
+    if (!job) return;
+    pending.delete(id);
+    clearTimeout(job.timer);
+    if (!ok) console.error(`[audio-analysis] worker error: ${error}`);
+    job.resolve(ok ? result : job.empty);
+  });
+
+  // If the worker dies (OOM on a large track, native crash), drop the handle
+  // so the next call starts a fresh one, and release anything still waiting
+  // with the same empty result the inline version returned on failure.
+  worker.on('error', (err) => {
+    worker = null;
+    failAllPending(`worker crashed: ${err?.message || err}`);
+  });
+  worker.on('exit', (code) => {
+    worker = null;
+    if (pending.size) failAllPending(`worker exited (code ${code}) with jobs in flight`);
+  });
+
+  worker.unref(); // never hold the process open
+
+  return worker;
 }
 
-function limitAnalysisBuffer(mp3Buffer) {
-  const maxBytes = getEssentiaMaxBytes();
-  if (!Buffer.isBuffer(mp3Buffer)) return mp3Buffer;
-  if (mp3Buffer.length <= maxBytes) return mp3Buffer;
-  return mp3Buffer.subarray(0, maxBytes);
-}
+function run(type, mp3Buffer, empty) {
+  if (!mp3Buffer || !mp3Buffer.length) return Promise.resolve(empty);
 
-const CAMELOT_MAP = {
-  'C major': '8B', 'A minor': '8A',
-  'Db major': '3B', 'Bb minor': '3A',
-  'D major': '10B', 'B minor': '10A',
-  'Eb major': '5B', 'C minor': '5A',
-  'E major': '12B', 'C# minor': '12A',
-  'F major': '7B', 'D minor': '7A',
-  'F# major': '2B', 'Eb minor': '2A',
-  'G major': '9B', 'E minor': '9A',
-  'Ab major': '4B', 'F minor': '4A',
-  'A major': '11B', 'F# minor': '11A',
-  'Bb major': '6B', 'G minor': '6A',
-  'B major': '1B', 'G# minor': '1A'
-};
+  return new Promise((resolve) => {
+    let w;
+    try {
+      w = getWorker();
+    } catch (e) {
+      console.error(`[audio-analysis] could not start worker: ${e?.message || e}`);
+      return resolve(empty);
+    }
 
-function toCamelot(key, scale) {
-  if (!key || !scale) return null;
-  const normalized = key.replace('♯', '#').replace('♭', 'b');
-  const lookup = `${normalized} ${scale}`;
-  return CAMELOT_MAP[lookup] || null;
+    const id = nextJobId++;
+    const timer = setTimeout(() => {
+      if (!pending.has(id)) return;
+      pending.delete(id);
+      console.error(`[audio-analysis] job ${id} (${type}) timed out after ${JOB_TIMEOUT_MS}ms — skipping track`);
+      // Terminate so a wedged WASM call cannot block every later track; the
+      // next request transparently spawns a fresh worker.
+      try { w.terminate(); } catch { /* already gone */ }
+      worker = null;
+      resolve(empty);
+    }, JOB_TIMEOUT_MS);
+
+    pending.set(id, { resolve, timer, empty });
+    w.postMessage({ id, type, buffer: mp3Buffer });
+  });
 }
 
 /**
- * Analyze an MP3 buffer for key and BPM using Essentia.js (real audio analysis).
+ * Analyze an MP3 buffer for key and BPM.
  * @param {Buffer} mp3Buffer - Raw MP3 file buffer
  * @returns {Promise<{key: string, scale: string, camelot: string, bpm: number, confidence: number}>}
  */
-export async function analyzeAudio(mp3Buffer) {
-  if (process.env.ESSENTIA_ENABLED === 'false') {
-    return { key: null, scale: null, camelot: null, bpm: null, confidence: 0 };
-  }
-
-  const essentia = await getEssentia();
-
-  if (typeof essentia.KeyExtractor !== 'function') {
-    console.warn('   ⚠ Essentia KeyExtractor not available — WASM may not be fully initialised');
-    return { key: null, scale: null, camelot: null, bpm: null, confidence: 0 };
-  }
-
-  // Decode MP3 to PCM float32
-  let audioBuffer;
-  try {
-    audioBuffer = await decode(limitAnalysisBuffer(mp3Buffer));
-  } catch (err) {
-    console.error('Audio decode error:', err.message);
-    return { key: null, scale: null, camelot: null, bpm: null, confidence: 0 };
-  }
-
-  // Get mono channel (mix down if stereo)
-  let monoData;
-  if (audioBuffer.numberOfChannels >= 2) {
-    const left = audioBuffer.getChannelData(0);
-    const right = audioBuffer.getChannelData(1);
-    monoData = new Float32Array(left.length);
-    for (let i = 0; i < left.length; i++) {
-      monoData[i] = (left[i] + right[i]) / 2;
-    }
-  } else {
-    monoData = audioBuffer.getChannelData(0);
-  }
-
-  // Convert to Essentia vector
-  const signal = essentia.arrayToVector(monoData);
-
-  let keyResult = { key: null, scale: null, camelot: null, confidence: 0 };
-  let bpmResult = null;
-
-  // Key detection
-  try {
-    const keyData = essentia.KeyExtractor(signal, true, 4096, 4096, 12, 3500, 60, 25, 0.2, 'bgate', audioBuffer.sampleRate, 1, 440, 'cosine', 'hann');
-    if (keyData && keyData.key) {
-      const key = keyData.key;
-      const scale = keyData.scale;
-      const strength = keyData.strength;
-      const camelot = toCamelot(key, scale);
-      keyResult = {
-        key,
-        scale,
-        camelot,
-        confidence: Math.min(strength, 1)
-      };
-    }
-  } catch (err) {
-    console.error('Key detection error:', err.message);
-  }
-
-  // BPM detection — try RhythmExtractor2013 first (more reliable), fall back to PercivalBpmEstimator
-  try {
-    if (typeof essentia.RhythmExtractor2013 === 'function') {
-      const rhythmData = essentia.RhythmExtractor2013(signal, 208, 'multifeature', 40);
-      if (rhythmData && rhythmData.bpm > 0) {
-        bpmResult = Math.round(rhythmData.bpm);
-      }
-    }
-  } catch (err) {
-    console.error('RhythmExtractor2013 error:', err.message);
-  }
-
-  if (!bpmResult) {
-    try {
-      // Correct param order: frameSize=1024, hopSize=128, maxBPM=210, minBPM=50, sampleRate
-      const bpmData = essentia.PercivalBpmEstimator(signal, 1024, 128, 210, 50, audioBuffer.sampleRate);
-      if (bpmData && bpmData.bpm > 0) {
-        bpmResult = Math.round(bpmData.bpm);
-      }
-    } catch (err) {
-      console.error('PercivalBpmEstimator error:', err.message);
-    }
-  }
-
-  // Clean up
-  signal.delete();
-
-  return {
-    key: keyResult.key,
-    scale: keyResult.scale,
-    camelot: keyResult.camelot,
-    bpm: bpmResult,
-    confidence: keyResult.confidence
-  };
+export function analyzeAudio(mp3Buffer) {
+  if (process.env.ESSENTIA_ENABLED === 'false') return Promise.resolve(EMPTY_AUDIO);
+  return run('audio', mp3Buffer, EMPTY_AUDIO);
 }
 
 /**
- * Analyze audio features for genre classification using Essentia.js.
- * Uses spectral, rhythmic, and tonal descriptors to predict genre.
+ * Analyze audio features for genre classification.
  * @param {Buffer} mp3Buffer - Raw MP3 file buffer
  * @returns {Promise<{genre: string, confidence: number, features: object}>}
  */
-export async function analyzeGenre(mp3Buffer) {
-  if (process.env.ESSENTIA_ENABLED === 'false') {
-    return { genre: null, confidence: 0, features: null };
-  }
-
-  const essentia = await getEssentia();
-
-  if (typeof essentia.SpectralRollOff !== 'function') {
-    return { genre: null, confidence: 0, features: null };
-  }
-
-  // Decode MP3 to PCM float32
-  let audioBuffer;
-  try {
-    audioBuffer = await decode(limitAnalysisBuffer(mp3Buffer));
-  } catch (err) {
-    console.error('Audio decode error:', err.message);
-    return { genre: null, confidence: 0, features: null };
-  }
-
-  // Get mono channel
-  let monoData;
-  if (audioBuffer.numberOfChannels >= 2) {
-    const left = audioBuffer.getChannelData(0);
-    const right = audioBuffer.getChannelData(1);
-    monoData = new Float32Array(left.length);
-    for (let i = 0; i < left.length; i++) {
-      monoData[i] = (left[i] + right[i]) / 2;
-    }
-  } else {
-    monoData = audioBuffer.getChannelData(0);
-  }
-
-  const signal = essentia.arrayToVector(monoData);
-  const sampleRate = audioBuffer.sampleRate;
-
-  const features = {};
-
-  try {
-    // Spectral features for genre classification
-    const windowSize = 2048;
-    const hopSize = 1024;
-    const spectrum = essentia.Spectrum(signal, windowSize);
-    const spectralCentroid = essentia.SpectralCentroidTime(spectrum.spectrum);
-    const spectralRolloff = essentia.SpectralRollOff(spectrum.spectrum, 0.85, sampleRate);
-    const spectralFlux = essentia.SpectralFlux(spectrum.spectrum, hopSize, true);
-    const zeroCrossingRate = essentia.ZeroCrossingRate(signal, hopSize, windowSize);
-
-    features.spectralCentroid = spectralCentroid.centroid;
-    features.spectralRolloff = spectralRolloff.rollOff;
-    features.spectralFlux = spectralFlux.spectralFlux;
-    features.zeroCrossingRate = zeroCrossingRate.zcr;
-
-    // Rhythm features - BPM and beat strength
-    const bpmData = essentia.PercivalBpmEstimator(signal, 1024, 2048, 128, 128, 210, 50, sampleRate);
-    features.bpm = bpmData.bpm;
-    features.rhythmConfidence = bpmData.confidence || 0.5;
-
-    // Low-level energy features
-    const rms = essentia.RMS(signal);
-    features.rms = rms.rms;
-
-    // Clean up
-    spectrum.spectrum.delete();
-    signal.delete();
-
-    // Genre classification based on audio features
-    // These thresholds are tuned for electronic/DJ music genres
-    const genre = classifyGenreFromFeatures(features);
-
-    return {
-      genre: genre.name,
-      confidence: genre.confidence,
-      features
-    };
-
-  } catch (err) {
-    console.error('Genre analysis error:', err.message);
-    signal.delete();
-    return { genre: null, confidence: 0, features: null };
-  }
-}
-
-/**
- * Classify genre based on extracted audio features.
- * Tuned for DJ/electronic music genres.
- */
-function classifyGenreFromFeatures(features) {
-  const { bpm, spectralCentroid, zeroCrossingRate, spectralFlux, rms } = features;
-
-  // House/Tech House: 120-130 BPM, moderate energy
-  if (bpm >= 120 && bpm <= 130) {
-    if (spectralCentroid > 2000 && spectralFlux > 0.015) {
-      return { name: 'Tech House', confidence: 0.75 };
-    }
-    if (spectralCentroid < 2500) {
-      return { name: 'Deep House', confidence: 0.70 };
-    }
-    return { name: 'House', confidence: 0.65 };
-  }
-
-  // Techno: 130-150 BPM, harder, more energy
-  if (bpm >= 130 && bpm <= 150) {
-    if (spectralCentroid > 3000 || spectralFlux > 0.02) {
-      return { name: 'Techno', confidence: 0.75 };
-    }
-    return { name: 'Tech House', confidence: 0.60 };
-  }
-
-  // Trance/Progressive: 128-140 BPM, melodic
-  if (bpm >= 128 && bpm <= 140) {
-    if (spectralCentroid > 4000) {
-      return { name: 'Trance', confidence: 0.65 };
-    }
-    return { name: 'Progressive House', confidence: 0.60 };
-  }
-
-  // Drum & Bass: 160-180 BPM, high energy
-  if (bpm >= 160 && bpm <= 180) {
-    return { name: 'Drum & Bass', confidence: 0.80 };
-  }
-
-  // Hip-Hop/R&B: 80-100 BPM, lower spectral centroid
-  if (bpm >= 80 && bpm <= 105) {
-    if (zeroCrossingRate < 0.05) {
-      return { name: 'Hip-Hop', confidence: 0.70 };
-    }
-    return { name: 'R&B', confidence: 0.60 };
-  }
-
-  // Afrobeat/Amapiano: 100-115 BPM, percussive
-  if (bpm >= 100 && bpm <= 115) {
-    if (spectralFlux > 0.02) {
-      return { name: 'Afrobeat', confidence: 0.65 };
-    }
-    return { name: 'Amapiano', confidence: 0.60 };
-  }
-
-  // Reggaeton/Latin: 85-100 BPM, specific rhythmic patterns
-  if (bpm >= 85 && bpm <= 100) {
-    if (spectralCentroid > 2000) {
-      return { name: 'Reggaeton', confidence: 0.65 };
-    }
-    return { name: 'Latin', confidence: 0.55 };
-  }
-
-  // Default: Electronic (moderate confidence)
-  return { name: 'Electronic', confidence: 0.50 };
+export function analyzeGenre(mp3Buffer) {
+  if (process.env.ESSENTIA_ENABLED === 'false') return Promise.resolve(EMPTY_GENRE);
+  return run('genre', mp3Buffer, EMPTY_GENRE);
 }
