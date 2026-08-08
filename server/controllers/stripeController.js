@@ -97,59 +97,70 @@ export const handleWebhook = async (req, res) => {
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
 
-  // Handle the event
-  try {
-    switch (event.type) {
-      case 'checkout.session.completed':
-        const session = event.data.object;
-        await handleCheckoutCompleted(session);
-        break;
+  // Acknowledge FIRST, process after.
+  //
+  // This handler used to await every handler — outbound Stripe API calls and
+  // several DB writes — before replying. Stripe gives roughly 20 seconds, and
+  // this is a single-threaded Node process that also runs Essentia audio
+  // analysis and builds ZIPs; while that CPU work holds the event loop, a
+  // webhook request simply sits unanswered until Stripe gives up. Those are
+  // connection-level failures rather than HTTP errors, which is precisely what
+  // Stripe reported: "184 requests had other errors" over nine days, ending in
+  // the endpoint being disabled — the root cause behind every "paid but still
+  // Free" incident, and why re-enabling it kept not sticking.
+  //
+  // Replying immediately keeps delivery healthy no matter how slow or busy the
+  // processing is. The trade-off is that Stripe will not retry a failure that
+  // happens after this 200, so failures are logged loudly and the subscription
+  // reconciler (services/subscriptionReconciler.js, every 6h) remains the
+  // backstop that repairs anything a dropped event would have missed.
+  res.json({ received: true });
 
-      case 'payment_intent.succeeded':
-        const paymentIntent = event.data.object;
-        console.log('PaymentIntent succeeded:', paymentIntent.id);
-        break;
-
-      case 'payment_intent.payment_failed':
-        const failedPayment = event.data.object;
-        console.warn('Payment failed:', failedPayment.id);
-        await handlePaymentFailed(failedPayment);
-        break;
-
-      case 'invoice.paid':
-      case 'invoice.payment_succeeded':
-        await handleInvoicePaid(event.data.object);
-        break;
-
-      case 'invoice.payment_failed':
-        await handleInvoicePaymentFailed(event.data.object);
-        break;
-
-      case 'charge.refunded':
-        const refundedCharge = event.data.object;
-        await handleChargeRefunded(refundedCharge);
-        break;
-
-      case 'customer.subscription.deleted':
-        const deletedSubscription = event.data.object;
-        await handleSubscriptionDeleted(deletedSubscription);
-        break;
-
-      case 'customer.subscription.updated':
-        const updatedSubscription = event.data.object;
-        await handleSubscriptionUpdated(updatedSubscription);
-        break;
-
-      default:
-        console.warn(`Unhandled Stripe event type: ${event.type}`);
-    }
-
-    res.json({ received: true });
-  } catch (error) {
-    console.error('Webhook handler error:', error);
-    res.status(500).json({ error: 'Webhook handler failed' });
-  }
+  processWebhookEvent(event).catch(error => {
+    console.error(`[webhook] processing failed for ${event.type} (${event.id}):`, error?.stack || error?.message || error);
+  });
 };
+
+async function processWebhookEvent(event) {
+  switch (event.type) {
+    case 'checkout.session.completed':
+      await handleCheckoutCompleted(event.data.object);
+      break;
+
+    case 'payment_intent.succeeded':
+      console.log('PaymentIntent succeeded:', event.data.object.id);
+      break;
+
+    case 'payment_intent.payment_failed':
+      console.warn('Payment failed:', event.data.object.id);
+      await handlePaymentFailed(event.data.object);
+      break;
+
+    case 'invoice.paid':
+    case 'invoice.payment_succeeded':
+      await handleInvoicePaid(event.data.object);
+      break;
+
+    case 'invoice.payment_failed':
+      await handleInvoicePaymentFailed(event.data.object);
+      break;
+
+    case 'charge.refunded':
+      await handleChargeRefunded(event.data.object);
+      break;
+
+    case 'customer.subscription.deleted':
+      await handleSubscriptionDeleted(event.data.object);
+      break;
+
+    case 'customer.subscription.updated':
+      await handleSubscriptionUpdated(event.data.object);
+      break;
+
+    default:
+      console.warn(`Unhandled Stripe event type: ${event.type}`);
+  }
+}
 
 // Helper function to handle completed checkout
 async function handleCheckoutCompleted(session) {
