@@ -51,6 +51,30 @@ export const subscribeWithSavedCard = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No saved payment method found. Please use the checkout form.' });
     }
 
+    // Same Stripe-side duplicate guard as createCheckoutSession: the local
+    // check above is blind whenever our record is stale, which is exactly when
+    // customers retry and get billed twice.
+    try {
+      const [active, pastDue] = await Promise.all([
+        stripe.subscriptions.list({ customer: customerId, status: 'active', limit: 1 }),
+        stripe.subscriptions.list({ customer: customerId, status: 'past_due', limit: 1 }),
+      ]);
+      const existing = active.data[0] || pastDue.data[0];
+      if (existing) {
+        console.warn(
+          `[subscribeWithSavedCard] blocked duplicate for user ${user._id}: Stripe already has ` +
+          `${existing.status} subscription ${existing.id} (local record said ${user.subscription?.status || 'none'})`
+        );
+        return res.status(400).json({
+          success: false,
+          message: 'You already have an active subscription. If you cannot access your account, please reload the page or contact support — you have not been charged again.',
+          alreadySubscribed: true,
+        });
+      }
+    } catch (e) {
+      console.error('[subscribeWithSavedCard] Stripe duplicate-check failed, allowing:', e.message);
+    }
+
     // Verify customer exists (guards against live→test mode switch)
     let customer;
     try {
@@ -187,6 +211,38 @@ export const createCheckoutSession = async (req, res) => {
 
     // Get or create Stripe customer
     let stripeCustomerId = req.user.subscription.stripeCustomerId;
+
+    // SECOND guard, against Stripe rather than our own record. The check above
+    // can only see what we stored, and the whole failure mode here is that our
+    // record is stale — when activation did not land, the customer sees "Free",
+    // retries checkout, and the local guard waves each attempt through. That is
+    // how one customer ended up with 7 subscriptions and 7 charges in 2.5 hours,
+    // and two others with 2 each. Stripe is the authority on what they already
+    // pay for, so ask Stripe before creating another subscription.
+    if (stripeCustomerId) {
+      try {
+        const [active, pastDue] = await Promise.all([
+          stripe.subscriptions.list({ customer: stripeCustomerId, status: 'active', limit: 1 }),
+          stripe.subscriptions.list({ customer: stripeCustomerId, status: 'past_due', limit: 1 }),
+        ]);
+        const existing = active.data[0] || pastDue.data[0];
+        if (existing) {
+          console.warn(
+            `[checkout] blocked duplicate for user ${req.user._id}: Stripe already has ` +
+            `${existing.status} subscription ${existing.id} (local record said ` +
+            `${req.user.subscription?.status || 'none'})`
+          );
+          return res.status(400).json({
+            success: false,
+            message: 'You already have an active subscription. If you cannot access your account, please reload the page or contact support — you have not been charged again.',
+            alreadySubscribed: true,
+          });
+        }
+      } catch (e) {
+        // Never block a genuine purchase because this lookup failed.
+        console.error('[checkout] Stripe duplicate-check failed, allowing checkout:', e.message);
+      }
+    }
 
     if (stripeCustomerId) {
       // Verify the customer still exists in Stripe (guards against test/live mode switches)

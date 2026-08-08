@@ -98,6 +98,48 @@ export async function reconcileSubscriptions({ dryRun = false } = {}) {
     });
   }
 
+  // Shared-plan members hold no Stripe subscription of their own — their
+  // access is a copy of the primary's, extended by handleInvoicePaid on each
+  // renewal. If that webhook is missed the member silently expires, and the
+  // Stripe walk above can never see them. Re-sync them from their primary.
+  const primaries = await User.find({ 'subscription.sharedWith.0': { $exists: true } })
+    .select('email subscription.sharedWith subscription.planId subscription.plan subscription.endDate subscription.status')
+    .lean();
+
+  for (const primary of primaries) {
+    const p = primary.subscription || {};
+    // Only propagate from a primary that is itself healthy, so a stale primary
+    // can never push a bad endDate onto its members.
+    if (p.status !== 'active' || !p.endDate || new Date(p.endDate).getTime() < Date.now()) continue;
+
+    const members = await User.find({ _id: { $in: p.sharedWith } })
+      .select('email subscription.endDate subscription.status subscription.planId').lean();
+
+    for (const m of members) {
+      const ms = m.subscription || {};
+      const mEnd = ms.endDate ? new Date(ms.endDate) : null;
+      const behind = !mEnd || mEnd.getTime() < new Date(p.endDate).getTime() - STALE_TOLERANCE_MS;
+      const inactive = ms.status !== 'active' || !ms.planId || ms.planId === 'free';
+      if (!behind && !inactive) continue;
+
+      if (!dryRun) {
+        await User.updateOne({ _id: m._id }, {
+          $set: {
+            'subscription.planId': p.planId,
+            'subscription.plan': p.plan || p.planId,
+            'subscription.status': 'active',
+            'subscription.endDate': p.endDate,
+          },
+        });
+      }
+      report.repaired.push({
+        email: m.email,
+        from: `${ms.planId || 'free'}/${ms.status || 'none'} (shared member)`,
+        to: `${p.planId}/active until ${new Date(p.endDate).toISOString().slice(0, 16)} — synced from ${primary.email}`,
+      });
+    }
+  }
+
   if (report.repaired.length || report.orphans.length || report.suspect.length) {
     console.log(
       `[reconciler] checked=${report.checked} repaired=${report.repaired.length} ` +

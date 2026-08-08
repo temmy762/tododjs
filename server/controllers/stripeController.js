@@ -375,28 +375,29 @@ async function handleInvoicePaid(invoice) {
     }
   }
 
-  // Dedup check before any writes — if this invoice was already processed, skip entirely
-  const alreadyRecorded = user.subscriptionHistory?.some(h => h.stripePaymentIntentId === invoice.id);
-  if (alreadyRecorded) {
-    console.log(`invoice.paid dedup: invoice ${invoice.id} already recorded for user ${user._id}`);
-    return;
-  }
-
-  user.subscription.status = 'active';
-  user.subscription.autoRenew = true;
-  if (newEndDate) {
-    user.subscription.endDate = newEndDate;
-  }
+  // Stripe fires invoice.paid and customer.subscription.updated at essentially
+  // the same moment on a renewal. Both handlers used to load the user, mutate
+  // it, and user.save() the WHOLE document — so whichever saved last silently
+  // reverted the other's fields. A renewal could be recorded as paid and then
+  // immediately stamped back to past_due, leaving a paying customer on Free.
+  // Everything below is therefore one atomic update, with the dedup folded
+  // into the filter so a webhook re-delivery is a no-op rather than a
+  // duplicate history entry.
+  const set = {
+    'subscription.status': 'active',
+    'subscription.autoRenew': true,
+  };
+  if (newEndDate) set['subscription.endDate'] = newEndDate;
 
   // Update startDate to current period start so UI shows the renewal date
   const lineItemForStart = invoice.lines?.data?.[0];
   if (lineItemForStart?.period?.start) {
-    user.subscription.startDate = new Date(lineItemForStart.period.start * 1000);
+    set['subscription.startDate'] = new Date(lineItemForStart.period.start * 1000);
   }
 
   // Recovery: sync stripeSubscriptionId if user was found by customerId and ID is missing
   if (!user.subscription.stripeSubscriptionId && subscriptionId) {
-    user.subscription.stripeSubscriptionId = subscriptionId;
+    set['subscription.stripeSubscriptionId'] = subscriptionId;
     console.log(`[handleInvoicePaid] Recovered stripeSubscriptionId ${subscriptionId} for user ${user._id}`);
   }
 
@@ -404,24 +405,33 @@ async function handleInvoicePaid(invoice) {
   // handleSubscriptionUpdated normally syncs this, but reset here as a safety net
   // in case that webhook is delayed or retried out of order.
   if (invoice.billing_reason === 'subscription_cycle') {
-    user.subscription.cancelAtPeriodEnd = false;
+    set['subscription.cancelAtPeriodEnd'] = false;
   }
 
-  // Record renewal in history
   const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
+  const update = { $set: set };
   if (plan) {
-    user.subscriptionHistory.push({
-      planId: user.subscription.planId,
-      startDate: new Date(),
-      endDate: newEndDate,
-      amount: plan.price,
-      currency: plan.currency,
-      status: 'completed',
-      stripePaymentIntentId: invoice.id
-    });
+    update.$push = {
+      subscriptionHistory: {
+        planId: user.subscription.planId,
+        startDate: new Date(),
+        endDate: newEndDate,
+        amount: plan.price,
+        currency: plan.currency,
+        status: 'completed',
+        stripePaymentIntentId: invoice.id
+      }
+    };
   }
 
-  await user.save();
+  const writeResult = await User.updateOne(
+    { _id: user._id, 'subscriptionHistory.stripePaymentIntentId': { $ne: invoice.id } },
+    update
+  );
+  if (writeResult.matchedCount === 0) {
+    console.log(`invoice.paid dedup: invoice ${invoice.id} already recorded for user ${user._id}`);
+    return;
+  }
   console.log(`Subscription renewed for user ${user._id}, new endDate: ${newEndDate}`);
 
   // Extend shared users' endDate so they don't lose access at the old period end
@@ -456,9 +466,17 @@ async function handleInvoicePaymentFailed(invoice) {
     return;
   }
 
-  // Mark past_due — do NOT cancel; Stripe will retry automatically
-  user.subscription.status = 'past_due';
-  await user.save();
+  // Out-of-order safety: webhook delivery is not ordered, so a retry may have
+  // already succeeded by the time this failure event is processed. Downgrading
+  // then would take access away from someone who has actually paid.
+  if (invoice.paid) {
+    console.log(`invoice.payment_failed ignored: invoice ${invoice.id} is already paid (user ${user._id})`);
+    return;
+  }
+
+  // Mark past_due — do NOT cancel; Stripe will retry automatically.
+  // Atomic $set so this cannot clobber a concurrent invoice.paid write.
+  await User.updateOne({ _id: user._id }, { $set: { 'subscription.status': 'past_due' } });
   console.log(`Subscription marked past_due for user ${user._id} (attempt ${invoice.attempt_count})`);
 
   // Only email on the first failure — Stripe retries up to 4 times over 10 days.
@@ -479,6 +497,31 @@ async function handleChargeRefunded(charge) {
   });
 
   if (user && user.subscription.status === 'active') {
+    // A refund does NOT always mean the customer lost their subscription.
+    // This handler matches on stripeCustomerId, so refunding a DUPLICATE
+    // charge — which happened repeatedly while the "paid but still Free"
+    // bug pushed customers to pay several times — would revoke the
+    // subscription they legitimately still hold. Ask Stripe whether any
+    // live subscription remains before cancelling anything.
+    const customerId = charge.customer || user.subscription.stripeCustomerId;
+    if (customerId) {
+      try {
+        const live = await stripe.subscriptions.list({ customer: customerId, status: 'active', limit: 1 });
+        if (live.data.length > 0) {
+          console.log(
+            `charge.refunded: user ${user._id} still has active Stripe subscription ` +
+            `${live.data[0].id} — refund was for a different charge, keeping access`
+          );
+          return;
+        }
+      } catch (e) {
+        // Cannot verify — err toward keeping access. Wrongly revoking a paying
+        // customer is worse than a stale record the reconciler will correct.
+        console.error(`charge.refunded: could not verify subscriptions for ${customerId} — keeping access:`, e.message);
+        return;
+      }
+    }
+
     const planId = user.subscription.planId;
     user.subscription.status = 'cancelled';
     user.subscription.autoRenew = false;
@@ -549,8 +592,6 @@ async function handleSubscriptionUpdated(subscription) {
     trialing: 'active',
   };
 
-  let changed = false;
-
   let newStatus = statusMap[subscription.status];
 
   // Guard: if Stripe reports 'canceled' but current_period_end is still in the future,
@@ -563,35 +604,27 @@ async function handleSubscriptionUpdated(subscription) {
     }
   }
 
-  if (newStatus && user.subscription.status !== newStatus) {
-    user.subscription.status = newStatus;
-    changed = true;
-  }
-
-  if (subscription.current_period_end) {
-    user.subscription.endDate = new Date(subscription.current_period_end * 1000);
-    changed = true;
-  }
-
-  if (typeof subscription.cancel_at_period_end === 'boolean') {
-    user.subscription.cancelAtPeriodEnd = subscription.cancel_at_period_end;
-    changed = true;
-  }
+  // Atomic $set rather than mutate-then-user.save(): this event lands at the
+  // same instant as invoice.paid on a renewal, and a full-document save from
+  // either handler would overwrite the other's fields (see handleInvoicePaid).
+  const set = {};
+  if (newStatus && user.subscription.status !== newStatus) set['subscription.status'] = newStatus;
+  if (subscription.current_period_end) set['subscription.endDate'] = new Date(subscription.current_period_end * 1000);
+  if (typeof subscription.cancel_at_period_end === 'boolean') set['subscription.cancelAtPeriodEnd'] = subscription.cancel_at_period_end;
 
   // Recovery: if stripeSubscriptionId is missing (e.g. DB save failed in subscribeWithSavedCard),
   // sync it now so cancel / renewal lookups work correctly going forward.
   if (!user.subscription.stripeSubscriptionId && subscription.id) {
-    user.subscription.stripeSubscriptionId = subscription.id;
+    set['subscription.stripeSubscriptionId'] = subscription.id;
     if (!user.subscription.planId && subscription.metadata?.planId) {
-      user.subscription.planId = subscription.metadata.planId;
-      user.subscription.plan = subscription.metadata.planId;
+      set['subscription.planId'] = subscription.metadata.planId;
+      set['subscription.plan'] = subscription.metadata.planId;
     }
-    changed = true;
   }
 
-  if (changed) {
-    await user.save();
-    console.log(`Subscription updated for user ${user._id}: status=${newStatus}, endDate=${user.subscription.endDate}`);
+  if (Object.keys(set).length > 0) {
+    await User.updateOne({ _id: user._id }, { $set: set });
+    console.log(`Subscription updated for user ${user._id}: status=${newStatus}, endDate=${set['subscription.endDate'] || user.subscription.endDate}`);
   }
 }
 

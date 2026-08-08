@@ -9,12 +9,38 @@ let refreshPromise = null;
  * Wrapper around fetch that auto-refreshes JWT on 401 responses.
  * Usage: import { apiFetch } from './apiFetch'; then use like fetch().
  */
+// Device identity is persisted in BOTH localStorage and a long-lived cookie,
+// and recovered from whichever survives.
+//
+// It used to live in localStorage alone. That gets wiped by ordinary browser
+// cleanup ("clear site data", privacy/cleaner tools, storage eviction), and a
+// wipe means the SAME computer comes back with a brand-new id, burns a second
+// device slot, and the customer is locked out of an account they pay for —
+// which is exactly what happened to one customer for five days. Cookies and
+// localStorage are cleared by different actions, so keeping the id in both
+// makes accidental loss far less likely.
+const DEVICE_ID_KEY = 'deviceId';
+const DEVICE_ID_MAX_AGE = 60 * 60 * 24 * 365 * 5; // 5 years
+
+function readDeviceIdCookie() {
+  const m = document.cookie.match(/(?:^|;\s*)deviceId=([^;]+)/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+function writeDeviceIdCookie(id) {
+  const secure = window.location.protocol === 'https:' ? '; Secure' : '';
+  document.cookie = `${DEVICE_ID_KEY}=${encodeURIComponent(id)}; Max-Age=${DEVICE_ID_MAX_AGE}; Path=/; SameSite=Lax${secure}`;
+}
+
 export function getDeviceId() {
-  let id = localStorage.getItem('deviceId');
-  if (!id) {
-    id = 'dev_' + crypto.randomUUID();
-    localStorage.setItem('deviceId', id);
-  }
+  let id = null;
+  try { id = localStorage.getItem(DEVICE_ID_KEY); } catch { /* storage blocked */ }
+  if (!id) id = readDeviceIdCookie();          // localStorage wiped — recover from cookie
+  if (!id) id = 'dev_' + crypto.randomUUID();  // genuinely new device
+
+  // Always re-assert both copies so a half-cleared browser self-heals.
+  try { localStorage.setItem(DEVICE_ID_KEY, id); } catch { /* storage blocked */ }
+  writeDeviceIdCookie(id);
   return id;
 }
 

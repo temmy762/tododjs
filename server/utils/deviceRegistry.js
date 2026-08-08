@@ -76,9 +76,64 @@ export async function registerDevice(userId, deviceId, meta, { maxDevices = null
   // limit blocked it. Distinguish by re-checking presence.
   if (maxDevices != null) {
     const exists = await User.exists({ _id: userId, 'subscription.devices.deviceId': deviceId });
-    return exists ? 'added' : 'limit';
+    if (exists) return 'added';
+
+    // Before refusing, consider that this may be a device we ALREADY know
+    // wearing a new id. Browser cleanup wipes the stored device id, so the
+    // same computer comes back unrecognised, takes a second slot, and locks
+    // the customer out — one lost five days of access this way.
+    //
+    // If an existing slot has the same fingerprint (browser + OS + type) and
+    // has gone quiet, treat this as that machine returning and hand the slot
+    // over rather than blocking. The staleness requirement is what keeps two
+    // genuinely different but identical-looking machines from stealing each
+    // other's slot: a device actually in use is never reclaimed.
+    const reclaimed = await reclaimStaleSlot(userId, deviceId, meta);
+    if (reclaimed) return 'added';
+
+    return 'limit';
   }
   return 'added';
+}
+
+const RECLAIM_IDLE_MS = 7 * 24 * 60 * 60 * 1000; // a slot must be quiet this long
+
+async function reclaimStaleSlot(userId, deviceId, meta) {
+  const user = await User.findById(userId).select('subscription.devices').lean();
+  const devices = user?.subscription?.devices || [];
+  const cutoff = Date.now() - RECLAIM_IDLE_MS;
+
+  const candidate = devices.find(d =>
+    d.browser === meta.browser &&
+    d.os === meta.os &&
+    d.deviceType === meta.deviceType &&
+    (!d.lastActive || new Date(d.lastActive).getTime() < cutoff)
+  );
+  if (!candidate) return false;
+
+  // Positional update keyed on the OLD id: if a concurrent request already
+  // reclaimed or removed that slot, this matches nothing and we fall through
+  // to 'limit' rather than corrupting the array.
+  const res = await User.updateOne(
+    { _id: userId, 'subscription.devices.deviceId': candidate.deviceId },
+    {
+      $set: {
+        'subscription.devices.$.deviceId': deviceId,
+        'subscription.devices.$.deviceName': meta.deviceName,
+        'subscription.devices.$.deviceInfo': meta.deviceInfo,
+        'subscription.devices.$.ipAddress': meta.ipAddress,
+        'subscription.devices.$.lastActive': new Date(),
+      },
+    }
+  );
+  if (res.modifiedCount > 0) {
+    console.log(
+      `[devices] reclaimed idle slot for user ${userId}: ${candidate.deviceId} -> ${deviceId} ` +
+      `(${meta.browser}/${meta.os}, idle since ${candidate.lastActive || 'unknown'})`
+    );
+    return true;
+  }
+  return false;
 }
 
 /**
