@@ -563,7 +563,12 @@ export function getPaymentFailedEmailTemplate(user, lang = 'es') {
 
 // ─── Device Email Templates ───
 
-export function getDeviceBlockedEmailTemplate(user, maxDevices, deviceInfo, ipAddress, lang = 'es') {
+// `manageUrl` is a tokenised link to the standalone device-management page.
+// It replaces the old /subscription link, which only worked if the email was
+// opened on a device that already had a session — never true for the device
+// that was just blocked, which is exactly who needs to act. Falls back to
+// /subscription when no token was issued.
+export function getDeviceBlockedEmailTemplate(user, maxDevices, deviceInfo, ipAddress, lang = 'es', manageUrl = null) {
   const plural = maxDevices > 1 ? 's' : '';
   const locale = lang === 'es' ? 'es-ES' : 'en-US';
   const content = `
@@ -583,7 +588,8 @@ export function getDeviceBlockedEmailTemplate(user, maxDevices, deviceInfo, ipAd
       <p style="font-size: 14px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'deviceBlocked.footer')}</p>
       <p style="font-size: 14px; color: #a0a0a0; line-height: 1.6;">${t(lang, 'deviceBlocked.notYou')}</p>
       <div style="margin: 25px 0;">
-        <a href="${FRONTEND_URL}/subscription" style="display: inline-block; background: #7c3aed; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">${t(lang, 'deviceBlocked.manageLink')}</a>
+        <a href="${manageUrl || `${FRONTEND_URL}/subscription`}" style="display: inline-block; background: #7c3aed; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 15px;">${t(lang, 'deviceBlocked.manageLink')}</a>
+        ${manageUrl ? `<p style="margin: 12px 0 0; font-size: 12px; color: #666;">${lang === 'es' ? 'Este enlace caduca en 30 minutos y solo permite gestionar tus dispositivos.' : 'This link expires in 30 minutes and only allows managing your devices.'}</p>` : ''}
       </div>
     </div>
   `;

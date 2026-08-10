@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { getSignedDownloadUrl } from '../config/wasabi.js';
 import { sendEmail, sendWelcomeEmail, sendPasswordResetEmail, notifyAdminNewSignup, getDeviceBlockedEmailTemplate } from '../services/emailService.js';
 import { registerDevice, pruneInactiveDevices, recordBlockedAttempt } from '../utils/deviceRegistry.js';
+import { issueDeviceManageUrl } from '../utils/deviceManageToken.js';
 
 // Sign avatar URL if it's stored in Wasabi
 const signAvatarUrl = async (user) => {
@@ -72,6 +73,14 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
       }
     }
 
+    // A deliberate password login on this device outranks an earlier removal:
+    // clear the revocation so the user can bring a device back without waiting
+    // out the TTL. (Whether it then fits within the limit is decided below.)
+    await User.updateOne(
+      { _id: user._id },
+      { $pull: { revokedDevices: { deviceId } } }
+    ).catch(() => { /* non-fatal */ });
+
     // Only enforce device registration for paying users; free accounts get none.
     if (maxDevices > 0) {
       await pruneInactiveDevices(user._id);
@@ -81,7 +90,11 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
         // Device limit reached — notify the account owner and block this device.
         try {
           const lang = user.preferredLanguage || 'es';
-          const { subject, html, text } = getDeviceBlockedEmailTemplate(user, maxDevices, deviceInfo, ipAddress, lang);
+          // Tokenised link so the BLOCKED device — which has no session — can
+          // free a slot itself. Failure to mint one is not fatal; the template
+          // falls back to the /subscription link.
+          const manageUrl = await issueDeviceManageUrl(user._id).catch(() => null);
+          const { subject, html, text } = getDeviceBlockedEmailTemplate(user, maxDevices, deviceInfo, ipAddress, lang, manageUrl);
           await sendEmail({ to: user.email, subject, html, text });
         } catch (emailError) {
           console.error('Failed to send device block email:', emailError);

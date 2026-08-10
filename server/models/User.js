@@ -147,6 +147,21 @@ const userSchema = new mongoose.Schema({
   emailVerificationToken: String,
   resetPasswordToken: String,
   resetPasswordExpire: Date,
+  // Short-lived, single-purpose token emailed when a login is blocked by the
+  // device limit. It authenticates ONLY the device-management page, so the
+  // blocked device (which has no session yet) can free a slot without being
+  // able to reach anything else in the account.
+  deviceManageToken: String,
+  deviceManageExpire: Date,
+  // Devices removed via that page. Needed because `protect` re-registers any
+  // device it sees, which would otherwise silently re-add the removed device
+  // on its very next request and undo the removal. Entries are pruned after
+  // REVOCATION_TTL and cleared for a device when the user logs in on it again
+  // with their password.
+  revokedDevices: [{
+    deviceId: { type: String, required: true },
+    revokedAt: { type: Date, default: Date.now }
+  }],
   lastLogin: Date,
   isActive: {
     type: Boolean,

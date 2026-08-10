@@ -1,7 +1,118 @@
 import User from '../models/User.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import { pruneInactiveDevices } from '../utils/deviceRegistry.js';
+import { resolveDeviceManageToken } from '../utils/deviceManageToken.js';
 import { sendEmail, getDeviceRemovedEmailTemplate, getSignOutAllEmailTemplate } from '../services/emailService.js';
+
+// ── Token-authenticated device management (no session required) ─────────────
+// Serves the standalone page linked from the device-limit email. Scope is
+// deliberately tiny: list this account's devices, remove one. Nothing here can
+// read or change anything else about the account.
+
+const publicDeviceView = (d) => ({
+  deviceId: d.deviceId,
+  deviceName: d.deviceName || 'Unknown device',
+  browser: d.browser || 'Unknown',
+  os: d.os || 'Unknown',
+  deviceType: d.deviceType || 'unknown',
+  lastActive: d.lastActive || null,
+  addedAt: d.addedAt || null,
+});
+
+/**
+ * @desc    List devices using an emailed one-purpose token
+ * @route   GET /api/devices/manage?token=...
+ * @access  Public (token is the credential)
+ */
+export const getDevicesByToken = async (req, res) => {
+  try {
+    const user = await resolveDeviceManageToken(req.query.token);
+    if (!user) {
+      return res.status(401).json({ success: false, expired: true, message: 'This link is invalid or has expired. Please try signing in again to receive a new one.' });
+    }
+
+    const plan = await SubscriptionPlan.findOne({ planId: user.subscription?.planId });
+    const maxDevices = plan?.features?.maxDevices || user.maxDevices || 1;
+    const devices = (user.subscription?.devices || []).map(publicDeviceView);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        // Only enough identity for the user to confirm it is their account.
+        email: user.email,
+        devices,
+        maxDevices,
+        slotsFree: Math.max(0, maxDevices - devices.length),
+      },
+    });
+  } catch (error) {
+    console.error('[device-manage] list failed:', error);
+    res.status(500).json({ success: false, message: 'Could not load your devices. Please try again.' });
+  }
+};
+
+/**
+ * @desc    Remove one device using the emailed token, and revoke its session
+ * @route   POST /api/devices/manage/remove
+ * @access  Public (token is the credential)
+ */
+export const removeDeviceByToken = async (req, res) => {
+  try {
+    const { token, deviceId } = req.body || {};
+    const user = await resolveDeviceManageToken(token);
+    if (!user) {
+      return res.status(401).json({ success: false, expired: true, message: 'This link is invalid or has expired. Please try signing in again to receive a new one.' });
+    }
+    if (!deviceId) {
+      return res.status(400).json({ success: false, message: 'No device selected.' });
+    }
+
+    const removed = (user.subscription?.devices || []).find(d => d.deviceId === deviceId);
+    if (!removed) {
+      return res.status(404).json({ success: false, message: 'That device is no longer registered.' });
+    }
+
+    // Pull the device AND record the revocation in one write. The revocation
+    // is what actually ends the old session: `protect` re-registers any device
+    // it sees, so without it the removed device would quietly re-add itself on
+    // its next request and the freed slot would vanish again.
+    await User.updateOne(
+      { _id: user._id },
+      {
+        $pull: { 'subscription.devices': { deviceId } },
+        $push: { revokedDevices: { deviceId, revokedAt: new Date() } },
+      }
+    );
+
+    const fresh = await User.findById(user._id).select('subscription.devices subscription.planId maxDevices').lean();
+    const plan = await SubscriptionPlan.findOne({ planId: fresh?.subscription?.planId });
+    const maxDevices = plan?.features?.maxDevices || fresh?.maxDevices || 1;
+    const remaining = fresh?.subscription?.devices || [];
+
+    try {
+      const lang = user.preferredLanguage || 'es';
+      const { subject, html, text } = getDeviceRemovedEmailTemplate(user, removed, lang);
+      await sendEmail({ to: user.email, subject, html, text });
+    } catch (e) {
+      console.error('[device-manage] removal email failed:', e.message);
+    }
+
+    console.log(`[device-manage] user ${user._id} removed device ${deviceId} via emailed link`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Device removed. You can now sign in on this device.',
+      data: {
+        devices: remaining.map(publicDeviceView),
+        maxDevices,
+        slotsFree: Math.max(0, maxDevices - remaining.length),
+      },
+    });
+  } catch (error) {
+    console.error('[device-manage] removal failed:', error);
+    res.status(500).json({ success: false, message: 'Could not remove the device. Please try again.' });
+  }
+};
 
 /**
  * @desc    Get all registered devices for current user

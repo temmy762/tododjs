@@ -5,6 +5,7 @@ import App from './App.jsx'
 import ResetPasswordPage from './components/ResetPasswordPage.jsx'
 import PaymentSuccessPage from './components/PaymentSuccessPage.jsx'
 import PaymentCancelPage from './components/PaymentCancelPage.jsx'
+import ManageDevicesPage from './components/ManageDevicesPage.jsx'
 import { UploadProvider } from './context/UploadContext.jsx'
 import './index.css'
 import './i18n/config'
@@ -15,6 +16,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       <UploadProvider>
         <Routes>
           <Route path="/reset-password" element={<ResetPasswordPage />} />
+          {/* Standalone: reached from the device-limit email, no session required */}
+          <Route path="/manage-devices" element={<ManageDevicesPage />} />
           <Route path="/subscription/success" element={<PaymentSuccessPage />} />
           <Route path="/subscription/cancel" element={<PaymentCancelPage />} />
           <Route path="*" element={<App />} />

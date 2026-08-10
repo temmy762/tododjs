@@ -3,6 +3,18 @@ import User from '../models/User.js';
 import { parseDeviceInfo } from '../utils/deviceParser.js';
 import { registerDevice } from '../utils/deviceRegistry.js';
 
+// How long a removal keeps locking a device out. It only has to outlast the
+// old device's live session; signing in again with a password clears it
+// sooner (see clearDeviceRevocation), so the user is never permanently stuck
+// with a device they later want back.
+export const DEVICE_REVOCATION_TTL_MS = 24 * 60 * 60 * 1000;
+
+function isDeviceRevoked(user, deviceId) {
+  const entry = (user.revokedDevices || []).find(d => d.deviceId === deviceId);
+  if (!entry) return false;
+  return Date.now() - new Date(entry.revokedAt).getTime() < DEVICE_REVOCATION_TTL_MS;
+}
+
 // Protect routes - verify JWT token
 export const protect = async (req, res, next) => {
   let token;
@@ -46,9 +58,22 @@ export const protect = async (req, res, next) => {
       });
     }
 
+    const deviceId = req.headers['x-device-id'];
+
+    // Enforce revocations from the device-management page. Without this the
+    // removal does nothing: the block below re-registers whatever device it
+    // sees, so the removed device would re-add itself on its very next request
+    // and immediately reclaim the slot the user just freed.
+    if (deviceId && isDeviceRevoked(req.user, deviceId)) {
+      return res.status(401).json({
+        success: false,
+        deviceRevoked: true,
+        message: 'This device was removed from your account. Please sign in again.'
+      });
+    }
+
     // Register/upsert device for ALL authenticated users (fire-and-forget, never blocks).
     // Atomic so concurrent requests from different devices can't clobber each other.
-    const deviceId = req.headers['x-device-id'];
     if (deviceId) {
       const info = parseDeviceInfo(req.headers['user-agent'] || '');
       setImmediate(() => {

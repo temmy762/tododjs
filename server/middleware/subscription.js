@@ -3,6 +3,7 @@ import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import stripe from '../config/stripe.js';
 import { parseDeviceInfo } from '../utils/deviceParser.js';
 import { registerDevice, pruneInactiveDevices } from '../utils/deviceRegistry.js';
+import { issueDeviceManageUrl } from '../utils/deviceManageToken.js';
 import { sendEmail, getDeviceBlockedEmailTemplate, getNewDeviceEmailTemplate } from '../services/emailService.js';
 
 // Check if user has active subscription
@@ -144,7 +145,8 @@ export const checkDeviceLimit = async (req, res, next) => {
       console.log(`   ❌ Device limit reached for user ${user.email}. Blocking unrecognized device.`);
       try {
         const lang = user.preferredLanguage || 'es';
-        const { subject, html, text } = getDeviceBlockedEmailTemplate(user, maxDevices, deviceInfo, ipAddress, lang);
+        const manageUrl = await issueDeviceManageUrl(user._id).catch(() => null);
+        const { subject, html, text } = getDeviceBlockedEmailTemplate(user, maxDevices, deviceInfo, ipAddress, lang, manageUrl);
         await sendEmail({ to: user.email, subject, html, text });
       } catch (emailError) {
         console.error('Failed to send device block email:', emailError);
