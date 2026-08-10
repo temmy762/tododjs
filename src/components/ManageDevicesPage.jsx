@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Monitor, Smartphone, Tablet, Loader, Trash2, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
 import API_URL from '../config/api';
 
@@ -10,8 +11,15 @@ import API_URL from '../config/api';
  * so this page authenticates with the emailed token alone and is deliberately
  * inert otherwise: no navigation, no downloads, no profile, no subscription,
  * no music, no admin. It can list this account's devices and remove one.
+ *
+ * Language: with no session there is nothing local to read the account's
+ * preference from, and on a brand-new device localStorage is empty too — i18n
+ * would just guess from the browser. The API returns the account's
+ * preferredLanguage, so the page is switched to match the language the email
+ * was actually sent in.
  */
 export default function ManageDevicesPage() {
+  const { t, i18n } = useTranslation();
   const token = new URLSearchParams(window.location.search).get('token');
 
   const [state, setState] = useState('loading'); // loading | ready | expired | error
@@ -26,17 +34,22 @@ export default function ManageDevicesPage() {
       const res = await fetch(`${API_URL}/devices/manage?token=${encodeURIComponent(token)}`);
       const json = await res.json();
       if (!res.ok || !json.success) {
+        // Prefer our own translated copy over the server's English string, so
+        // the page never mixes languages.
         setState(json.expired ? 'expired' : 'error');
-        setError(json.message || 'Could not load your devices.');
+        setError(t('manageDevices.loadFailed'));
         return;
+      }
+      if (json.data?.preferredLanguage && json.data.preferredLanguage !== i18n.language) {
+        i18n.changeLanguage(json.data.preferredLanguage);
       }
       setData(json.data);
       setState('ready');
     } catch {
       setState('error');
-      setError('Network error. Please check your connection and try again.');
+      setError(t('manageDevices.networkError'));
     }
-  }, [token]);
+  }, [token, t, i18n]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -52,13 +65,13 @@ export default function ManageDevicesPage() {
       const json = await res.json();
       if (!res.ok || !json.success) {
         if (json.expired) { setState('expired'); return; }
-        setError(json.message || 'Could not remove the device.');
+        setError(t('manageDevices.removeFailed'));
         return;
       }
       setData(d => ({ ...d, ...json.data }));
       setRemoved(true);
     } catch {
-      setError('Network error. Please try again.');
+      setError(t('manageDevices.networkError'));
     } finally {
       setRemovingId(null);
     }
@@ -67,13 +80,13 @@ export default function ManageDevicesPage() {
   const iconFor = (type) => (type === 'mobile' ? Smartphone : type === 'tablet' ? Tablet : Monitor);
 
   const timeAgo = (d) => {
-    if (!d) return 'Never used';
+    if (!d) return t('manageDevices.neverUsed');
     const mins = Math.floor((Date.now() - new Date(d).getTime()) / 60000);
-    if (mins < 1) return 'Active now';
-    if (mins < 60) return `${mins} min ago`;
+    if (mins < 1) return t('manageDevices.activeNow');
+    if (mins < 60) return t('manageDevices.minAgo', { count: mins });
     const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    return `${Math.floor(hrs / 24)}d ago`;
+    if (hrs < 24) return t('manageDevices.hoursAgo', { count: hrs });
+    return t('manageDevices.daysAgo', { count: Math.floor(hrs / 24) });
   };
 
   const Shell = ({ children }) => (
@@ -87,7 +100,7 @@ export default function ManageDevicesPage() {
   if (state === 'loading') {
     return <Shell><div className="flex flex-col items-center py-10 gap-3">
       <Loader className="w-7 h-7 text-red-500 animate-spin" />
-      <p className="text-white/50 text-sm">Loading your devices…</p>
+      <p className="text-white/50 text-sm">{t('manageDevices.loading')}</p>
     </div></Shell>;
   }
 
@@ -97,13 +110,10 @@ export default function ManageDevicesPage() {
         <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto mb-4">
           <AlertCircle className="w-7 h-7 text-amber-400" />
         </div>
-        <h1 className="text-xl font-bold text-white mb-2">This link has expired</h1>
-        <p className="text-sm text-white/50 leading-relaxed mb-6">
-          For your security these links are only valid for 30 minutes. Try signing in again
-          and we&apos;ll email you a fresh one.
-        </p>
+        <h1 className="text-xl font-bold text-white mb-2">{t('manageDevices.expiredTitle')}</h1>
+        <p className="text-sm text-white/50 leading-relaxed mb-6">{t('manageDevices.expiredBody')}</p>
         <a href="/" className="inline-flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold rounded-xl transition-colors">
-          Go to sign in <ArrowRight className="w-4 h-4" />
+          {t('manageDevices.goToLogin')} <ArrowRight className="w-4 h-4" />
         </a>
       </div>
     </Shell>;
@@ -113,10 +123,10 @@ export default function ManageDevicesPage() {
     return <Shell>
       <div className="text-center py-6">
         <AlertCircle className="w-10 h-10 text-red-400 mx-auto mb-3" />
-        <h1 className="text-lg font-bold text-white mb-2">Something went wrong</h1>
+        <h1 className="text-lg font-bold text-white mb-2">{t('manageDevices.errorTitle')}</h1>
         <p className="text-sm text-white/50 mb-5">{error}</p>
         <button onClick={load} className="px-5 py-2.5 bg-white/10 hover:bg-white/15 text-white text-sm font-semibold rounded-xl transition-colors">
-          Try again
+          {t('manageDevices.tryAgain')}
         </button>
       </div>
     </Shell>;
@@ -127,9 +137,9 @@ export default function ManageDevicesPage() {
   return (
     <Shell>
       <div className="mb-6">
-        <h1 className="text-xl font-bold text-white mb-1.5">Manage your devices</h1>
+        <h1 className="text-xl font-bold text-white mb-1.5">{t('manageDevices.title')}</h1>
         <p className="text-sm text-white/50 leading-relaxed">
-          {data.email} · {data.devices.length} of {data.maxDevices} device{data.maxDevices > 1 ? 's' : ''} in use
+          {data.email} · {t('manageDevices.summary', { used: data.devices.length, max: data.maxDevices })}
         </p>
       </div>
 
@@ -138,21 +148,19 @@ export default function ManageDevicesPage() {
           <div className="flex items-start gap-2.5 mb-3">
             <CheckCircle className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-semibold text-green-300">Device removed</p>
-              <p className="text-xs text-green-200/60 mt-0.5">
-                That device has been signed out. You can now sign in on this one.
-              </p>
+              <p className="text-sm font-semibold text-green-300">{t('manageDevices.removedTitle')}</p>
+              <p className="text-xs text-green-200/60 mt-0.5">{t('manageDevices.removedBody')}</p>
             </div>
           </div>
           <a href="/" className="w-full flex items-center justify-center gap-2 py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-lg transition-colors">
-            Continue to sign in <ArrowRight className="w-4 h-4" />
+            {t('manageDevices.continueToLogin')} <ArrowRight className="w-4 h-4" />
           </a>
         </div>
       )}
 
       {!removed && full && (
         <p className="text-xs text-amber-300/80 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2.5 mb-4">
-          Your plan allows {data.maxDevices} device{data.maxDevices > 1 ? 's' : ''}. Remove one below to free a slot.
+          {t('manageDevices.planLimit', { max: data.maxDevices })}
         </p>
       )}
 
@@ -169,7 +177,7 @@ export default function ManageDevicesPage() {
                 <Icon className="w-5 h-5 text-white/50" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-white truncate">{d.deviceName}</p>
+                <p className="text-sm font-medium text-white truncate">{d.deviceName || t('manageDevices.unknownDevice')}</p>
                 <p className="text-xs text-white/40 truncate">{d.browser} · {d.os} · {timeAgo(d.lastActive)}</p>
               </div>
               <button
@@ -180,19 +188,18 @@ export default function ManageDevicesPage() {
                 {removingId === d.deviceId
                   ? <Loader className="w-3.5 h-3.5 animate-spin" />
                   : <Trash2 className="w-3.5 h-3.5" />}
-                Remove
+                {t('manageDevices.remove')}
               </button>
             </div>
           );
         })}
         {data.devices.length === 0 && (
-          <p className="text-sm text-white/40 text-center py-8">No devices registered. You can sign in normally.</p>
+          <p className="text-sm text-white/40 text-center py-8">{t('manageDevices.noDevices')}</p>
         )}
       </div>
 
       <p className="text-[11px] text-white/25 text-center mt-6 leading-relaxed">
-        This page can only view and remove devices on your account.
-        The link expires 30 minutes after it was sent.
+        {t('manageDevices.footer')}
       </p>
     </Shell>
   );

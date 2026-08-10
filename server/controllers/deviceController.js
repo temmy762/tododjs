@@ -40,6 +40,10 @@ export const getDevicesByToken = async (req, res) => {
       data: {
         // Only enough identity for the user to confirm it is their account.
         email: user.email,
+        // The page has no session, so it cannot look up the account language
+        // itself. Returning it keeps the page in the same language as the
+        // email that linked here, even on a brand-new device.
+        preferredLanguage: user.preferredLanguage || 'es',
         devices,
         maxDevices,
         slotsFree: Math.max(0, maxDevices - devices.length),
