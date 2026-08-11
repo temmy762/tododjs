@@ -252,6 +252,23 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
               return;
             }
 
+            // A collection that does not exist is never going to start
+            // existing. Previously this fell through to the success-only
+            // branch below, so polling continued silently until the 10-minute
+            // cap and reported a "timeout" — which is what a stale entry
+            // restored from a previous session looks like, indistinguishable
+            // from a real upload that hung.
+            if (statusResp.status === 404) {
+              clearInterval(interval);
+              pollIntervalByItemIdRef.current.delete(it.id);
+              updateItem(idx, {
+                uploadStatus: 'failed',
+                uploadError: 'This upload is no longer on the server (it may be from an earlier session). Please upload the file again.'
+              });
+              resolve();
+              return;
+            }
+
             const statusJson = await statusResp.json();
             if (statusJson?.success) {
               const { status, processingProgress, processingDetail, tracksProcessed, totalTracksEstimate, errorMessage } = statusJson.data;
@@ -595,11 +612,24 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
           }
           return resolve(response);
         }
+        // Keep the HTTP status. A failure here is often produced by nginx
+        // rather than the app — 413 when the ZIP exceeds client_max_body_size,
+        // 502/504 when the proxy gives up — and those responses are HTML, so
+        // the JSON parse below fails and the reason was previously replaced
+        // with a generic "Upload failed", discarding the one detail that
+        // identifies the cause.
         try {
           const resp = JSON.parse(xhr.responseText);
-          return reject(new Error(resp.message || 'Upload failed. Please try again.'));
+          return reject(new Error(`${resp.message || 'Upload failed'} (HTTP ${xhr.status})`));
         } catch (e) {
-          return reject(new Error('Upload failed. Please try again.'));
+          const hint =
+            xhr.status === 413 ? 'The file is larger than the server accepts (nginx client_max_body_size).'
+            : xhr.status === 502 || xhr.status === 504 ? 'The server did not respond in time (proxy timeout).'
+            : xhr.status === 401 || xhr.status === 403 ? 'Your session expired — please sign in again.'
+            : xhr.status === 0 ? 'The connection dropped before the upload finished.'
+            : '';
+          const body = (xhr.responseText || '').replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+          return reject(new Error(`Upload failed (HTTP ${xhr.status}). ${hint} ${body}`.trim()));
         }
       });
 

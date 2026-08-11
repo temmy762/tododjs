@@ -5,15 +5,30 @@ const UploadContext = createContext(null);
 
 const LS_KEY = 'tododjs:activeUploads';
 
+// Persisted entries are meant to survive a page reload during an upload, not
+// to live forever. Without an expiry, an upload that never finished is
+// restored and re-polled on every visit — reappearing as a fresh "failure"
+// long after the fact, and making a genuinely new problem indistinguishable
+// from an old ghost. Nothing legitimately takes this long.
+const MAX_PERSISTED_AGE_MS = 12 * 60 * 60 * 1000; // 12 hours
+
 function saveToStorage(uploads) {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(uploads));
+    // Stamp on write so age can be judged on read.
+    const stamped = uploads.map(u => ({ ...u, savedAt: u.savedAt || Date.now() }));
+    localStorage.setItem(LS_KEY, JSON.stringify(stamped));
   } catch {}
 }
 
 function readFromStorage() {
   try {
-    return JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+    const all = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+    if (!Array.isArray(all)) return [];
+    const fresh = all.filter(u => !u.savedAt || Date.now() - u.savedAt < MAX_PERSISTED_AGE_MS);
+    if (fresh.length !== all.length) {
+      try { localStorage.setItem(LS_KEY, JSON.stringify(fresh)); } catch {}
+    }
+    return fresh;
   } catch {
     return [];
   }
