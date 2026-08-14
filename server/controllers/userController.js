@@ -190,11 +190,12 @@ export const exportUsers = async (req, res) => {
       return 'Active';
     };
 
-    const header = ['Name', 'Email', 'Phone', 'Plan', 'Subscription Status', 'Joined', 'Last Login', 'Downloads Total', 'Downloads Today', 'Account Status'];
+    const header = ['Name', 'Email', 'Phone', 'Instagram', 'Plan', 'Subscription Status', 'Joined', 'Last Login', 'Downloads Total', 'Downloads Today', 'Account Status'];
     const rows = users.map(u => [
       u.name || '',
       u.email || '',
       u.phoneNumber || '',
+      u.instagram || '',
       planOf(u),
       u.subscription?.status || '',
       u.createdAt ? new Date(u.createdAt).toISOString().slice(0, 10) : '',

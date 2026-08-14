@@ -70,7 +70,11 @@
     "notNow": "Not now",
     "or": "or",
     "verifying": "Verifying…",
-    "loginWithFingerprint": "Login with Fingerprint"
+    "loginWithFingerprint": "Login with Fingerprint",
+    "instagram": "Instagram",
+    "instagramHint": "Your Instagram username, so we can identify you and help with your account.",
+    "phoneRequired": "Phone number is required",
+    "instagramRequired": "Instagram username is required"
   },
   "common": {
     "browse": "Browse",

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Mail, Lock, User, Eye, EyeOff, AlertCircle, Phone, Globe, Fingerprint, Loader } from 'lucide-react';
+import { X, Mail, Lock, User, Eye, EyeOff, AlertCircle, Phone, Globe, Fingerprint, Loader, Instagram } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import API_URL from '../../config/api';
 import ForgotPasswordModal from '../ForgotPasswordModal';
@@ -23,7 +23,7 @@ function getDeviceId() {
 export default function AuthModal({ onClose, onSuccess, initialMode = 'login' }) {
   const { t } = useTranslation();
   const [mode, setMode] = useState(initialMode);
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', confirmPassword: '', phoneNumber: '', preferredLanguage: 'en' });
+  const [formData, setFormData] = useState({ name: '', email: '', password: '', confirmPassword: '', phoneNumber: '', instagram: '', preferredLanguage: 'en' });
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -45,7 +45,7 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
   const switchMode = () => {
     setMode(mode === 'login' ? 'register' : 'login');
     setError('');
-    setFormData({ name: '', email: '', password: '', confirmPassword: '', phoneNumber: '', preferredLanguage: 'en' });
+    setFormData({ name: '', email: '', password: '', confirmPassword: '', phoneNumber: '', instagram: '', preferredLanguage: 'en' });
   };
 
   const handleSubmit = async (e) => {
@@ -55,6 +55,14 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
     if (mode === 'register') {
       if (formData.password !== formData.confirmPassword) {
         setError(t('auth.passwordMismatch'));
+        return;
+      }
+      if (!formData.phoneNumber.trim()) {
+        setError(t('auth.phoneRequired'));
+        return;
+      }
+      if (!formData.instagram.trim()) {
+        setError(t('auth.instagramRequired'));
         return;
       }
     }
@@ -71,7 +79,8 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
             name: formData.name,
             email: formData.email,
             password: formData.password,
-            phoneNumber: formData.phoneNumber || undefined,
+            phoneNumber: formData.phoneNumber,
+            instagram: formData.instagram,
             preferredLanguage: formData.preferredLanguage,
             deviceId: getDeviceId()
           })
@@ -280,17 +289,40 @@ export default function AuthModal({ onClose, onSuccess, initialMode = 'login' })
 
           {mode === 'register' && (
             <div>
-              <label className="block text-sm font-medium mb-2">{t('auth.phoneNumber')}</label>
+              <label className="block text-sm font-medium mb-2">
+                {t('auth.phoneNumber')} <span className="text-accent">*</span>
+              </label>
               <div className="relative">
                 <Phone size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
                 <input
                   type="tel"
+                  required
                   value={formData.phoneNumber}
                   onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value })}
                   className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent"
-                  placeholder="+1 234 567 8900"
+                  placeholder="+34 612 345 678"
                 />
               </div>
+            </div>
+          )}
+
+          {mode === 'register' && (
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                {t('auth.instagram')} <span className="text-accent">*</span>
+              </label>
+              <div className="relative">
+                <Instagram size={20} className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-text-tertiary" />
+                <input
+                  type="text"
+                  required
+                  value={formData.instagram}
+                  onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
+                  className="w-full pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-lg focus:outline-none focus:border-accent"
+                  placeholder="@tu_usuario"
+                />
+              </div>
+              <p className="text-xs text-brand-text-tertiary mt-1">{t('auth.instagramHint')}</p>
             </div>
           )}
 

@@ -18,6 +18,11 @@ const userSchema = new mongoose.Schema({
       'Please provide a valid email'
     ]
   },
+  // NOT schema-required, deliberately. Registration enforces it (see
+  // authController), but 8 pre-existing accounts have no phone, and a
+  // schema-level requirement would make every save() on them throw —
+  // including the save() during login, locking those users out of accounts
+  // they pay for. New signups are validated at the entry point instead.
   phoneNumber: {
     type: String,
     trim: true,
@@ -25,6 +30,14 @@ const userSchema = new mongoose.Schema({
       /^\+?[1-9]\d{6,14}$/,
       'Please provide a valid phone number (e.g. +1234567890)'
     ]
+  },
+  // Instagram handle, collected at registration to help support identify and
+  // contact users. Stored normalised (no @, no URL) so it can be searched.
+  // Same reasoning as phoneNumber: enforced at registration, not in schema,
+  // so existing accounts keep working.
+  instagram: {
+    type: String,
+    trim: true
   },
   password: {
     type: String,

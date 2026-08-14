@@ -400,7 +400,17 @@ export default function AdminUsers({ forcedSegment = null, title, subtitle } = {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-brand-text-tertiary">
-                        {user.phoneNumber || '—'}
+                        <div>{user.phoneNumber || '—'}</div>
+                        {user.instagram && (
+                          <a
+                            href={`https://instagram.com/${user.instagram}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-[11px] text-accent hover:underline"
+                          >
+                            @{user.instagram}
+                          </a>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">

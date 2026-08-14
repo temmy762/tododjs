@@ -72,7 +72,11 @@
     "notNow": "Ahora no",
     "or": "o",
     "verifying": "Verificando…",
-    "loginWithFingerprint": "Iniciar Sesión con Huella Digital"
+    "loginWithFingerprint": "Iniciar Sesión con Huella Digital",
+    "instagram": "Instagram",
+    "instagramHint": "Tu usuario de Instagram, para poder identificarte y ayudarte con tu cuenta.",
+    "phoneRequired": "El número de teléfono es obligatorio",
+    "instagramRequired": "El usuario de Instagram es obligatorio"
   },
   "common": {
     "browse": "Explorar",

@@ -155,7 +155,46 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
 // @access  Public
 export const register = async (req, res) => {
   try {
-    const { name, email, password, phoneNumber, preferredLanguage } = req.body;
+    const { name, email, password, phoneNumber, instagram, preferredLanguage } = req.body;
+
+    // Phone and Instagram are mandatory for NEW registrations (support needs
+    // them to identify and contact users). Enforced here rather than in the
+    // schema so the accounts that predate this rule keep working — a
+    // schema-level requirement would break their next save(), including the
+    // one during login.
+    if (!phoneNumber || !String(phoneNumber).trim()) {
+      return res.status(400).json({ success: false, message: 'Phone number is required' });
+    }
+    if (!instagram || !String(instagram).trim()) {
+      return res.status(400).json({ success: false, message: 'Instagram is required' });
+    }
+
+    // Accept the formats people actually type — "+1 234 567 8900",
+    // "(555) 123-4567" — by stripping separators before validating. The stored
+    // pattern allows none of them, and the form's own placeholder contained
+    // spaces, so a user following the example would have been rejected.
+    const normalisedPhone = String(phoneNumber).replace(/[\s()\-.]/g, '');
+    if (!/^\+?[1-9]\d{6,14}$/.test(normalisedPhone)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid phone number, including country code (e.g. +34 612 345 678)'
+      });
+    }
+
+    // Accept a handle, an @handle, or a full profile URL; store the bare
+    // handle so support can search it consistently.
+    const normalisedInstagram = String(instagram)
+      .trim()
+      .replace(/^(https?:\/\/)?(www\.)?instagram\.com\//i, '')
+      .replace(/\/+$/, '')
+      .replace(/^@+/, '')
+      .split(/[?#]/)[0];
+    if (!/^[A-Za-z0-9._]{1,30}$/.test(normalisedInstagram)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide a valid Instagram username (letters, numbers, dots and underscores)'
+      });
+    }
 
     // Check if user exists
     const userExists = await User.findOne({ email });
@@ -175,7 +214,8 @@ export const register = async (req, res) => {
       name,
       email,
       password,
-      phoneNumber: phoneNumber || undefined,
+      phoneNumber: normalisedPhone,
+      instagram: normalisedInstagram,
       preferredLanguage: language
     });
 
