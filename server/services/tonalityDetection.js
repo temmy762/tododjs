@@ -69,7 +69,15 @@ export function parseKeyFromID3(initialKey) {
  * @param {object} metadata - Track metadata (title, artist, album)
  * @returns {Promise<{tonality: object, detectedBpm: number|null}>}
  */
-export async function detectTonality(audioBuffer, metadata) {
+export async function detectTonality(audioBuffer, metadata, options = {}) {
+  // skipAiFallback trades completeness for speed. The OpenAI steps below are
+  // the slowest part of this function by far (25s and 45s timeouts), and while
+  // that is acceptable for the admin's dedicated "Detect Tonality & BPM" tool,
+  // it is not acceptable inside an upload request: one track without ID3 tags
+  // could hold the connection ~95s, which is what made bulk mashup uploads
+  // stall after a few files. Uploads run fast (tags + Essentia only) and flag
+  // anything unresolved for that existing tool to fill in afterwards.
+  const { skipAiFallback = false } = options;
   let tonality = null;
   let detectedBpm = null;
 
@@ -196,7 +204,7 @@ export async function detectTonality(audioBuffer, metadata) {
   }
 
   // Step 4: OpenAI text fallback
-  if (!tonality && process.env.TONALITY_AI_FALLBACK === 'true' && metadata.title && metadata.artist) {
+  if (!skipAiFallback && !tonality && process.env.TONALITY_AI_FALLBACK === 'true' && metadata.title && metadata.artist) {
     try {
       console.log(`   🤖 Falling back to OpenAI for: ${metadata.title} - ${metadata.artist}`);
       const aiTonality = await detectTonalityWithAI(metadata.title, metadata.artist, metadata.album);
@@ -214,7 +222,7 @@ export async function detectTonality(audioBuffer, metadata) {
   }
 
   // Step 4.5: OpenAI web-search — looks up key on Tunebat, Beatport, etc. in real-time
-  if (!tonality?.camelot && process.env.OPENAI_API_KEY && metadata.title && metadata.artist) {
+  if (!skipAiFallback && !tonality?.camelot && process.env.OPENAI_API_KEY && metadata.title && metadata.artist) {
     try {
       console.log(`   🌐 Trying OpenAI web-search for: ${metadata.title} - ${metadata.artist}`);
       const wsResult = await detectTonalityWithWebSearch(metadata.title, metadata.artist, metadata.album);

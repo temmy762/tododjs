@@ -418,6 +418,16 @@ export const createMashup = async (req, res) => {
   try {
     const { title, artist, category, genre, bpm, tonality } = req.body;
 
+    // Fast path by default. The slow enrichment (OpenAI genre, OpenAI tonality
+    // text fallback, OpenAI web-search) totals up to ~95s of timeouts per
+    // track, which made bulk uploads stall after a handful of files once one
+    // arrived without ID3 tags. Tags and Essentia still run, so most tracks
+    // come out fully populated; the rest are flagged for the existing
+    // "Detect Tonality & BPM" and "Auto-Categorize" admin tools, which are
+    // built for exactly this and run outside the upload request.
+    // Send fullEnrichment=true to opt back into the slow path for one upload.
+    const fastUpload = req.body.fullEnrichment !== 'true';
+
     if (!req.files || !req.files.audio) {
       return res.status(400).json({ success: false, message: 'Please upload an audio file' });
     }
@@ -475,12 +485,17 @@ export const createMashup = async (req, res) => {
       }
     }
 
-    // Detect genre using AI (independent of pool-brand category)
+    // Detect genre using AI (independent of pool-brand category).
+    // Skipped during bulk upload: this is a 25s-timeout OpenAI call, and doing
+    // it inline per track is part of why uploading a batch stalled. The admin's
+    // Auto-Categorize action fills genres in afterwards, in one pass.
     let detectedGenre = genre || 'Mashup';
-    try {
-      const aiGenre = await detectGenreWithAI(cleanTitle, trackArtist);
-      if (aiGenre) detectedGenre = aiGenre;
-    } catch { /* AI genre detection is best-effort */ }
+    if (!fastUpload) {
+      try {
+        const aiGenre = await detectGenreWithAI(cleanTitle, trackArtist);
+        if (aiGenre) detectedGenre = aiGenre;
+      } catch { /* AI genre detection is best-effort */ }
+    }
 
     // Detect tonality and BPM if not provided
     let detectedTonality = tonality || '';
@@ -492,7 +507,7 @@ export const createMashup = async (req, res) => {
         const { tonality: tonalityResult, detectedBpm: bpmResult } = await detectTonality(audioFile.buffer, {
           title: cleanTitle,
           artist: trackArtist
-        });
+        }, { skipAiFallback: fastUpload });
 
         if (!tonality) {
           if (tonalityResult?.camelot) {
@@ -610,6 +625,47 @@ export const updateMashup = async (req, res) => {
 // @desc    Delete a mashup
 // @route   DELETE /api/mashups/:id
 // @access  Private/Admin
+// @desc    Delete many mashups in one request
+// @route   POST /api/mashups/bulk-delete
+// @access  Private/Admin
+//
+// The admin UI previously looped and fired one DELETE per mashup. With a
+// library of 1500+, and each delete making two Wasabi round-trips, clearing a
+// selection meant hundreds of sequential requests — slow enough that it looked
+// broken and had to be clicked repeatedly. One request now removes the batch,
+// with the (best-effort) Wasabi cleanup done concurrently.
+export const bulkDeleteMashups = async (req, res) => {
+  try {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ success: false, message: 'No mashups selected' });
+    }
+
+    const mashups = await Mashup.find({ _id: { $in: ids } }).select('audioFile.key coverArtKey').lean();
+
+    // Remove the records first so the UI updates promptly; an orphaned file in
+    // Wasabi is far less disruptive than a delete that appears to hang.
+    const result = await Mashup.deleteMany({ _id: { $in: ids } });
+
+    const keys = mashups.flatMap(m => [m.audioFile?.key, m.coverArtKey].filter(Boolean));
+    Promise.allSettled(keys.map(k => deleteFromWasabi(k)))
+      .then(rs => {
+        const failed = rs.filter(r => r.status === 'rejected').length;
+        if (failed) console.warn(`[bulk-delete] ${failed}/${keys.length} Wasabi objects could not be removed`);
+      })
+      .catch(() => {});
+
+    res.status(200).json({
+      success: true,
+      message: `Deleted ${result.deletedCount} mashup(s)`,
+      data: { deletedCount: result.deletedCount, requested: ids.length },
+    });
+  } catch (error) {
+    console.error('[bulk-delete] failed:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 export const deleteMashup = async (req, res) => {
   try {
     const mashup = await Mashup.findById(req.params.id);

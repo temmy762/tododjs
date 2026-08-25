@@ -9,6 +9,7 @@ import {
   createMashup,
   updateMashup,
   deleteMashup,
+  bulkDeleteMashups,
   getMashupPlayback,
   getMashupGenres,
   autoCategorizeMashups,
@@ -64,6 +65,8 @@ router.post('/', protect, authorize('admin'), mashupUpload.fields([
 router.put('/:id', protect, authorize('admin'), mashupUpload.fields([
   { name: 'coverArt', maxCount: 1 }
 ]), updateMashup);
+// Must precede '/:id' so "bulk-delete" is not parsed as an id
+router.post('/bulk-delete', protect, authorize('admin'), bulkDeleteMashups);
 router.delete('/:id', protect, authorize('admin'), deleteMashup);
 router.post('/auto-categorize', protect, authorize('admin'), autoCategorizeMashups);
 router.post('/bulk-assign-category', protect, authorize('admin'), bulkAssignCategory);

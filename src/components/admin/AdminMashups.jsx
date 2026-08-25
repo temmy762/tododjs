@@ -51,6 +51,7 @@ export default function AdminMashups() {
   const [showUploadPanel, setShowUploadPanel] = useState(false);
   const [selectedMashups, setSelectedMashups] = useState(new Set());
   const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkCategory, setBulkCategory] = useState('');
   const [bulkAssigning, setBulkAssigning] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -176,18 +177,31 @@ export default function AdminMashups() {
     }
     setBulkDeleteConfirm(false);
     const token = localStorage.getItem('token');
-    let deleted = 0;
-    for (const id of selectedMashups) {
-      try {
-        const res = await fetch(`${API}/mashups/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
-        const data = await res.json();
-        if (data.success) deleted++;
-      } catch {}
+    const total = selectedMashups.size;
+    // One request for the whole selection. This used to loop a DELETE per
+    // mashup, so clearing a large selection fired hundreds of sequential
+    // requests and looked like it had frozen.
+    setBulkDeleting(true);
+    try {
+      const res = await fetch(`${API}/mashups/bulk-delete`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...selectedMashups] }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ type: 'success', text: `Deleted ${data.data?.deletedCount ?? total} of ${total} mashup(s)` });
+        setSelectedMashups(new Set());
+        fetchMashups();
+      } else {
+        setMessage({ type: 'error', text: data.message || 'Delete failed. Please try again.' });
+      }
+    } catch {
+      setMessage({ type: 'error', text: 'Network error while deleting. Please try again.' });
+    } finally {
+      setBulkDeleting(false);
+      setTimeout(() => setMessage({ type: '', text: '' }), 3000);
     }
-    setMessage({ type: 'success', text: `Deleted ${deleted} of ${selectedMashups.size} mashup(s)` });
-    setSelectedMashups(new Set());
-    fetchMashups();
-    setTimeout(() => setMessage({ type: '', text: '' }), 3000);
   };
 
   const handleBulkAssign = async () => {
@@ -1217,13 +1231,16 @@ export default function AdminMashups() {
             </button>
             <button
               onClick={handleBulkDelete}
-              className={`px-4 py-1.5 border rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 flex-shrink-0 ${
+              disabled={bulkDeleting}
+              className={`px-4 py-1.5 border rounded-lg text-xs font-medium transition-all flex items-center gap-1.5 flex-shrink-0 disabled:opacity-50 disabled:cursor-wait ${
                 bulkDeleteConfirm
                   ? 'bg-red-600 hover:bg-red-700 border-red-500 text-white animate-pulse'
                   : 'bg-red-500/20 hover:bg-red-500/30 border-red-500/40 text-red-400'
               }`}
             >
-              <Trash2 size={12} /> {bulkDeleteConfirm ? 'Confirm Delete?' : 'Delete'}
+              {bulkDeleting
+                ? <><Loader size={12} className="animate-spin" /> Deleting…</>
+                : <><Trash2 size={12} /> {bulkDeleteConfirm ? 'Confirm Delete?' : 'Delete'}</>}
             </button>
             <button
               onClick={() => setSelectedMashups(new Set())}
