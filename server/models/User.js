@@ -312,7 +312,11 @@ userSchema.methods.canDownload = function() {
      (this.subscription.status === 'past_due' && isWithinPeriod) ||
      (this.subscription.status === 'cancelled' && isWithinPeriod) ||
      isPastDueInGrace) &&
-    (this.subscription.planId || (this.subscription.plan && this.subscription.plan !== 'free')));
+    // 'free' must be excluded on BOTH fields. Testing only `planId` truthiness
+    // let planId:'free' through, because the string is truthy — a free-plan
+    // account with an active status could download.
+    ((this.subscription.planId && this.subscription.planId !== 'free') ||
+     (this.subscription.plan && this.subscription.plan !== 'free')));
   
   const limits = {
     free: 5,

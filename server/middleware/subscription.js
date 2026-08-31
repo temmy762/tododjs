@@ -28,7 +28,7 @@ export const requireSubscription = async (req, res, next) => {
       return next();
     }
 
-    const hasPlan = user.subscription.planId || (user.subscription.plan && user.subscription.plan !== 'free');
+    const hasPlan = (user.subscription.planId && user.subscription.planId !== 'free') || (user.subscription.plan && user.subscription.plan !== 'free');
 
     // Stripe fallback: if cancelled + stripeSubscriptionId still set + endDate missing/stale,
     // look up Stripe once to recover the real current_period_end and persist it.
@@ -205,7 +205,7 @@ export const optionalSubscription = async (req, res, next) => {
 
     const user = await User.findById(req.user.id);
 
-    const hasPlan = user.subscription.planId || (user.subscription.plan && user.subscription.plan !== 'free');
+    const hasPlan = (user.subscription.planId && user.subscription.planId !== 'free') || (user.subscription.plan && user.subscription.plan !== 'free');
     if (!hasPlan || user.subscription.status !== 'active') {
       req.hasSubscription = false;
       return next();
