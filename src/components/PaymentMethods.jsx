@@ -197,7 +197,19 @@ export default function PaymentMethods({ user }) {
       const data = await res.json();
       if (data.success) {
         await fetchCards();
-        showSuccess(isSpanish ? 'Tarjeta eliminada.' : 'Card removed.');
+        // The server may have promoted another card to default; refetch above
+        // already reflects that, so just report what happened.
+        showSuccess(
+          data.data?.newDefaultPaymentMethod
+            ? (isSpanish ? 'Tarjeta eliminada. Tu otra tarjeta es ahora la predeterminada.' : 'Card removed. Your other card is now the default.')
+            : (isSpanish ? 'Tarjeta eliminada.' : 'Card removed.')
+        );
+      } else if (data.requiresCardOnFile) {
+        // Blocked because this is the last card on an auto-renewing
+        // subscription. Server copy is English-only, so localise here.
+        setError(isSpanish
+          ? 'Añade otra tarjeta antes de eliminar esta. Tu suscripción se renueva automáticamente y el pago fallaría sin una tarjeta guardada. Si no quieres renovar, cancela primero la suscripción.'
+          : data.message);
       } else setError(data.message);
     } catch { setError(isSpanish ? 'Error al eliminar' : 'Failed to remove'); }
     finally { setRemovingId(null); }

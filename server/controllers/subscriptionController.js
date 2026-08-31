@@ -640,16 +640,71 @@ export const detachPaymentMethod = async (req, res) => {
   try {
     const { pmId } = req.params;
     const user = await User.findById(req.user.id);
+    const customerId = user.subscription?.stripeCustomerId;
 
     // Safety: verify this card belongs to this customer before detaching
     const pm = await stripe.paymentMethods.retrieve(pmId);
-    if (pm.customer !== user.subscription?.stripeCustomerId) {
+    if (pm.customer !== customerId) {
       return res.status(403).json({ success: false, message: 'Not your payment method' });
     }
 
+    // What would be left on file, and will this customer be billed again?
+    // Ask Stripe rather than our own record — Stripe is the authority on both,
+    // and a stale local status is exactly what caused earlier access bugs.
+    const [allCards, subs, customer] = await Promise.all([
+      stripe.paymentMethods.list({ customer: customerId, type: 'card' }),
+      stripe.subscriptions.list({ customer: customerId, status: 'all', limit: 10 }),
+      stripe.customers.retrieve(customerId),
+    ]);
+    const remaining = allCards.data.filter(p => p.id !== pmId);
+    // A subscription set to cancel at period end will not be charged again, so
+    // removing the card is harmless in that case.
+    const willBillAgain = subs.data.find(
+      s => ['active', 'past_due', 'trialing', 'unpaid'].includes(s.status) && !s.cancel_at_period_end
+    );
+
+    // Removing the ONLY card while billing continues guarantees the next
+    // renewal fails. Since access now ends the moment the paid period does,
+    // that silently costs the customer their subscription — so refuse, and
+    // tell them the two ways forward.
+    if (remaining.length === 0 && willBillAgain) {
+      return res.status(409).json({
+        success: false,
+        requiresCardOnFile: true,
+        message: 'Please add another card before removing this one. Your subscription renews automatically and the payment would fail without a card on file. If you want to stop renewing, cancel your subscription first.',
+      });
+    }
+
+    // Capture the default BEFORE detaching — Stripe clears it on detach, so
+    // afterwards there is no way to tell whether this card was the default.
+    const wasDefault = customer.invoice_settings?.default_payment_method === pmId;
+
     await stripe.paymentMethods.detach(pmId);
-    res.status(200).json({ success: true, message: 'Card removed' });
+
+    // Removing the default card while others remain leaves the customer with
+    // cards on file but NO default, so the next renewal fails anyway. Promote
+    // a replacement on both the customer and the subscription.
+    let promoted = null;
+    if (wasDefault && remaining.length > 0) {
+      promoted = remaining[0].id;
+      await stripe.customers.update(customerId, {
+        invoice_settings: { default_payment_method: promoted },
+      });
+      if (willBillAgain) {
+        await stripe.subscriptions.update(willBillAgain.id, { default_payment_method: promoted }).catch(
+          e => console.error('[detach] could not set subscription default:', e.message)
+        );
+      }
+      console.log(`[detach] user ${user._id}: removed default card, promoted ${promoted}`);
+    }
+
+    res.status(200).json({
+      success: true,
+      message: promoted ? 'Card removed. Your other card is now the default.' : 'Card removed',
+      data: { remainingCards: remaining.length, newDefaultPaymentMethod: promoted },
+    });
   } catch (error) {
+    console.error('[detach] failed:', error.message);
     res.status(500).json({ success: false, message: error.message });
   }
 };
