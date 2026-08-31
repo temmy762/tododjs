@@ -266,11 +266,15 @@ userSchema.methods.resetDailyDownloads = function() {
 
 // Check download limit based on subscription
 // How long access survives after the paid period lapses while Stripe retries a
-// failed renewal. Configurable so the business can tighten or remove it:
-// SUBSCRIPTION_GRACE_DAYS=0 revokes access the moment the paid period ends.
+// failed renewal.
+//
+// Policy: ZERO. Access ends the moment the paid period ends — an unpaid
+// renewal grants nothing. This is the default in code rather than only an env
+// var so a new or rebuilt environment cannot silently fall back to granting
+// free days. Set SUBSCRIPTION_GRACE_DAYS=<n> to reintroduce a retry window.
 export const PAST_DUE_GRACE_MS = (() => {
   const raw = parseInt(process.env.SUBSCRIPTION_GRACE_DAYS, 10);
-  const days = Number.isFinite(raw) && raw >= 0 ? raw : 3;
+  const days = Number.isFinite(raw) && raw >= 0 ? raw : 0;
   return days * 24 * 60 * 60 * 1000;
 })();
 
