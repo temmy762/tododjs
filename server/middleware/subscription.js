@@ -1,4 +1,4 @@
-import User from '../models/User.js';
+import User, { PAST_DUE_GRACE_MS } from '../models/User.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import stripe from '../config/stripe.js';
 import { parseDeviceInfo } from '../utils/deviceParser.js';
@@ -40,7 +40,13 @@ export const requireSubscription = async (req, res, next) => {
     ) {
       try {
         const stripeSub = await stripe.subscriptions.retrieve(user.subscription.stripeSubscriptionId);
-        if (stripeSub.current_period_end) {
+        // Only adopt Stripe's period end when Stripe still considers the
+        // subscription PAID. current_period_end on a canceled or past_due
+        // subscription reflects the period Stripe last attempted to bill, not
+        // one the customer paid for — adopting it here silently handed expired
+        // and cancelled users a fresh month of access every time they hit a
+        // download endpoint, which is how a cancelled account kept downloading.
+        if (stripeSub.current_period_end && ['active', 'trialing'].includes(stripeSub.status)) {
           user.subscription.endDate = new Date(stripeSub.current_period_end * 1000);
           await user.save();
         }
@@ -50,10 +56,16 @@ export const requireSubscription = async (req, res, next) => {
     // past_due grace: compute BEFORE the expired block so the expired block can skip it.
     // Stripe retries failed renewals over ~10 days — keep access during that window.
     // Once customer.subscription.deleted fires, status becomes 'cancelled' and grace ends.
-    const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000; // 10 days
+    // Bounded at BOTH ends. `(now - endDate) < GRACE` alone is also satisfied
+    // by a future endDate (negative difference), which gave every past_due
+    // user whose endDate had been pushed forward unlimited access.
+    const msSinceExpiry = user.subscription.endDate
+      ? Date.now() - new Date(user.subscription.endDate).getTime()
+      : null;
     const isPastDueInGrace = user.subscription.status === 'past_due' &&
-      !!user.subscription.endDate &&
-      (Date.now() - new Date(user.subscription.endDate).getTime()) < PAST_DUE_GRACE_MS;
+      msSinceExpiry !== null &&
+      msSinceExpiry >= 0 &&
+      msSinceExpiry < PAST_DUE_GRACE_MS;
 
     // Subscription expired — check endDate first before status.
     // Skip for past_due users still within the retry grace window.
@@ -77,6 +89,9 @@ export const requireSubscription = async (req, res, next) => {
     const isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
     const hasAccess =
       user.subscription.status === 'active' ||
+      // past_due inside the period they already paid for keeps access; the
+      // failed renewal concerns the NEXT period.
+      (user.subscription.status === 'past_due' && isWithinPeriod) ||
       (user.subscription.status === 'cancelled' && isWithinPeriod) ||
       isPastDueInGrace;
 

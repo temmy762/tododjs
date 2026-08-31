@@ -620,7 +620,27 @@ async function handleSubscriptionUpdated(subscription) {
   // either handler would overwrite the other's fields (see handleInvoicePaid).
   const set = {};
   if (newStatus && user.subscription.status !== newStatus) set['subscription.status'] = newStatus;
-  if (subscription.current_period_end) set['subscription.endDate'] = new Date(subscription.current_period_end * 1000);
+
+  // Only extend paid-through when the subscription is actually PAID.
+  //
+  // Stripe advances current_period_end when it ATTEMPTS a renewal, not when
+  // that renewal succeeds. Copying it unconditionally handed users a full
+  // extra month of access the moment their card failed: a renewal that failed
+  // on 17 Aug still moved endDate to 17 Sep. Combined with the past_due grace
+  // below, that is why users with failed payments kept downloading for weeks.
+  //
+  // endDate must therefore only ever move forward on evidence of payment.
+  // invoice.paid is what advances it (handleInvoicePaid); here we only accept
+  // it while Stripe reports the subscription as paid.
+  const paidStatuses = ['active', 'trialing'];
+  if (subscription.current_period_end && paidStatuses.includes(subscription.status)) {
+    set['subscription.endDate'] = new Date(subscription.current_period_end * 1000);
+  } else if (subscription.current_period_end) {
+    console.log(
+      `[subscription.updated] user ${user._id}: NOT extending endDate — Stripe status is ` +
+      `'${subscription.status}' (unpaid). Keeping paid-through ${user.subscription.endDate}`
+    );
+  }
   if (typeof subscription.cancel_at_period_end === 'boolean') set['subscription.cancelAtPeriodEnd'] = subscription.cancel_at_period_end;
 
   // Recovery: if stripeSubscriptionId is missing (e.g. DB save failed in subscribeWithSavedCard),

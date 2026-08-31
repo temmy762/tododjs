@@ -598,6 +598,12 @@ export const downloadAlbumFile = async (req, res) => {
       console.error('Archiver error:', err);
       if (!res.headersSent) {
         res.status(500).json({ success: false, message: 'ZIP creation failed' });
+      } else {
+        // Headers are already out, so the status cannot be changed — but the
+        // socket must still be closed. Previously this branch did nothing,
+        // which left the connection open indefinitely: the browser sat on a
+        // download that never progressed and never failed.
+        res.destroy(err);
       }
     });
 
@@ -611,32 +617,64 @@ export const downloadAlbumFile = async (req, res) => {
       logged = true;
       logAlbumDownload().catch((err) => console.error('Failed to log completed ZIP download:', err.message));
     });
+    let clientGone = false;
     res.on('close', () => {
       if (!res.writableEnded) {
+        clientGone = true;
         console.warn(`ZIP download for album ${album._id} aborted before completion (user ${user._id})`);
+        // Stop pulling from Wasabi for a client that has already left.
+        try { archive.abort(); } catch { /* already finished */ }
       }
     });
 
     archive.pipe(res);
 
-    // Fetch up to 5 tracks concurrently from Wasabi then append to archive
-    const CONCURRENCY = 5;
-    for (let i = 0; i < tracks.length; i += CONCURRENCY) {
-      const batch = tracks.slice(i, i + CONCURRENCY);
-      await Promise.all(batch.map(async (track) => {
-        const key = track.audioFile?.wasabiKey || track.audioFile?.key;
-        if (!key) return;
-        try {
-          const cmd = new GetObjectCommand({ Bucket: process.env.WASABI_BUCKET_NAME, Key: key });
-          const s3Resp = await s3Client.send(cmd);
-          const trackFilename = buildSafeFilename(`${track.artist} - ${track.title}.mp3`);
-          archive.append(s3Resp.Body, { name: trackFilename });
-        } catch (err) {
-          console.error(`Failed to fetch track ${track._id} (${key}):`, err.message);
-        }
-      }));
+    // Fetch one track at a time and hand archiver a finished BUFFER.
+    //
+    // This previously opened five Wasabi streams at once and kept queueing
+    // more — up to one per track — while archiver, which processes entries
+    // strictly in order, consumed only the first. The rest sat idle until the
+    // socket timed out, and that error surfaced after headers had been sent,
+    // so the response was never ended and the browser hung forever on a
+    // download that could not progress. Larger albums queued more streams and
+    // failed more reliably.
+    //
+    // Buffering each track fully before appending means exactly one Wasabi
+    // connection is open at a time and it is drained immediately, so nothing
+    // can idle out. Peak memory is one track (~5-15 MB), not the whole album.
+    let appended = 0;
+    for (const track of tracks) {
+      if (clientGone) break;
+      const key = track.audioFile?.wasabiKey || track.audioFile?.key;
+      if (!key) {
+        console.warn(`[zip] track ${track._id} has no audio key — skipped`);
+        continue;
+      }
+      try {
+        const cmd = new GetObjectCommand({ Bucket: process.env.WASABI_BUCKET_NAME, Key: key });
+        const s3Resp = await s3Client.send(cmd);
+        const bytes = await s3Resp.Body.transformToByteArray();
+        const trackFilename = buildSafeFilename(`${track.artist} - ${track.title}.mp3`);
+        archive.append(Buffer.from(bytes), { name: trackFilename });
+        appended++;
+      } catch (err) {
+        // One unreadable track must not sink the whole album.
+        console.error(`Failed to fetch track ${track._id} (${key}):`, err.message);
+      }
     }
 
+    if (clientGone) return;
+
+    if (appended === 0) {
+      console.error(`[zip] album ${album._id}: no tracks could be read — aborting`);
+      try { archive.abort(); } catch {}
+      if (!res.headersSent) {
+        return res.status(500).json({ success: false, message: 'No audio files could be read for this album' });
+      }
+      return res.destroy(new Error('no readable tracks'));
+    }
+
+    console.log(`[zip] album ${album._id}: streaming ${appended}/${tracks.length} track(s)`);
     await archive.finalize();
   } catch (error) {
     console.error('downloadAlbumFile error:', error.message, error.stack);

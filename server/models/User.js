@@ -265,22 +265,50 @@ userSchema.methods.resetDailyDownloads = function() {
 };
 
 // Check download limit based on subscription
+// How long access survives after the paid period lapses while Stripe retries a
+// failed renewal. Configurable so the business can tighten or remove it:
+// SUBSCRIPTION_GRACE_DAYS=0 revokes access the moment the paid period ends.
+export const PAST_DUE_GRACE_MS = (() => {
+  const raw = parseInt(process.env.SUBSCRIPTION_GRACE_DAYS, 10);
+  const days = Number.isFinite(raw) && raw >= 0 ? raw : 3;
+  return days * 24 * 60 * 60 * 1000;
+})();
+
 userSchema.methods.canDownload = function() {
   this.resetDailyDownloads();
-  
-  // Check if user has active subscription (admin-granted plans may have no planId)
-  // Also treat cancelled-but-within-period as active (cancel_at_period_end retention)
-  // past_due grace: Stripe retries over ~10 days — allow downloads during that window
+
+  // Access is granted for a period the user actually PAID for, plus a short
+  // retry window after it lapses.
+  //
+  // The previous grace test was `(now - endDate) < GRACE`, which is also true
+  // whenever endDate is in the FUTURE (a negative difference). Any past_due
+  // user whose endDate had been pushed forward therefore kept full access for
+  // the entire unpaid period — and endDate was being pushed forward on every
+  // failed renewal, so it never expired. That is why users with failed
+  // payments continued downloading. The window must be bounded at both ends.
   const isWithinPeriod = !!this.subscription.endDate && new Date() <= new Date(this.subscription.endDate);
-  const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000; // 10 days
+  const msSinceExpiry = this.subscription.endDate
+    ? Date.now() - new Date(this.subscription.endDate).getTime()
+    : null;
   const isPastDueInGrace = this.subscription.status === 'past_due' &&
+    msSinceExpiry !== null &&
+    msSinceExpiry >= 0 &&
+    msSinceExpiry < PAST_DUE_GRACE_MS;
+  // An 'active' status whose paid period has already passed is stale data, not
+  // entitlement — requireSubscription treats it as expired, and this method
+  // must agree or the two gates disagree about the same account.
+  const staleActive = this.subscription.status === 'active' &&
     !!this.subscription.endDate &&
-    (Date.now() - new Date(this.subscription.endDate).getTime()) < PAST_DUE_GRACE_MS;
-  const hasActiveSubscription =
-    (this.subscription.status === 'active' ||
+    !isWithinPeriod;
+
+  const hasActiveSubscription = !staleActive &&
+    ((this.subscription.status === 'active' ||
+     // past_due still inside the period they paid for keeps access; the
+     // failed renewal is for the NEXT period.
+     (this.subscription.status === 'past_due' && isWithinPeriod) ||
      (this.subscription.status === 'cancelled' && isWithinPeriod) ||
      isPastDueInGrace) &&
-    (this.subscription.planId || (this.subscription.plan && this.subscription.plan !== 'free'));
+    (this.subscription.planId || (this.subscription.plan && this.subscription.plan !== 'free')));
   
   const limits = {
     free: 5,
