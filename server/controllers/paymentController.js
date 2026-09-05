@@ -8,6 +8,7 @@ const FRONTEND_BASE = (process.env.FRONTEND_URL || 'http://localhost:5173').repl
 import User from '../models/User.js';
 import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentReceiptEmail, sendSubscriptionCancelledEmail, sendPaymentFailedEmail } from '../services/emailService.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
+import { customerLocaleFields, syncCustomerLocale } from '../utils/stripeLocale.js';
 
 // On staging, resolve the Stripe price ID from the test-mode config instead
 // of the shared production DB's SubscriptionPlan.stripePriceId (a live-mode
@@ -87,6 +88,11 @@ export const subscribeWithSavedCard = async (req, res) => {
       }
       throw e;
     }
+
+    // Opportunistic locale repair for customers created before preferred_locales
+    // was set. Free — we already hold the customer object, so this costs no
+    // extra read. Fire-and-forget: it must never delay or fail a payment.
+    syncCustomerLocale(stripe, customerId, user, customer);
 
     const defaultPm = customer.invoice_settings?.default_payment_method;
     const pmId = typeof defaultPm === 'object' ? defaultPm?.id : defaultPm;
@@ -263,6 +269,8 @@ export const createCheckoutSession = async (req, res) => {
       const customer = await stripe.customers.create({
         email: req.user.email,
         name: req.user.name,
+        // Localises the emails Stripe sends itself (failed payment, receipts).
+        ...customerLocaleFields(req.user),
         metadata: {
           userId: req.user._id.toString()
         }

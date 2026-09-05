@@ -4,6 +4,7 @@ import stripe from '../config/stripe.js';
 import { sendSubscriptionCancelledEmail, notifyAdminCancelledSubscription } from '../services/emailService.js';
 import { parseDeviceInfo } from '../utils/deviceParser.js';
 import { registerDevice as registerDeviceAtomic } from '../utils/deviceRegistry.js';
+import { customerLocaleFields } from '../utils/stripeLocale.js';
 
 // @desc    Get all subscription plans
 // @route   GET /api/subscriptions/plans
@@ -773,6 +774,8 @@ export const createSetupIntent = async (req, res) => {
       const customer = await stripe.customers.create({
         email: user.email,
         name: user.name,
+        // Localises the emails Stripe sends itself (failed payment, receipts).
+        ...customerLocaleFields(user),
         metadata: { userId: user._id.toString() }
       });
       user.subscription.stripeCustomerId = customer.id;

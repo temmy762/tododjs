@@ -492,17 +492,51 @@ export const syncUserStripeSubscription = async (req, res) => {
     if (newEndDate) user.subscription.endDate = newEndDate;
     user.subscription.status = newStatus;
     user.subscription.cancelAtPeriodEnd = stripeSub.cancel_at_period_end || false;
+
+    // Restore planId when the record has none.
+    //
+    // This is the button an admin reaches for when a customer reports "I paid
+    // but I'm still on Free", so it has to be able to actually fix that. It
+    // only wrote status/endDate before, and every access gate additionally
+    // requires planId to be set and not 'free' — so on precisely the accounts
+    // it was meant to repair it reported "Subscription synced from Stripe."
+    // and changed nothing the customer could see.
+    //
+    // Resolved from the price Stripe is billing, same as the reconciler.
+    // Only fills a gap; never overwrites a plan the customer already holds.
+    let restoredPlanId = null;
+    if (!user.subscription.planId || user.subscription.planId === 'free') {
+      const priceId = stripeSub.items?.data?.[0]?.price?.id;
+      const plan = priceId ? await SubscriptionPlan.findOne({ stripePriceId: priceId }) : null;
+      if (plan) {
+        user.subscription.planId = plan.planId;
+        user.subscription.plan = plan.planId;
+        if (plan.features?.maxDevices) user.maxDevices = plan.features.maxDevices;
+        restoredPlanId = plan.planId;
+      } else {
+        console.warn(
+          `[Admin] sync user ${user._id}: no planId on record and Stripe price ` +
+          `${priceId} is not mapped to any SubscriptionPlan.stripePriceId — ` +
+          `status synced but the account will still show Free`
+        );
+      }
+    }
+
     await user.save();
 
-    console.log(`[Admin] Synced Stripe sub for user ${user._id}: status=${newStatus}, endDate=${newEndDate}`);
+    console.log(`[Admin] Synced Stripe sub for user ${user._id}: status=${newStatus}, endDate=${newEndDate}, planRestored=${restoredPlanId || 'n/a'}`);
 
     res.status(200).json({
       success: true,
-      message: 'Subscription synced from Stripe.',
+      message: restoredPlanId
+        ? `Subscription synced from Stripe. Plan restored to ${restoredPlanId}.`
+        : 'Subscription synced from Stripe.',
       data: {
         endDate: user.subscription.endDate,
         status: user.subscription.status,
-        cancelAtPeriodEnd: user.subscription.cancelAtPeriodEnd
+        cancelAtPeriodEnd: user.subscription.cancelAtPeriodEnd,
+        planId: user.subscription.planId,
+        planRestored: restoredPlanId
       }
     });
   } catch (error) {

@@ -3,10 +3,55 @@ import { isStaging, testConfig } from '../config/stripeTest.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import User from '../models/User.js';
 import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentReceiptEmail, sendSubscriptionCancelledEmail, sendPaymentFailedEmail } from '../services/emailService.js';
+import { customerLocaleFields } from '../utils/stripeLocale.js';
 
 // Trailing slashes stripped — FRONTEND_URL=https://site.com/ would otherwise
 // produce double-slash paths that break SPA route matching.
 const FRONTEND_URL = (process.env.FRONTEND_URL || 'http://localhost:5173').replace(/\/+$/, '');
+
+// ── Invoice field compatibility ──────────────────────────────────────────────
+//
+// Webhook payloads are serialized with the API version configured ON THE
+// WEBHOOK ENDPOINT in the Stripe dashboard — NOT the version this SDK pins
+// (config/stripe.js pins 2023-10-16, which only governs calls we make).
+// Production's endpoints are on 2026-01-28.clover, where two fields these
+// handlers depend on were removed:
+//
+//   invoice.subscription          -> invoice.parent.subscription_details.subscription
+//   invoice.lines[].price.id      -> invoice.lines[].pricing.price_details.price
+//
+// Reading the old names returned undefined on every live event. For the
+// subscription id that is actively dangerous: the user lookup does
+//   $or: [{ stripeSubscriptionId: <undefined> }, { stripeCustomerId }]
+// and Mongoose keeps the key with an undefined value, which the driver
+// serializes to null (ignoreUndefined is not enabled in config/db.js). The
+// clause becomes "stripeSubscriptionId: null" — matching any account that has
+// no Stripe subscription id — so findOne could return an arbitrary user and
+// apply another customer's payment to them.
+//
+// These readers accept BOTH shapes so the handlers are correct regardless of
+// which API version an endpoint is pinned to, including after a future
+// dashboard upgrade.
+function invoiceSubscriptionId(invoice) {
+  const raw = invoice?.subscription ?? invoice?.parent?.subscription_details?.subscription ?? null;
+  // May arrive expanded as an object rather than a bare id.
+  return (raw && typeof raw === 'object' ? raw.id : raw) || null;
+}
+
+function invoiceLinePriceId(invoice) {
+  const line = invoice?.lines?.data?.[0];
+  const raw = line?.price?.id ?? line?.pricing?.price_details?.price ?? null;
+  return (raw && typeof raw === 'object' ? raw.id : raw) || null;
+}
+
+// Build the user lookup for an invoice without ever putting undefined into the
+// query — see the note above on why an undefined clause is unsafe.
+function invoiceUserQuery(subscriptionId, customerId) {
+  const or = [];
+  if (subscriptionId) or.push({ 'subscription.stripeSubscriptionId': subscriptionId });
+  if (customerId) or.push({ 'subscription.stripeCustomerId': customerId });
+  return or.length ? { $or: or } : null;
+}
 
 // @desc    Verify payment and activate subscription
 // @route   POST /api/stripe/verify-payment
@@ -353,15 +398,15 @@ async function handleInvoicePaid(invoice) {
     return;
   }
 
-  const subscriptionId = invoice.subscription;
+  const subscriptionId = invoiceSubscriptionId(invoice);
   const customerId = invoice.customer;
 
-  const user = await User.findOne({
-    $or: [
-      { 'subscription.stripeSubscriptionId': subscriptionId },
-      { 'subscription.stripeCustomerId': customerId }
-    ]
-  });
+  const query = invoiceUserQuery(subscriptionId, customerId);
+  if (!query) {
+    console.error(`invoice.paid: invoice ${invoice.id} has neither a subscription nor a customer id — cannot identify the account`);
+    return;
+  }
+  const user = await User.findOne(query);
 
   if (!user) {
     console.warn(`invoice.paid: no user found for subscription ${subscriptionId} / customer ${customerId}`);
@@ -419,12 +464,62 @@ async function handleInvoicePaid(invoice) {
     set['subscription.cancelAtPeriodEnd'] = false;
   }
 
-  const plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
+  // Resolve the plan from what Stripe actually billed, not from what our record
+  // happens to say.
+  //
+  // This handler used to set status:'active' and nothing else about the plan,
+  // which is only sufficient while planId survives the lapse. It does not
+  // always: an admin reverting an account to free clears it (userController
+  // "revert to free"), and a shared member losing their primary clears it too.
+  // The account then comes back from a recovered payment with status 'active'
+  // but no planId — and every access gate requires planId to be set and not
+  // 'free', so the customer pays and still sees Plan: Free with no access,
+  // with no error anywhere. Worse, the SubscriptionPlan lookup below keyed off
+  // that same empty planId, so no history row was written and no receipt was
+  // sent: the failure was completely silent.
+  //
+  // Stripe is the authority on what is being billed, so map the invoice's
+  // price to our plan exactly as the reconciler does, and fall back to the
+  // stored planId only when the price is unmapped.
+  const invoicePriceId = invoiceLinePriceId(invoice);
+  let plan = invoicePriceId
+    ? await SubscriptionPlan.findOne({ stripePriceId: invoicePriceId })
+    : null;
+  if (!plan && user.subscription.planId) {
+    plan = await SubscriptionPlan.findOne({ planId: user.subscription.planId });
+  }
+
+  // Restore planId/plan whenever the record has none (or 'free') and we could
+  // resolve one. Left alone otherwise, so a normal renewal never rewrites a
+  // plan the customer already holds — including admin-granted plans, which
+  // carry a plan name with no Stripe planId and must not be clobbered.
+  const storedPlanId = user.subscription.planId;
+  const needsPlanRestore = !storedPlanId || storedPlanId === 'free';
+  if (needsPlanRestore && plan) {
+    set['subscription.planId'] = plan.planId;
+    set['subscription.plan'] = plan.planId;
+    if (plan.features?.maxDevices) set.maxDevices = plan.features.maxDevices;
+    console.warn(
+      `[handleInvoicePaid] user ${user._id}: restored planId '${plan.planId}' from ` +
+      `invoice price ${invoicePriceId} (record had ${JSON.stringify(storedPlanId)}) — ` +
+      `account would otherwise have stayed on Free despite paying`
+    );
+  } else if (needsPlanRestore) {
+    // Nothing to restore from. Say so loudly: the customer has paid and this
+    // account cannot be activated without a price->plan mapping.
+    console.error(
+      `[handleInvoicePaid] user ${user._id}: PAID but no plan resolvable — ` +
+      `invoice price ${invoicePriceId} is not mapped to any SubscriptionPlan.stripePriceId ` +
+      `and the record has no planId. Account will remain on Free until this is fixed.`
+    );
+  }
   const update = { $set: set };
   if (plan) {
     update.$push = {
       subscriptionHistory: {
-        planId: user.subscription.planId,
+        // Resolved plan, not the stored one — on a restore the stored value is
+        // the empty/'free' record we are correcting.
+        planId: plan.planId,
         startDate: new Date(),
         endDate: newEndDate,
         amount: plan.price,
@@ -462,15 +557,15 @@ async function handleInvoicePaid(invoice) {
 
 // Helper: handle invoice.payment_failed — marks subscription as past_due
 async function handleInvoicePaymentFailed(invoice) {
-  const subscriptionId = invoice.subscription;
+  const subscriptionId = invoiceSubscriptionId(invoice);
   const customerId = invoice.customer;
 
-  const user = await User.findOne({
-    $or: [
-      { 'subscription.stripeSubscriptionId': subscriptionId },
-      { 'subscription.stripeCustomerId': customerId }
-    ]
-  });
+  const query = invoiceUserQuery(subscriptionId, customerId);
+  if (!query) {
+    console.error(`invoice.payment_failed: invoice ${invoice.id} has neither a subscription nor a customer id — cannot identify the account`);
+    return;
+  }
+  const user = await User.findOne(query);
 
   if (!user) {
     console.warn(`invoice.payment_failed: no user found for subscription ${subscriptionId} / customer ${customerId}`);
@@ -696,6 +791,8 @@ export const createPaymentIntent = async (req, res) => {
       const customer = await stripe.customers.create({
         email: user.email,
         name: user.name,
+        // Localises the emails Stripe sends itself (failed payment, receipts).
+        ...customerLocaleFields(user),
         metadata: {
           userId: user._id.toString()
         }
