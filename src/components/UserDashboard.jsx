@@ -10,6 +10,7 @@ import API_URL from '../config/api';
 import DeviceManagement from './DeviceManagement';
 import DownloadHistory from './DownloadHistory';
 import PaymentMethods from './PaymentMethods';
+import { hasPaidPlan, hasPaidAccess } from '../utils/subscriptionAccess';
 
 const API = API_URL;
 
@@ -89,13 +90,9 @@ export default function UserDashboard({ user, onClose, onUserUpdate, onLogout, o
   const subscriptionPlan = user?.subscription?.plan;
   const isAdmin = user?.role === 'admin';
   // Recognize both Stripe-paid (has planId) and admin-granted (has plan name but no planId)
-  const hasPlan = !!subscriptionPlanId || (!!subscriptionPlan && subscriptionPlan !== 'free');
-  const isWithinPeriod = !!(user?.subscription?.endDate) && new Date(user.subscription.endDate) > new Date();
-  const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000;
-  const isPastDueInGrace = subscriptionStatus === 'past_due' &&
-    !!(user?.subscription?.endDate) &&
-    (Date.now() - new Date(user.subscription.endDate).getTime()) < PAST_DUE_GRACE_MS;
-  const isActivePaid = hasPlan && (subscriptionStatus === 'active' || (subscriptionStatus === 'cancelled' && isWithinPeriod) || isPastDueInGrace);
+  // Single shared implementation — see src/utils/subscriptionAccess.js.
+  const hasPlan = hasPaidPlan(user?.subscription);
+  const isActivePaid = hasPaidAccess(user?.subscription);
   const normalizePlanLabel = (raw) => {
     if (!raw || raw === 'free') return 'Free';
     if (['premium', 'individual-monthly', 'individual-quarterly'].includes(raw)) return 'Premium';

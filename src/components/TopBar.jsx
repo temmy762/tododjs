@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import LanguageSwitcher from './LanguageSwitcher';
+import { hasActiveWindow } from '../utils/subscriptionAccess';
 
 const tonalities = ['1A', '2A', '3A', '4A', '5A', '6A', '7A', '8A', '9A', '10A', '11A', '12A', '1B', '2B', '3B', '4B', '5B', '6B', '7B', '8B', '9B', '10B', '11B', '12B'];
 
@@ -30,11 +31,10 @@ export default function TopBar({ onSearchFocus, onSearchChange, searchQuery, onS
   const subStatus = sub?.status;
   const subEndDate = sub?.endDate ? new Date(sub.endDate) : null;
   const now = new Date();
-  const isWithinPeriod = subEndDate && now <= subEndDate;
-  const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000;
-  const isPastDueInGrace = subStatus === 'past_due' && subEndDate &&
-    (now - subEndDate) < PAST_DUE_GRACE_MS;
-  const isActive = subStatus === 'active' || (subStatus === 'cancelled' && isWithinPeriod) || isPastDueInGrace;
+  // Single shared implementation — see src/utils/subscriptionAccess.js. The
+  // local 10-day grace here kept the premium crown lit for ten days after the
+  // backend had already started refusing downloads.
+  const isActive = hasActiveWindow(sub);
   const daysRemaining = subEndDate
     ? Math.max(0, Math.ceil((subEndDate - now) / (1000 * 60 * 60 * 24)))
     : -1;

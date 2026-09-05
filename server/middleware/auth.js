@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import User from '../models/User.js';
+import User, { hasActiveWindow } from '../models/User.js';
 import { parseDeviceInfo } from '../utils/deviceParser.js';
 import { registerDevice } from '../utils/deviceRegistry.js';
 
@@ -122,17 +122,20 @@ export const authorize = (...roles) => {
 };
 
 // Check subscription plan
+//
+// NOTE: this and checkSubscriptionActive below are currently referenced by no
+// route — every gated route uses requireSubscription (middleware/subscription.js)
+// instead. They are kept working rather than left to rot because they are the
+// most authoritative-LOOKING copies in the codebase, sitting in the auth
+// middleware where you would expect the gate to be, and both carried their own
+// hardcoded 10-day grace that the zero-grace policy never reached. Anyone
+// copying from here would have reintroduced the bug. Now delegated to
+// hasActiveWindow so there is one implementation. Worth deleting outright —
+// see the note in the commit.
 export const checkSubscription = (...plans) => {
   return (req, res, next) => {
     if (req.user.role === 'admin') return next();
-    const _isWithinPeriod = !!req.user.subscription?.endDate && new Date() <= new Date(req.user.subscription.endDate);
-    const _GRACE_MS = 10 * 24 * 60 * 60 * 1000;
-    const _isPastDueInGrace = req.user.subscription?.status === 'past_due' &&
-      !!req.user.subscription?.endDate &&
-      (Date.now() - new Date(req.user.subscription.endDate).getTime()) < _GRACE_MS;
-    const _hasAccess = req.user.subscription?.status === 'active' ||
-      (req.user.subscription?.status === 'cancelled' && _isWithinPeriod) ||
-      _isPastDueInGrace;
+    const _hasAccess = hasActiveWindow(req.user.subscription);
     if (!_hasAccess) {
       return res.status(403).json({
         success: false,
@@ -151,17 +154,10 @@ export const checkSubscription = (...plans) => {
   };
 };
 
-// Check if subscription is active
+// Check if subscription is active. Also currently unused — see the note above.
 export const checkSubscriptionActive = (req, res, next) => {
   if (req.user.role === 'admin') return next();
-  const isWithinPeriod = !!req.user.subscription?.endDate && new Date() <= new Date(req.user.subscription.endDate);
-  const GRACE_MS = 10 * 24 * 60 * 60 * 1000;
-  const isPastDueInGrace = req.user.subscription?.status === 'past_due' &&
-    !!req.user.subscription?.endDate &&
-    (Date.now() - new Date(req.user.subscription.endDate).getTime()) < GRACE_MS;
-  const hasAccess = req.user.subscription?.status === 'active' ||
-    (req.user.subscription?.status === 'cancelled' && isWithinPeriod) ||
-    isPastDueInGrace;
+  const hasAccess = hasActiveWindow(req.user.subscription);
   if (!hasAccess) {
     return res.status(403).json({
       success: false,

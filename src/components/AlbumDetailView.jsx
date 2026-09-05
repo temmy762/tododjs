@@ -6,6 +6,7 @@ import PremiumPrompt from './PremiumPrompt';
 import API_URL from '../config/api';
 import { apiFetch } from '../services/apiFetch';
 import { triggerBrowserDownload, triggerNativeDownload, pollDownloadWarning } from '../services/downloadService';
+import { hasPaidAccess } from '../utils/subscriptionAccess';
 
 const getTonalityColor = (tonality) => {
   const colors = {
@@ -49,18 +50,8 @@ export default function AlbumDetailView({ album, tracks = [], isLoading = false,
   const [downloadZipError, setDownloadZipError] = useState(false);
 
   const isAdmin = user?.role === 'admin';
-  const isWithinPeriod = !!(user?.subscription?.endDate) && new Date(user.subscription.endDate) > new Date();
-  const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000;
-  const isPastDueInGrace = user?.subscription?.status === 'past_due' &&
-    !!user?.subscription?.endDate &&
-    (Date.now() - new Date(user.subscription.endDate).getTime()) < PAST_DUE_GRACE_MS;
-  const isPremium = isAdmin || (
-    user &&
-    (user.subscription?.planId || (user.subscription?.plan && user.subscription.plan !== 'free')) &&
-    (user.subscription?.status === 'active' ||
-     (user.subscription?.status === 'cancelled' && isWithinPeriod) ||
-     isPastDueInGrace)
-  );
+  // Single shared implementation — see src/utils/subscriptionAccess.js.
+  const isPremium = isAdmin || hasPaidAccess(user?.subscription);
   const autoPlayTriggered = useRef(false);
 
   const handlePlayPause = (track) => {

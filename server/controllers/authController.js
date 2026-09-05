@@ -1,4 +1,4 @@
-import User from '../models/User.js';
+import User, { PAST_DUE_GRACE_MS } from '../models/User.js';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { getSignedDownloadUrl } from '../config/wasabi.js';
@@ -50,13 +50,24 @@ const sendTokenResponse = async (user, statusCode, res, req) => {
     // Determine max devices based on subscription status
     let maxDevices = 0; // Free accounts get 0 devices (no downloads)
 
+    // Shared PAST_DUE_GRACE_MS from the User model — the single place the
+    // policy lives (currently ZERO). This hardcoded its own 10 days, so a
+    // lapsed account was still handed its full plan device allowance at login
+    // for ten days after access itself had ended. Window bounded at both ends:
+    // `now - endDate < GRACE` alone is also true for a FUTURE endDate.
     const _isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
-    const _GRACE_MS = 10 * 24 * 60 * 60 * 1000;
+    const _msSinceExpiry = user.subscription.endDate
+      ? Date.now() - new Date(user.subscription.endDate).getTime()
+      : null;
     const _isPastDueInGrace = user.subscription.status === 'past_due' &&
-      !!user.subscription.endDate &&
-      (Date.now() - new Date(user.subscription.endDate).getTime()) < _GRACE_MS;
+      _msSinceExpiry !== null &&
+      _msSinceExpiry >= 0 &&
+      _msSinceExpiry < PAST_DUE_GRACE_MS;
     const _hasValidSub = user.subscription.planId && (
       user.subscription.status === 'active' ||
+      // past_due inside the paid period keeps its devices — the failed renewal
+      // is for the NEXT period. Mirrors requireSubscription.
+      (user.subscription.status === 'past_due' && _isWithinPeriod) ||
       (user.subscription.status === 'cancelled' && _isWithinPeriod) ||
       _isPastDueInGrace
     );

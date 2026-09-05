@@ -23,6 +23,7 @@ import FloatingContact from './components/FloatingContact';
 import DownloadProtectionModal from './components/DownloadProtectionModal';
 import BlockedScreen from './components/BlockedScreen';
 import lazyWithRetry from './utils/lazyWithRetry';
+import { hasActiveWindow, hasPaidPlan } from './utils/subscriptionAccess';
 
 // Lazy-loaded pages for code splitting. lazyWithRetry reloads the page once
 // if a chunk 404s after a new deploy (stale index.html in the user's cache),
@@ -505,20 +506,11 @@ function App() {
         }
         const sub = user.subscription;
         const isPaid = sub && (sub.planId || (sub.plan && sub.plan !== 'free'));
-        // isWithinPeriod: true only when a concrete future endDate exists.
-        // Intentionally false for null endDate — cancelled with no period has no access to retain.
-        const isWithinPeriod = !!sub?.endDate && new Date(sub.endDate) > new Date();
-        // past_due grace: Stripe retries over ~10 days after failed renewal.
-        // Keep access during that window so users can update their card without losing service.
-        const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000; // 10 days
-        const isWithinGrace = !!sub?.endDate &&
-          (new Date() - new Date(sub.endDate)) < PAST_DUE_GRACE_MS;
-        // Cancelled users keep access until their paid period expires (cancel_at_period_end retention)
-        const isActive = sub && (
-          sub.status === 'active' ||
-          (sub.status === 'cancelled' && isWithinPeriod) ||
-          (sub.status === 'past_due' && (isWithinPeriod || isWithinGrace))
-        );
+        // Single shared implementation — see src/utils/subscriptionAccess.js.
+        // This used to carry its own 10-day past_due grace, which the server
+        // stopped honouring when grace went to zero: the UI kept showing access
+        // while every download returned 403.
+        const isActive = hasActiveWindow(sub);
 
         if (!isPaid || !isActive) {
           navigate('/pricing');
@@ -713,19 +705,9 @@ function App() {
 
     if (user.role !== 'admin') {
       const sub = user.subscription;
-      const isPaid = sub && (sub.planId || (sub.plan && sub.plan !== 'free'));
-      // isWithinPeriod: true only when a concrete future endDate exists.
-      // Intentionally false for null endDate — cancelled with no period has no access to retain.
-      const isWithinPeriod = !!sub?.endDate && new Date(sub.endDate) > new Date();
-      const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000; // 10 days
-      const isWithinGrace = !!sub?.endDate &&
-        (new Date() - new Date(sub.endDate)) < PAST_DUE_GRACE_MS;
-      // Cancelled users keep access until their paid period expires (cancel_at_period_end retention)
-      const isActive = sub && (
-        sub.status === 'active' ||
-        (sub.status === 'cancelled' && isWithinPeriod) ||
-        (sub.status === 'past_due' && (isWithinPeriod || isWithinGrace))
-      );
+      // Single shared implementation — see src/utils/subscriptionAccess.js.
+      const isPaid = hasPaidPlan(sub);
+      const isActive = hasActiveWindow(sub);
       if (!isPaid || !isActive) {
         navigate('/pricing');
         return;

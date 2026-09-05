@@ -1,5 +1,5 @@
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
-import User from '../models/User.js';
+import User, { PAST_DUE_GRACE_MS } from '../models/User.js';
 import stripe from '../config/stripe.js';
 import { sendSubscriptionCancelledEmail, notifyAdminCancelledSubscription } from '../services/emailService.js';
 import { parseDeviceInfo } from '../utils/deviceParser.js';
@@ -81,11 +81,28 @@ export const getSubscriptionStatus = async (req, res) => {
       : null;
 
     // past_due grace: compute BEFORE the expired check so it can bypass it.
-    // Stripe retries failed renewals over ~10 days — keep isActive true during that window.
-    const PAST_DUE_GRACE_MS = 10 * 24 * 60 * 60 * 1000; // 10 days
+    //
+    // Uses the shared PAST_DUE_GRACE_MS from the User model — the single place
+    // the policy lives (currently ZERO; SUBSCRIPTION_GRACE_DAYS reopens it).
+    // This used to hardcode its own 10 days, left behind when the zero-grace
+    // policy landed and only updated the model. The endpoint therefore reported
+    // isActive:true for a past_due account up to 10 days past endDate while
+    // requireSubscription and canDownload — which DID follow the policy —
+    // returned 403 for the same account. The UI showed an active subscription
+    // and every download failed. It also suppressed the flip to 'expired'
+    // below, so the record stayed past_due indefinitely.
+    //
+    // The window is bounded at BOTH ends. `now - endDate < GRACE` alone is also
+    // satisfied by a FUTURE endDate (a negative difference), which granted the
+    // grace to anyone whose endDate had been pushed forward — the exact bug
+    // fixed in User.js and middleware/subscription.js.
+    const msSinceExpiry = user.subscription.endDate
+      ? Date.now() - new Date(user.subscription.endDate).getTime()
+      : null;
     const isPastDueInGrace = user.subscription.status === 'past_due' &&
-      !!user.subscription.endDate &&
-      (Date.now() - new Date(user.subscription.endDate).getTime()) < PAST_DUE_GRACE_MS;
+      msSinceExpiry !== null &&
+      msSinceExpiry >= 0 &&
+      msSinceExpiry < PAST_DUE_GRACE_MS;
 
     // Check if subscription expired (past endDate).
     // Skip for past_due users still within the retry grace window — do NOT overwrite their status.
@@ -107,13 +124,23 @@ export const getSubscriptionStatus = async (req, res) => {
     const daysRemaining = user.subscription.endDate
       ? Math.max(0, Math.ceil((user.subscription.endDate - new Date()) / (1000 * 60 * 60 * 24)))
       : -1;
-    // isActive = true when:
-    //   - status is 'active' (normal case, or cancel_at_period_end still pending)
-    //   - status is 'cancelled' AND a concrete future endDate exists
-    //   - status is 'past_due' AND within the 10-day retry grace window
+    // isActive must mirror requireSubscription (middleware/subscription.js) and
+    // User.canDownload exactly — it is what the UI labels the account with, so
+    // any divergence shows the customer one thing while the download endpoints
+    // do another:
+    //   - 'active'                        → yes
+    //   - 'past_due' INSIDE the paid period → yes; the failed renewal is for the
+    //     NEXT period, and this clause was missing here, so a customer whose
+    //     card failed mid-period was labelled inactive while downloads worked
+    //   - 'cancelled' inside the paid period → yes (cancel_at_period_end)
+    //   - 'past_due' past endDate         → only within PAST_DUE_GRACE_MS
     // NOTE: isWithinPeriod is false when endDate is null — no paid period to retain.
     const isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
-    const isActive = status === 'active' || (status === 'cancelled' && isWithinPeriod) || isPastDueInGrace;
+    const isActive =
+      status === 'active' ||
+      (status === 'past_due' && isWithinPeriod) ||
+      (status === 'cancelled' && isWithinPeriod) ||
+      isPastDueInGrace;
 
     res.status(200).json({
       success: true,

@@ -278,6 +278,53 @@ export const PAST_DUE_GRACE_MS = (() => {
   return days * 24 * 60 * 60 * 1000;
 })();
 
+/**
+ * Does this subscription's STATUS and DATES grant access right now?
+ *
+ * The status/date half of the entitlement question, in one place. It had been
+ * reimplemented independently in the middleware, both auth controllers and the
+ * status endpoint — each with its own copy of the grace constant — so the
+ * zero-grace policy change reached some copies and not others, and the same
+ * account could be "active" to the UI and 403 to the download endpoints.
+ *
+ * Deliberately does NOT consider the plan. 'free' must be excluded on BOTH
+ * `planId` and `plan` (the string 'free' is truthy, which is how a free-plan
+ * account with an active status once downloaded), and admin-granted plans carry
+ * a plan name with no planId — so callers apply that check with the rules that
+ * fit their context.
+ *
+ * @param {object} subscription - a User's `subscription` subdocument
+ */
+export function hasActiveWindow(subscription = {}) {
+  const end = subscription?.endDate ? new Date(subscription.endDate).getTime() : null;
+  const now = Date.now();
+  const isWithinPeriod = end !== null && now <= end;
+  const msSinceExpiry = end !== null ? now - end : null;
+
+  // Bounded at BOTH ends. `now - end < GRACE` alone is also satisfied by a
+  // FUTURE endDate (a negative difference), which handed unlimited access to
+  // any past_due account whose endDate had been pushed forward — and endDate
+  // was pushed forward on every failed renewal attempt.
+  const isPastDueInGrace =
+    subscription?.status === 'past_due' &&
+    msSinceExpiry !== null &&
+    msSinceExpiry >= 0 &&
+    msSinceExpiry < PAST_DUE_GRACE_MS;
+
+  // An 'active' status whose paid period has already passed is stale data, not
+  // entitlement — requireSubscription treats it as expired and this must agree.
+  if (subscription?.status === 'active' && end !== null && !isWithinPeriod) return false;
+
+  return (
+    subscription?.status === 'active' ||
+    // past_due INSIDE the period they already paid for keeps access; the failed
+    // renewal concerns the NEXT period.
+    (subscription?.status === 'past_due' && isWithinPeriod) ||
+    (subscription?.status === 'cancelled' && isWithinPeriod) ||
+    isPastDueInGrace
+  );
+}
+
 userSchema.methods.canDownload = function() {
   this.resetDailyDownloads();
 
