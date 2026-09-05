@@ -69,6 +69,20 @@ const DAY = 24 * 60 * 60 * 1000;
 const iso = (d) => (d ? new Date(d).toISOString().slice(0, 16) : '—');
 const days = (ms) => Math.round(ms / DAY);
 
+// Describe the gap between what was paid for and what the record grants.
+//
+// An account with NO endDate is the severe case, not a zero-length one: it
+// grants no access at all, so the entire billed period went undelivered. It
+// gets its own wording rather than being rendered as "record ends —", which
+// read as a formatting blank rather than as the finding it is.
+function describeGap(r, verb = 'short') {
+  if (r.noEndDate) {
+    const span = r.shortfallDays !== null ? `${r.shortfallDays}d billed period` : 'billed period';
+    return `record has NO endDate — entire ${span} ${verb} (account grants no access)`;
+  }
+  return `record ends ${iso(r.dbEnd)}  (${r.shortfallDays}d ${verb})`;
+}
+
 // Same both-shapes readers as the webhook handlers: this script must work
 // against payloads and objects from either API version. See the note in
 // controllers/stripeController.js.
@@ -104,6 +118,11 @@ for await (const inv of stripe.invoices.list({ status: 'paid', created: { gte: s
     ? inv.lines.data[0].period.end * 1000
     : null;
   if (!paidThroughMs) continue; // no billable period on this invoice — nothing to compare
+  // Start of the period this invoice paid for. Needed to size the shortfall
+  // when our record has no endDate at all — see below.
+  const periodStartMs = inv.lines?.data?.[0]?.period?.start
+    ? inv.lines.data[0].period.start * 1000
+    : null;
 
   // Locate the account: stripeCustomerId first, then email. Email is the
   // fallback the reconciler uses and catches records whose Stripe ids were
@@ -143,7 +162,20 @@ for await (const inv of stripe.invoices.list({ status: 'paid', created: { gte: s
     currency: inv.currency,
     paidThrough: paidThroughMs,
     dbEnd: dbEndMs,
-    shortfallDays: days(paidThroughMs - (dbEndMs ?? paidThroughMs)),
+    // Size of the shortfall, measured from whichever point access actually
+    // stopped.
+    //
+    // With an endDate present that is simply paidThrough - endDate. With NO
+    // endDate the record grants no access at all, so the whole billed period
+    // went undelivered and the reference point is the period START. Using
+    // `dbEnd ?? paidThrough` here (as this did) made that case evaluate to
+    // paidThrough - paidThrough = 0, and the report then said "0d never
+    // delivered" about the accounts that had received nothing whatsoever —
+    // the worst rows in the output looked like the most harmless.
+    noEndDate: dbEndMs === null,
+    shortfallDays: dbEndMs !== null
+      ? days(paidThroughMs - dbEndMs)
+      : (periodStartMs !== null ? days(paidThroughMs - periodStartMs) : null),
     dbStatus: user.subscription?.status || null,
     dbPlanId: user.subscription?.planId || null,
     resolvedPlan: plan?.planId || null,
@@ -185,7 +217,7 @@ section(`RESTORABLE — paid through a future date, access falls short  (${findi
 if (!findings.restorable.length) console.log('  none');
 for (const r of findings.restorable) {
   console.log(`  ${r.applied ? '✓ fixed ' : '· would fix'} ${r.email}`);
-  console.log(`      paid through ${iso(r.paidThrough)}  but record ends ${iso(r.dbEnd)}  (${r.shortfallDays}d short)`);
+  console.log(`      paid through ${iso(r.paidThrough)}  ${describeGap(r)}`);
   console.log(`      status=${r.dbStatus}  planId=${r.dbPlanId ?? 'null'}${!r.dbPlanId && r.resolvedPlan ? ` -> restore ${r.resolvedPlan}` : ''}  ${r.amount} ${r.currency}`);
 }
 
@@ -195,7 +227,7 @@ console.log('  These customers paid and did not receive what they paid for.\n');
 if (!findings.pastShortfall.length) console.log('  none');
 for (const r of findings.pastShortfall) {
   console.log(`  ! ${r.email}  ${r.amount} ${r.currency}  invoice ${r.invoice}`);
-  console.log(`      paid through ${iso(r.paidThrough)}  record ended ${iso(r.dbEnd)}  (${r.shortfallDays}d never delivered)`);
+  console.log(`      paid through ${iso(r.paidThrough)}  ${describeGap(r, 'never delivered')}`);
 }
 
 section(`PAID BUT NO TODODJS ACCOUNT  (${findings.noAccount.length})`);
@@ -222,10 +254,10 @@ if (!apply && findings.restorable.length) console.log(`\n  Re-run with --apply t
 
 if (csvPath) {
   const rows = [
-    ['category', 'email', 'invoice', 'amount', 'currency', 'paidThrough', 'dbEnd', 'shortfallDays', 'dbStatus', 'dbPlanId'],
-    ...findings.restorable.map(r => ['restorable', r.email, r.invoice, r.amount, r.currency, iso(r.paidThrough), iso(r.dbEnd), r.shortfallDays, r.dbStatus, r.dbPlanId]),
-    ...findings.pastShortfall.map(r => ['past_shortfall', r.email, r.invoice, r.amount, r.currency, iso(r.paidThrough), iso(r.dbEnd), r.shortfallDays, r.dbStatus, r.dbPlanId]),
-    ...findings.noAccount.map(r => ['no_account', r.email || '', r.invoice, r.amount, r.currency, iso(r.paidThrough), '', '', '', '']),
+    ['category', 'email', 'invoice', 'amount', 'currency', 'paidThrough', 'dbEnd', 'shortfallDays', 'noEndDate', 'dbStatus', 'dbPlanId'],
+    ...findings.restorable.map(r => ['restorable', r.email, r.invoice, r.amount, r.currency, iso(r.paidThrough), r.noEndDate ? 'NONE' : iso(r.dbEnd), r.shortfallDays, r.noEndDate, r.dbStatus, r.dbPlanId]),
+    ...findings.pastShortfall.map(r => ['past_shortfall', r.email, r.invoice, r.amount, r.currency, iso(r.paidThrough), r.noEndDate ? 'NONE' : iso(r.dbEnd), r.shortfallDays, r.noEndDate, r.dbStatus, r.dbPlanId]),
+    ...findings.noAccount.map(r => ['no_account', r.email || '', r.invoice, r.amount, r.currency, iso(r.paidThrough), '', '', '', '', '']),
   ];
   fs.writeFileSync(csvPath, rows.map(r => r.map(c => `"${String(c ?? '').replace(/"/g, '""')}"`).join(',')).join('\n'));
   console.log(`\n  CSV written to ${csvPath}`);
