@@ -69,7 +69,7 @@ Todo/
 │   │   └── ...
 │   ├── routes/                 # Express route definitions (22 files)
 │   ├── middleware/
-│   │   ├── auth.js             # JWT protect, optionalAuth, authorize, checkSubscription
+│   │   ├── auth.js             # JWT protect, optionalAuth, authorize
 │   │   └── subscription.js     # requireSubscription (Stripe-aware, admin bypass)
 │   ├── services/
 │   │   ├── emailService.js         # Resend + Nodemailer
@@ -110,8 +110,9 @@ Todo/
 - Stripe-based with plans defined in `SubscriptionPlan` model.
 - Subscription statuses: `active`, `cancelled`, `past_due`, `inactive`.
 - **Cancelled but within period** still has access (access until `endDate`).
-- **Past due grace period:** 10 days after `endDate` — user retains access.
-- **Admin bypass:** `req.user.role === 'admin'` short-circuits ALL subscription checks (in both `auth.js` and `subscription.js` middleware).
+- **Past due within the paid period** still has access — the failed renewal is for the NEXT period.
+- **Past due after `endDate`: NO grace.** Access ends the moment the paid period does (`PAST_DUE_GRACE_MS` in `models/User.js`; set `SUBSCRIPTION_GRACE_DAYS` to reopen a window). This was 10 days until b19e6e1 — do not reintroduce it.
+- **Admin bypass:** `req.user.role === 'admin'` short-circuits ALL subscription checks (`subscription.js` middleware).
 - **Admin-granted subscriptions:** If `subscription.grantedByAdmin` is true and no `planId`, user is allowed through.
 
 ### Device Management
@@ -167,7 +168,7 @@ Todo/
 - Controller pattern: routes → controllers → models.
 - All routes protected with `protect` middleware (JWT auth).
 - Admin-only routes use `authorize('admin')`.
-- Subscription-gated routes use `checkSubscription(...)` or `requireSubscription`.
+- Subscription-gated routes use `requireSubscription` (middleware/subscription.js). It is the ONLY subscription gate — do not add a second one.
 - Error responses: `{ success: false, message: "..." }` with appropriate HTTP status.
 - Success responses: `{ success: true, data: ... }` or `{ success: true, message: "..." }`.
 - Mongoose models with virtuals where needed (e.g., User subscription status).
@@ -177,16 +178,21 @@ Todo/
 - `protect` middleware: checks header → cookie → query param (for downloads).
 - `optionalAuth`: populates `req.user` if token present, never blocks.
 - `authorize(...roles)`: role-based access control.
-- `checkSubscription(...plans)`: plan-level gating (admin bypasses).
-- `checkSubscriptionActive`: just checks active status (admin bypasses).
-- `requireSubscription` (subscription.js): Stripe-aware, handles cancelled/past_due/grace.
+- `requireSubscription` (subscription.js): the single subscription gate. Stripe-aware, handles cancelled/past_due/grace, admin bypasses.
+
+### Subscription access — one rule, two places
+- **Never reimplement "does this user have access".** It was duplicated nine times, each copy drifting its own way, and the resulting UI-says-active/downloads-403 mismatches took months to find.
+- Backend: `hasActiveWindow(subscription)` from `server/models/User.js`. Plan check is separate — `'free'` must be excluded on BOTH `planId` and `plan`.
+- Frontend: `hasActiveWindow` / `hasPaidPlan` / `hasPaidAccess` from `src/utils/subscriptionAccess.js`.
+- Grace after a failed renewal is **ZERO** (`PAST_DUE_GRACE_MS`, `SUBSCRIPTION_GRACE_DAYS` to reopen). The frontend constant is a hand-kept mirror: change one, change the other.
+- Covered by `src/test/subscriptionAccess.test.js` — add a case there when the rules change.
 
 ## Important Gotchas
 
-1. **Admin bypasses everything** — `role === 'admin'` must short-circuit FIRST in all subscription/permission checks. Both `auth.js` and `subscription.js` enforce this.
+1. **Admin bypasses everything** — `role === 'admin'` must short-circuit FIRST in all subscription/permission checks. `subscription.js` enforces this.
 2. **Every `lazy()` needs `<Suspense>`** — missing Suspense wrappers caused crashes (fixed, but always check when adding new lazy routes).
 3. **Cancelled subscriptions retain access** until `endDate` — don't block users whose status is `cancelled` but are still within their paid period.
-4. **Past due grace period** — 10 days after `endDate`, `past_due` users still have access.
+4. **Past due grace is ZERO** — `past_due` keeps access only while still INSIDE the paid period. Once `endDate` passes, access ends immediately. Never hardcode a grace window; use `PAST_DUE_GRACE_MS` from `models/User.js`.
 5. **Admin-granted subscriptions** — if `grantedByAdmin` is true and no `planId`, let them through (they don't have a Stripe subscription).
 6. **Device ID via header** — `x-device-id` header is used for device tracking. Fire-and-forget upsert in `protect` middleware.
 7. **i18n** — all UI strings must go through `t()`. Both `en.json` and `es.json` must be updated together.

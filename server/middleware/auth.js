@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import User, { hasActiveWindow } from '../models/User.js';
+import User from '../models/User.js';
 import { parseDeviceInfo } from '../utils/deviceParser.js';
 import { registerDevice } from '../utils/deviceRegistry.js';
 
@@ -119,51 +119,4 @@ export const authorize = (...roles) => {
     }
     next();
   };
-};
-
-// Check subscription plan
-//
-// NOTE: this and checkSubscriptionActive below are currently referenced by no
-// route — every gated route uses requireSubscription (middleware/subscription.js)
-// instead. They are kept working rather than left to rot because they are the
-// most authoritative-LOOKING copies in the codebase, sitting in the auth
-// middleware where you would expect the gate to be, and both carried their own
-// hardcoded 10-day grace that the zero-grace policy never reached. Anyone
-// copying from here would have reintroduced the bug. Now delegated to
-// hasActiveWindow so there is one implementation. Worth deleting outright —
-// see the note in the commit.
-export const checkSubscription = (...plans) => {
-  return (req, res, next) => {
-    if (req.user.role === 'admin') return next();
-    const _hasAccess = hasActiveWindow(req.user.subscription);
-    if (!_hasAccess) {
-      return res.status(403).json({
-        success: false,
-        message: 'Active subscription required',
-        subscriptionStatus: req.user.subscription?.status
-      });
-    }
-    if (!plans.includes(req.user.subscription.plan)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Upgrade your subscription to access this feature',
-        requiredPlan: plans
-      });
-    }
-    next();
-  };
-};
-
-// Check if subscription is active. Also currently unused — see the note above.
-export const checkSubscriptionActive = (req, res, next) => {
-  if (req.user.role === 'admin') return next();
-  const hasAccess = hasActiveWindow(req.user.subscription);
-  if (!hasAccess) {
-    return res.status(403).json({
-      success: false,
-      message: 'Your subscription is not active. Please renew to continue.',
-      subscriptionStatus: req.user.subscription?.status
-    });
-  }
-  next();
 };
