@@ -4,6 +4,7 @@ import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import User from '../models/User.js';
 import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentReceiptEmail, sendSubscriptionCancelledEmail, sendPaymentFailedEmail } from '../services/emailService.js';
 import { customerLocaleFields } from '../utils/stripeLocale.js';
+import { sendPurchaseEvent } from '../services/metaConversions.js';
 
 // Trailing slashes stripped — FRONTEND_URL=https://site.com/ would otherwise
 // produce double-slash paths that break SPA route matching.
@@ -367,6 +368,22 @@ async function handleCheckoutCompleted(session) {
   // Notify admin of new payment (non-blocking)
   notifyAdminNewPayment(user, plan.name, plan.price, plan.currency)
     .catch(err => console.error('Admin webhook payment notification failed:', err));
+
+  // Meta Conversions API — report the Purchase server-side. This is the
+  // first successful payment of a new subscription (renewals go through
+  // handleInvoicePaid and are NOT reported as Purchase). event_id is the
+  // checkout session id, matching the browser-side pixel for dedup. Non-blocking
+  // so a Meta outage cannot block subscription activation.
+  sendPurchaseEvent({
+    eventSourceId: session.id,
+    amount: session.amount_total != null ? session.amount_total / 100 : plan.price,
+    currency: session.currency || plan.currency || 'EUR',
+    customer: {
+      email: customerEmail,
+      name: session.customer_details?.name,
+      phone: session.customer_details?.phone
+    }
+  }).catch(err => console.error('Meta CAPI Purchase failed:', err.message));
 }
 
 // Helper function to handle payment failures

@@ -34,7 +34,7 @@ export default function PaymentSuccessPage() {
     if (sessionStorage.getItem(dedupKey)) return;
     window.fbq('track', 'Purchase', {
       value: typeof amount === 'number' ? amount : 0,
-      currency: (currency || 'USD').toUpperCase()
+      currency: (currency || 'EUR').toUpperCase()
     }, { eventID: sessionId });
     sessionStorage.setItem(dedupKey, '1');
   };
