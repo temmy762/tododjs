@@ -113,6 +113,10 @@ export const verifyPayment = async (req, res) => {
     res.status(200).json({
       success: true,
       activated,
+      // Amount/currency let the frontend report an accurate Purchase
+      // conversion to the Meta Pixel. amount_total is in cents.
+      amount: session.amount_total != null ? session.amount_total / 100 : null,
+      currency: session.currency || 'usd',
       message: 'Payment confirmed. Subscription will be activated shortly.'
     });
   } catch (error) {

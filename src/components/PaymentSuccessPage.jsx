@@ -25,6 +25,20 @@ export default function PaymentSuccessPage() {
     }
   }, [sessionId]);
 
+  // Report the conversion to the Meta Pixel. Deduped per checkout session
+  // (sessionStorage guard + eventID) so refreshing the success page doesn't
+  // inflate purchase counts.
+  const trackMetaPurchase = (amount, currency) => {
+    if (!sessionId || typeof window.fbq !== 'function') return;
+    const dedupKey = `fbq_purchase_${sessionId}`;
+    if (sessionStorage.getItem(dedupKey)) return;
+    window.fbq('track', 'Purchase', {
+      value: typeof amount === 'number' ? amount : 0,
+      currency: (currency || 'USD').toUpperCase()
+    }, { eventID: sessionId });
+    sessionStorage.setItem(dedupKey, '1');
+  };
+
   const verifyPayment = async () => {
     try {
       const token = localStorage.getItem('token');
@@ -42,6 +56,7 @@ export default function PaymentSuccessPage() {
       const data = await res.json();
 
       if (data.success) {
+        trackMetaPurchase(data.amount, data.currency);
         if (token) {
           // Logged in — wait for activation to land, then show success
           await pollSubscriptionActivation(token);
@@ -61,6 +76,7 @@ export default function PaymentSuccessPage() {
       console.error('Verification error:', err);
       // The payment itself already succeeded at Stripe — never present this
       // as a failed payment, or customers pay a second time (this happened).
+      trackMetaPurchase(null, null);
       setSuccess(true);
       setNeedsLogin(!localStorage.getItem('token'));
       setLoading(false);
