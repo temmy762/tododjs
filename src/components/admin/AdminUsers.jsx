@@ -332,10 +332,14 @@ export default function AdminUsers({ forcedSegment = null, title, subtitle } = {
                         <p key={`${r.email}-${i}`} className="text-[10px] leading-relaxed">
                           <span className="text-white">{r.email}</span>{' '}
                           <span className="text-brand-text-tertiary">
-                            {r.before?.status !== r.status && `${r.before?.status ?? '—'} → ${r.status}`}
-                            {r.before?.status !== r.status && when(r.before?.endDate) !== when(r.endDate) && ', '}
-                            {when(r.before?.endDate) !== when(r.endDate) &&
-                              `expires ${when(r.before?.endDate)} → ${when(r.endDate)}`}
+                            {[
+                              r.before?.status !== r.status && `${r.before?.status ?? '—'} → ${r.status}`,
+                              when(r.before?.endDate) !== when(r.endDate) &&
+                                `expires ${when(r.before?.endDate)} → ${when(r.endDate)}`,
+                              // An account can change by having a dead Stripe id
+                              // repaired and nothing else — that still needs applying.
+                              r.idsRepaired && 'Stripe ids repaired',
+                            ].filter(Boolean).join(', ')}
                           </span>
                         </p>
                       ))}

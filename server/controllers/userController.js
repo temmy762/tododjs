@@ -627,9 +627,15 @@ export const bulkSyncStripeSubscriptions = async (req, res) => {
     for (const user of users) {
       try {
         // Captured before any mutation so the preview can show before -> after.
+        // Ids are part of this too, not just status/endDate: repairing a dead
+        // stripeCustomerId is itself a change worth applying, and if it were
+        // left out of the diff below such an account would report changed:false,
+        // never offer an Apply button, and stay broken on every future run.
         const before = {
           status: user.subscription?.status ?? null,
           endDate: user.subscription?.endDate ?? null,
+          customerId: user.subscription?.stripeCustomerId ?? null,
+          subscriptionId: user.subscription?.stripeSubscriptionId ?? null,
         };
         let subId = user.subscription?.stripeSubscriptionId;
         let customerId = user.subscription?.stripeCustomerId;
@@ -663,10 +669,37 @@ export const bulkSyncStripeSubscriptions = async (req, res) => {
           }
         }
         if (!stripeSub && customerId) {
-          const subs = await stripe.subscriptions.list({ customer: customerId, limit: 5, status: 'all' });
-          stripeSub = subs.data.find(s => s.status === 'active') ||
-                      subs.data.find(s => s.status === 'trialing') ||
-                      subs.data[0] || null;
+          // A dead customer id must recover the same way a dead subscription id
+          // does above. Without this the list call throws 'No such customer',
+          // the account is reported as failed, and the email lookup that would
+          // have found the customer is never reached — so the SAME accounts
+          // failed on every single run, permanently, while a working customer
+          // record sat in Stripe under their email. (Stale ids arise from a
+          // deleted customer or a test/live mode mismatch.)
+          try {
+            const subs = await stripe.subscriptions.list({ customer: customerId, limit: 5, status: 'all' });
+            stripeSub = subs.data.find(s => s.status === 'active') ||
+                        subs.data.find(s => s.status === 'trialing') ||
+                        subs.data[0] || null;
+          } catch (customerErr) {
+            console.warn(
+              `[BulkSync] customer ID invalid for ${user.email} (${customerErr.message}) — ` +
+              `clearing and trying email lookup`
+            );
+            user.subscription.stripeCustomerId = null;
+            customerId = null;
+
+            const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+            if (customers.data.length) {
+              customerId = customers.data[0].id;
+              user.subscription.stripeCustomerId = customerId;
+              const subs = await stripe.subscriptions.list({ customer: customerId, limit: 5, status: 'all' });
+              stripeSub = subs.data.find(s => s.status === 'active') ||
+                          subs.data.find(s => s.status === 'trialing') ||
+                          subs.data[0] || null;
+            }
+          }
+
           if (stripeSub) {
             user.subscription.stripeSubscriptionId = stripeSub.id;
           }
@@ -705,10 +738,16 @@ export const bulkSyncStripeSubscriptions = async (req, res) => {
         const after = {
           status: user.subscription.status ?? null,
           endDate: user.subscription.endDate ?? null,
+          customerId: user.subscription.stripeCustomerId ?? null,
+          subscriptionId: user.subscription.stripeSubscriptionId ?? null,
         };
+        const idsRepaired =
+          before.customerId !== after.customerId ||
+          before.subscriptionId !== after.subscriptionId;
         const changed =
           before.status !== after.status ||
-          String(before.endDate ?? '') !== String(after.endDate ?? '');
+          String(before.endDate ?? '') !== String(after.endDate ?? '') ||
+          idsRepaired;
 
         if (!dryRun) await user.save();
 
@@ -720,6 +759,7 @@ export const bulkSyncStripeSubscriptions = async (req, res) => {
           endDate: after.endDate,
           before,
           changed,
+          idsRepaired,
         });
         console.log(
           `[BulkSync]${dryRun ? ' (preview)' : ''} ${user.email}: ` +
