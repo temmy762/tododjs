@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, UserPlus, Edit, Trash2, Shield, Crown, User, Loader, X, ChevronLeft, ChevronRight, Users, RefreshCw, Ban, CheckCircle, Download, FileDown } from 'lucide-react';
 import API_URL from '../../config/api';
+import { hasPaidAccess } from '../../utils/subscriptionAccess';
 
 const API = API_URL;
 const getToken = () => localStorage.getItem('token');
@@ -221,15 +222,14 @@ export default function AdminUsers({ forcedSegment = null, title, subtitle } = {
     return map[raw] || raw;
   };
 
-  const isSubActive = (u) => {
-    const sub = u.subscription;
-    if (!sub) return false;
-    if (sub.status !== 'active') return false;          // must be explicitly active
-    if (sub.isActive === false) return false;
-    if (sub.endDate && new Date(sub.endDate) < new Date()) return false;
-    const plan = sub.planId || sub.plan;
-    return !!plan && plan !== 'free';                   // 'free' is not a paid plan
-  };
+  // The shared rule, not a local one. This was its own implementation and it
+  // disagreed: it required status === 'active', so a customer who had
+  // cancelled but was still inside the period they paid for — someone who can
+  // download right now, because the backend says so — rendered here as a grey
+  // avatar labelled "Free" with a "Sub: Cancelled" tag. This is the screen
+  // used to answer "is this customer OK?", so it produced confident wrong
+  // answers. hasPaidAccess is what the backend and UserDashboard both use.
+  const isSubActive = (u) => hasPaidAccess(u.subscription);
 
   const getPlanLabel = (u) => {
     if (u.role === 'admin') return t('admin.adminRole');
@@ -461,7 +461,13 @@ export default function AdminUsers({ forcedSegment = null, title, subtitle } = {
                   <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('admin.joined')}</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('admin.lastLogin')}</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('library.downloads')}</th>
-                  <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('admin.status')}</th>
+                  {/* "Account", not "Status": this column is user.isActive — whether the
+    account is enabled — and has nothing to do with the subscription, which
+    is shown in the Role/Plan column. Both read "Active", and the ambiguity
+    caused a real mistake: an account showing "Subscription: Cancelled /
+    Status: Active" was read as a billing fault and disabled by hand, which
+    returns 401 on every request, not just downloads. */}
+<th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider" title="Whether the account is enabled. Subscription state is in the Role / Plan column.">{t('admin.accountStatus', 'Account')}</th>
                   <th className="text-left px-6 py-4 text-xs font-semibold text-brand-text-tertiary uppercase tracking-wider">{t('admin.actions')}</th>
                 </tr>
               </thead>
@@ -661,15 +667,8 @@ function EditUserModal({ user, onClose, onSave }) {
     };
     return map[raw] || raw;
   };
-  const isSubActive = (() => {
-    const sub = user.subscription;
-    if (!sub) return false;
-    if (sub.status !== 'active') return false;
-    if (sub.isActive === false) return false;
-    if (sub.endDate && new Date(sub.endDate) < new Date()) return false;
-    const plan = sub.planId || sub.plan;
-    return !!plan && plan !== 'free';
-  })();
+  // (A third copy of the access rule lived here, computed and then never
+  // referenced. Removed rather than left waiting to be used.)
   const [plan, setPlan] = useState(
     normalizePlan(user.subscription?.planId || user.subscription?.plan || 'free')
   );

@@ -217,6 +217,21 @@ export const exportUsers = async (req, res) => {
       .limit(EXPORT_ROW_CAP)
       .lean();
 
+    // Today's downloads from the Download collection, same as getAllUsers.
+    // user.downloads.today is never reset in the database, so exporting it
+    // shipped the lifetime total under a "Downloads Today" heading.
+    //
+    // Matched on date alone rather than on the exported user ids: an export
+    // can carry up to EXPORT_ROW_CAP rows, and today's downloads across the
+    // whole platform are far fewer than a 10,000-element $in.
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const todayCounts = await Download.aggregate([
+      { $match: { createdAt: { $gte: startOfToday } } },
+      { $group: { _id: '$userId', count: { $sum: 1 } } },
+    ]);
+    const todayByUser = new Map(todayCounts.map(r => [String(r._id), r.count]));
+
     const escapeCsv = (val) => {
       const s = val === null || val === undefined ? '' : String(val);
       return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
@@ -240,7 +255,7 @@ export const exportUsers = async (req, res) => {
       u.createdAt ? new Date(u.createdAt).toISOString().slice(0, 10) : '',
       u.lastLogin ? new Date(u.lastLogin).toISOString() : '',
       u.downloads?.total || 0,
-      u.downloads?.today || 0,
+      todayByUser.get(String(u._id)) || 0,
       statusOf(u)
     ].map(escapeCsv).join(','));
 

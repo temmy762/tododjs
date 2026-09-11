@@ -344,6 +344,7 @@
     "joined": "Joined",
     "lastLogin": "Last Login",
     "status": "Status",
+    "accountStatus": "Account",
     "actions": "Actions",
     "activeStatus": "Active",
     "inactiveStatus": "Inactive",
