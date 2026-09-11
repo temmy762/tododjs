@@ -95,7 +95,7 @@ export async function detectAccessDrift({ limit } = {}) {
 }
 
 /** Human-readable summary, used for both the log line and the admin email. */
-function formatReport(report) {
+function formatReport(report, newNoEvidence = []) {
   const lines = [];
   lines.push(`Accounts with access checked: ${report.checked}`);
   lines.push(`Correct (inside a paid period): ${report.ok}`);
@@ -119,7 +119,13 @@ function formatReport(report) {
   if (report.noEvidence.length) {
     lines.push('');
     lines.push('NO STRIPE EVIDENCE — decide by hand, do not assume non-payment:');
-    for (const n of report.noEvidence) lines.push(`  ${n.email} — ${n.reason}`);
+    for (const n of report.noEvidence) {
+      const isNew = newNoEvidence.includes(n.email);
+      lines.push(`  ${isNew ? 'NEW ' : ''}${n.email} — ${n.reason}`);
+    }
+    lines.push('');
+    lines.push('Standing entries are listed for context only; this report is not');
+    lines.push('sent again for them unless a new one appears.');
   }
   return lines.join('\n');
 }
@@ -129,12 +135,31 @@ function formatReport(report) {
  * A clean run logs one line and sends nothing — an alert that fires every day
  * stops being read.
  */
+// Emails seen in the previous pass, so a standing unresolved account does not
+// re-alert every day. null until the first pass of this process: a restart
+// must not re-announce everything it already reported.
+let previousNoEvidence = null;
+
 export async function runAccessDriftPass() {
   const started = Date.now();
   const report = await detectAccessDrift();
   const seconds = Math.round((Date.now() - started) / 1000);
 
-  const needsAttention = report.drift.length > 0 || report.noEvidence.length > 0;
+  // Alert on over-granting always — that is money leaving and it is actionable.
+  //
+  // Do NOT alert on no-evidence accounts merely EXISTING. Some cannot be
+  // resolved in code at all (a customer with no Stripe record anywhere is a
+  // human decision), so including them made a "we only email when something
+  // needs a decision" report fire every single day forever — which is how an
+  // alert stops being read, and then the next real over-grant arrives in a
+  // message nobody opens. Only a NEWLY appearing one is news.
+  const currentNoEvidence = new Set(report.noEvidence.map(n => n.email));
+  const newNoEvidence = previousNoEvidence === null
+    ? []   // first pass in this process — establish a baseline, announce nothing
+    : [...currentNoEvidence].filter(e => !previousNoEvidence.has(e));
+  previousNoEvidence = currentNoEvidence;
+
+  const needsAttention = report.drift.length > 0 || newNoEvidence.length > 0;
 
   console.log(
     `[access-drift] checked ${report.checked} account(s) in ${seconds}s — ` +
@@ -150,11 +175,10 @@ export async function runAccessDriftPass() {
 
   if (needsAttention && process.env.ADMIN_EMAIL) {
     try {
-      await sendNotificationEmail(
-        process.env.ADMIN_EMAIL,
-        `TodoDJs: ${report.drift.length} account(s) with access Stripe did not pay for`,
-        formatReport(report)
-      );
+      const subject = report.drift.length > 0
+        ? `TodoDJs: ${report.drift.length} account(s) with access Stripe did not pay for`
+        : `TodoDJs: ${newNoEvidence.length} account(s) with access and no payment record`;
+      await sendNotificationEmail(process.env.ADMIN_EMAIL, subject, formatReport(report, newNoEvidence));
     } catch (err) {
       console.error('[access-drift] failed to send admin report:', err.message);
     }

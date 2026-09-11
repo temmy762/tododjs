@@ -758,7 +758,23 @@ export const bulkSyncStripeSubscriptions = async (req, res) => {
           const repairedIds =
             (user.subscription.stripeCustomerId ?? null) !== before.customerId ||
             (user.subscription.stripeSubscriptionId ?? null) !== before.subscriptionId;
-          if (repairedIds && !dryRun) await user.save();
+          if (repairedIds && !dryRun) {
+            // Targeted $set, not user.save(). Saving the whole document here
+            // would rewrite every subscription field from a copy loaded at the
+            // top of this loop — and a webhook may have activated the account
+            // in the meantime, which this would silently revert. Same reason
+            // downloadController uses $inc and handleInvoicePaid uses a single
+            // atomic $set. Only the two ids changed, so only they are written.
+            await User.updateOne(
+              { _id: user._id },
+              {
+                $set: {
+                  'subscription.stripeCustomerId': user.subscription.stripeCustomerId ?? null,
+                  'subscription.stripeSubscriptionId': user.subscription.stripeSubscriptionId ?? null,
+                },
+              }
+            );
+          }
 
           skipped++;
           results.push({
