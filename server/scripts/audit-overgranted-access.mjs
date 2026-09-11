@@ -56,7 +56,7 @@ import mongoose from 'mongoose';
 import stripe from '../config/stripe.js';
 import User, { hasActiveWindow, PAST_DUE_GRACE_MS } from '../models/User.js';
 import Download from '../models/Download.js';
-import { hasPaidPlan, truePaidThrough } from './lib/stripeTruth.mjs';
+import { hasPaidPlan, truePaidThrough } from '../utils/stripeTruth.js';
 
 const argv = process.argv.slice(2);
 const value = (name) => {

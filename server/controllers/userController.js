@@ -601,6 +601,12 @@ export const syncUserStripeSubscription = async (req, res) => {
 // @access  Private/Admin
 export const bulkSyncStripeSubscriptions = async (req, res) => {
   try {
+    // Preview before writing. One click used to mutate every matching account
+    // with no way to see what it would do first — which is how a month of
+    // unpaid access was written to a customer's record and went unnoticed
+    // until someone ran an audit by hand. The admin panel now previews, shows
+    // the proposed changes, and only writes on a second, explicit click.
+    const dryRun = req.query.dryRun === '1' || req.body?.dryRun === true;
     // Target users who have a paid plan OR any Stripe ID stored
     const users = await User.find({
       $or: [
@@ -620,6 +626,11 @@ export const bulkSyncStripeSubscriptions = async (req, res) => {
 
     for (const user of users) {
       try {
+        // Captured before any mutation so the preview can show before -> after.
+        const before = {
+          status: user.subscription?.status ?? null,
+          endDate: user.subscription?.endDate ?? null,
+        };
         let subId = user.subscription?.stripeSubscriptionId;
         let customerId = user.subscription?.stripeCustomerId;
 
@@ -689,11 +700,31 @@ export const bulkSyncStripeSubscriptions = async (req, res) => {
         if (stripeSub.customer && !user.subscription.stripeCustomerId) {
           user.subscription.stripeCustomerId = stripeSub.customer;
         }
-        await user.save();
+        // The mutations above are in-memory only until this save. On a dry run
+        // we simply never save, so the document is discarded untouched.
+        const after = {
+          status: user.subscription.status ?? null,
+          endDate: user.subscription.endDate ?? null,
+        };
+        const changed =
+          before.status !== after.status ||
+          String(before.endDate ?? '') !== String(after.endDate ?? '');
+
+        if (!dryRun) await user.save();
 
         synced++;
-        results.push({ email: user.email, result: 'synced', status: newStatus, endDate: newEndDate });
-        console.log(`[BulkSync] ${user.email}: status=${newStatus}, endDate=${newEndDate}`);
+        results.push({
+          email: user.email,
+          result: 'synced',
+          status: after.status,
+          endDate: after.endDate,
+          before,
+          changed,
+        });
+        console.log(
+          `[BulkSync]${dryRun ? ' (preview)' : ''} ${user.email}: ` +
+          `status=${before.status}->${after.status}, endDate=${before.endDate}->${after.endDate}`
+        );
       } catch (err) {
         failed++;
         results.push({ email: user.email, result: 'error', error: err.message });
@@ -701,10 +732,15 @@ export const bulkSyncStripeSubscriptions = async (req, res) => {
       }
     }
 
+    const changedCount = results.filter(r => r.changed).length;
+
     res.status(200).json({
       success: true,
-      message: `Bulk sync complete: ${synced} synced, ${skipped} skipped, ${failed} failed`,
-      data: { synced, skipped, failed, total: users.length, results }
+      dryRun,
+      message: dryRun
+        ? `Preview: ${changedCount} of ${synced} account(s) would change, ${skipped} skipped, ${failed} failed`
+        : `Bulk sync complete: ${synced} synced, ${skipped} skipped, ${failed} failed`,
+      data: { synced, skipped, failed, changed: changedCount, total: users.length, results }
     });
   } catch (error) {
     console.error('[bulkSyncStripeSubscriptions] Error:', error.message);

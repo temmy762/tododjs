@@ -4,7 +4,7 @@
  * WHAT IT DOES
  * ------------
  * For every account that currently HAS access, asks Stripe what the customer
- * actually paid for (latest PAID invoice period end, via lib/stripeTruth.mjs —
+ * actually paid for (latest PAID invoice period end, via utils/stripeTruth.js —
  * the same function the audit uses, so the two can never disagree) and, where
  * the stored endDate reaches beyond that, rewinds endDate to the truth.
  *
@@ -49,7 +49,7 @@
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import User, { hasActiveWindow } from '../models/User.js';
-import { hasPaidPlan, truePaidThrough } from './lib/stripeTruth.mjs';
+import { hasPaidPlan, truePaidThrough } from '../utils/stripeTruth.js';
 
 const argv = process.argv.slice(2);
 const value = (name) => {

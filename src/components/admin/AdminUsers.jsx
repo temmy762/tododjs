@@ -92,17 +92,24 @@ export default function AdminUsers({ forcedSegment = null, title, subtitle } = {
     }
   };
 
-  const handleBulkSync = async () => {
+  // Preview first, write only on an explicit second click.
+  //
+  // This button used to mutate every matching account on one click with no way
+  // to see what it would do. It wrote a month of unpaid access to a customer's
+  // record and nobody noticed until an audit went looking. Previewing costs one
+  // extra click and makes the riskiest control in this panel reviewable.
+  const handleBulkSync = async (dryRun = true) => {
     setBulkSyncing(true);
     setBulkResult(null);
     try {
-      const res = await fetch(`${API}/users/bulk-sync-stripe`, {
+      const res = await fetch(`${API}/users/bulk-sync-stripe${dryRun ? '?dryRun=1' : ''}`, {
         method: 'POST',
         headers: authHeaders()
       });
       const data = await res.json();
       setBulkResult(data);
-      if (data.success) fetchUsers(pagination.page);
+      // Only a real write can change the table underneath us.
+      if (data.success && !data.dryRun) fetchUsers(pagination.page);
     } catch (err) {
       setBulkResult({ success: false, message: err.message });
     } finally {
@@ -275,21 +282,66 @@ export default function AdminUsers({ forcedSegment = null, title, subtitle } = {
             {exporting ? 'Exporting...' : 'Export CSV'}
           </button>
           <div className="flex flex-col items-end gap-1">
-            <button
-              onClick={handleBulkSync}
-              disabled={bulkSyncing}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-sm font-medium transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${bulkSyncing ? 'animate-spin' : ''}`} />
-              {bulkSyncing ? 'Syncing all...' : 'Sync All from Stripe'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleBulkSync(true)}
+                disabled={bulkSyncing}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/30 text-blue-300 text-sm font-medium transition-colors disabled:opacity-50"
+                title="Ask Stripe what would change. Writes nothing."
+              >
+                <RefreshCw className={`w-4 h-4 ${bulkSyncing ? 'animate-spin' : ''}`} />
+                {bulkSyncing ? 'Checking Stripe...' : 'Preview Stripe sync'}
+              </button>
+              {/* Only offered once a preview has actually found changes to make. */}
+              {bulkResult?.success && bulkResult?.dryRun && (bulkResult.data?.changed ?? 0) > 0 && (
+                <button
+                  onClick={() => handleBulkSync(false)}
+                  disabled={bulkSyncing}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-600/20 hover:bg-amber-600/30 border border-amber-500/40 text-amber-300 text-sm font-semibold transition-colors disabled:opacity-50"
+                  title="Write the changes listed below"
+                >
+                  Apply {bulkResult.data.changed} change{bulkResult.data.changed === 1 ? '' : 's'}
+                </button>
+              )}
+            </div>
             {bulkResult && (
               <div className="flex flex-col items-end gap-1 max-w-md">
-                <p className={`text-[11px] font-semibold ${bulkResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                <p className={`text-[11px] font-semibold ${
+                  !bulkResult.success ? 'text-red-400' : bulkResult.dryRun ? 'text-blue-300' : 'text-green-400'
+                }`}>
                   {bulkResult.success
-                    ? `✓ ${bulkResult.data?.synced ?? 0} synced, ${bulkResult.data?.skipped ?? 0} skipped, ${bulkResult.data?.failed ?? 0} failed`
+                    ? `${bulkResult.dryRun ? '👁' : '✓'} ${bulkResult.message}`
                     : `✗ ${bulkResult.message}`}
                 </p>
+
+                {/* On a preview, the point is to see WHAT would change before
+                    anything is written. Nothing has been saved at this stage. */}
+                {bulkResult.success && bulkResult.dryRun && (() => {
+                  const changes = (bulkResult.data?.results || []).filter(r => r.changed);
+                  if (!changes.length) {
+                    return (
+                      <p className="text-[10px] text-brand-text-tertiary">
+                        Nothing would change — every account already matches Stripe.
+                      </p>
+                    );
+                  }
+                  const when = (d) => (d ? String(d).slice(0, 10) : '—');
+                  return (
+                    <div className="w-full text-right bg-dark-elevated border border-blue-500/20 rounded-lg p-2 max-h-48 overflow-y-auto">
+                      {changes.map((r, i) => (
+                        <p key={`${r.email}-${i}`} className="text-[10px] leading-relaxed">
+                          <span className="text-white">{r.email}</span>{' '}
+                          <span className="text-brand-text-tertiary">
+                            {r.before?.status !== r.status && `${r.before?.status ?? '—'} → ${r.status}`}
+                            {r.before?.status !== r.status && when(r.before?.endDate) !== when(r.endDate) && ', '}
+                            {when(r.before?.endDate) !== when(r.endDate) &&
+                              `expires ${when(r.before?.endDate)} → ${when(r.endDate)}`}
+                          </span>
+                        </p>
+                      ))}
+                    </div>
+                  );
+                })()}
                 {/* The API already returns a per-user `results` array naming every
                     failure and skip — it was simply discarded here, so "3 failed"
                     was unactionable and an admin had to read PM2 logs to find out

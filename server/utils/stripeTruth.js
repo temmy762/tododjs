@@ -1,15 +1,16 @@
 /**
  * What Stripe was ACTUALLY PAID for — the one implementation.
  *
- * Extracted from audit-overgranted-access.mjs so the audit and the revocation
- * script cannot answer "is this account paid up?" differently. A revoker that
- * disagrees with the auditor by even a rounding rule would cut off paying
- * customers, and this codebase has already paid the price for letting one rule
- * exist in several places (see the nine copies of the access window, e5f9626).
+ * Shared by the audit script, the revocation script and the scheduled drift
+ * monitor, so the three can never answer "is this account paid up?"
+ * differently. A revoker that disagreed with the auditor by even a rounding
+ * rule would cut off paying customers, and this codebase has already paid the
+ * price for letting one rule live in several places (the nine copies of the
+ * access window, e5f9626).
  *
  * Nothing here writes. Callers decide what to do with the answer.
  */
-import stripe from '../../config/stripe.js';
+import stripe from '../config/stripe.js';
 
 /**
  * Read an invoice's subscription id under BOTH shapes.

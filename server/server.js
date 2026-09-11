@@ -37,6 +37,7 @@ import mashupCategoryRoutes from './routes/mashupCategory.js';
 import contactRoutes from './routes/contact.js';
 import mongoose from 'mongoose';
 import { startSubscriptionReconciler } from './services/subscriptionReconciler.js';
+import { startAccessDriftMonitor } from './services/accessDriftMonitor.js';
 import { startTempSweeper } from './utils/tempCleanup.js';
 import { recoverOrphanedJobs } from './services/processingQueue.js';
 
@@ -211,6 +212,10 @@ const server = app.listen(PORT, () => {
   // subscription is active but whose local record disagrees (missed webhooks,
   // disabled endpoint, downtime). See services/subscriptionReconciler.js.
   startSubscriptionReconciler();
+  // The reverse question the reconciler structurally cannot ask: which accounts
+  // does OUR record grant that Stripe was never paid for? Reports only — never
+  // revokes. See services/accessDriftMonitor.js.
+  startAccessDriftMonitor();
   // Remove upload temp files orphaned by a crash or restart (23 GB had
   // accumulated in production). Runs now and every 6h.
   startTempSweeper();
