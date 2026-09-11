@@ -159,7 +159,11 @@ export async function reconcileSubscriptions({ dryRun = false } = {}) {
  * idempotent so a double-run is harmless, but there is no point paying for
  * the Stripe API calls twice.
  */
-export function startSubscriptionReconciler({ intervalMs = 6 * 60 * 60 * 1000, startupDelayMs = 60 * 1000 } = {}) {
+// Hourly, not six-hourly. This is the only backstop when a webhook does not
+// activate an account, and six hours on Free is a long time for someone who
+// has just been told twice that their card failed. A pass is a single Stripe
+// list plus one lookup per active subscription, so the cost is small.
+export function startSubscriptionReconciler({ intervalMs = 60 * 60 * 1000, startupDelayMs = 60 * 1000 } = {}) {
   const instance = process.env.NODE_APP_INSTANCE;
   if (instance !== undefined && instance !== '0') {
     console.log(`[reconciler] instance ${instance} — not the designated runner, skipping`);

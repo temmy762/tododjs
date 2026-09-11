@@ -303,11 +303,22 @@ async function handleCheckoutCompleted(session) {
     endDate.setDate(endDate.getDate() + 30);
   }
 
-  // Dedup: use session.id as the canonical key (payment_intent is null in subscription mode).
-  // Check BEFORE any writes — Stripe retries webhooks on 5xx, so a re-delivery must be idempotent.
-  const historyKey = session.id;
+  // Dedup key, shared with handleInvoicePaid.
+  //
+  // This used session.id while invoice.paid keys on invoice.id, so the two
+  // handlers could not see each other's work. That was survivable only while
+  // invoice.paid unconditionally skipped every subscription_create invoice;
+  // now that it activates the ones checkout never saw, the two must share a
+  // key or a single payment records twice and emails two receipts.
+  //
+  // Prefer the invoice id (what invoice.paid uses) and fall back to session.id
+  // when Stripe gives us no invoice. Both are checked below so history rows
+  // written under the old key are still recognised.
+  const sessionInvoiceId =
+    typeof session.invoice === 'object' ? session.invoice?.id : session.invoice;
+  const historyKey = sessionInvoiceId || session.id;
   const alreadyRecorded = user.subscriptionHistory?.some(
-    h => h.stripePaymentIntentId === historyKey
+    h => h.stripePaymentIntentId === historyKey || h.stripePaymentIntentId === session.id
   );
   if (alreadyRecorded) {
     console.log(`checkout.session.completed dedup: session ${historyKey} already processed for user ${user._id} — skipping`);
@@ -413,12 +424,6 @@ async function handlePaymentFailed(paymentIntent) {
 
 // Helper: handle invoice.paid — extends subscription on renewal
 async function handleInvoicePaid(invoice) {
-  // Skip the initial creation invoice — checkout.session.completed already handles it
-  if (invoice.billing_reason === 'subscription_create') {
-    console.log('invoice.paid skipped: initial invoice handled by checkout.session.completed');
-    return;
-  }
-
   const subscriptionId = invoiceSubscriptionId(invoice);
   const customerId = invoice.customer;
 
@@ -432,6 +437,36 @@ async function handleInvoicePaid(invoice) {
   if (!user) {
     console.warn(`invoice.paid: no user found for subscription ${subscriptionId} / customer ${customerId}`);
     return;
+  }
+
+  // The initial invoice of a subscription is normally activated by
+  // checkout.session.completed, so this handler used to return immediately on
+  // billing_reason === 'subscription_create'.
+  //
+  // That assumed every subscription is born in a Checkout Session. It is not.
+  // A subscription created from Stripe's dunning recovery page (the "Update
+  // payment method" link in a failed-payment email), the customer portal, the
+  // dashboard or the API produces a subscription_create invoice with NO
+  // checkout session behind it. The invoice was skipped, nothing else
+  // activated the account, and the customer paid and stayed on Free — silently,
+  // with the log line reporting it as normal.
+  //
+  // Skip only when checkout demonstrably DID handle it, not when it merely
+  // should have. The invoice-id dedup on the write below still makes webhook
+  // re-delivery a no-op, so this can only add an activation that would
+  // otherwise never happen.
+  if (invoice.billing_reason === 'subscription_create') {
+    const alreadyActivated =
+      user.subscription?.stripeSubscriptionId === subscriptionId &&
+      user.subscription?.status === 'active';
+    if (alreadyActivated) {
+      console.log(`invoice.paid skipped: subscription ${subscriptionId} already activated by checkout for user ${user._id}`);
+      return;
+    }
+    console.warn(
+      `[handleInvoicePaid] user ${user._id}: subscription_create invoice ${invoice.id} with no ` +
+      `prior activation — no checkout session (recovery page / portal / API). Activating here.`
+    );
   }
 
   // Derive new endDate from invoice line item period, then fall back to subscription object
