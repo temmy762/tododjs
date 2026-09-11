@@ -619,6 +619,14 @@ function EditUserModal({ user, onClose, onSave }) {
   );
   const [isActive, setIsActive] = useState(user.isActive !== false);
 
+  // Stripe owns the paid period for a Stripe-managed subscription — the expiry
+  // field is read-only there. It is editable only for admin grants, which had
+  // no expiry at all before: status 'active' with a null endDate never expires,
+  // so a comp granted once lasted forever with no way to time-box it.
+  const isStripeManaged = !!user.subscription?.stripeSubscriptionId;
+  const toDateInput = (d) => (d ? new Date(d).toISOString().slice(0, 10) : '');
+  const [grantExpiry, setGrantExpiry] = useState(toDateInput(user.subscription?.endDate));
+
   const hasPaidPlan = !!(user.subscription?.planId || (user.subscription?.plan && user.subscription?.plan !== 'free'));
 
   const handleSyncStripe = async () => {
@@ -691,6 +699,29 @@ function EditUserModal({ user, onClose, onSave }) {
             </button>
           </div>
         </div>
+          {/* Grant expiry — only meaningful for a paid plan */}
+          {plan !== 'free' && (
+            <div className="mt-4">
+              <label className="block text-sm font-medium text-brand-text-tertiary mb-1">
+                Access expires
+              </label>
+              <input
+                type="date"
+                value={grantExpiry}
+                disabled={isStripeManaged}
+                onChange={e => setGrantExpiry(e.target.value)}
+                className="w-full px-4 py-2.5 bg-dark-elevated border border-white/10 rounded-lg text-white focus:outline-none focus:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <p className="text-[10px] text-brand-text-tertiary mt-1">
+                {isStripeManaged
+                  ? 'Managed by Stripe — the paid period is set by billing and cannot be edited here.'
+                  : grantExpiry
+                    ? 'Access ends at the start of this day. Clear the field for a permanent grant.'
+                    : 'Permanent grant — this never expires. Set a date to time-box it.'}
+              </p>
+            </div>
+          )}
+
           {/* Stripe Sync — shown for all users with a paid plan */}
           {hasPaidPlan && (
             <div className="mt-4 p-3 rounded-lg bg-blue-500/10 border border-blue-500/20">
@@ -728,7 +759,20 @@ function EditUserModal({ user, onClose, onSave }) {
           )}
         <div className="flex gap-3 mt-6">
           <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg bg-dark-elevated hover:bg-dark-surface border border-white/10 text-white font-medium transition-colors">{t('common.cancel')}</button>
-          <button onClick={() => onSave(user._id, { role, plan, isActive })} className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-colors">{t('common.save')}</button>
+          <button
+            onClick={() => onSave(user._id, {
+              role,
+              plan,
+              isActive,
+              // Only send an expiry for admin grants; the backend ignores it for
+              // Stripe-managed subscriptions, but there is no reason to send it.
+              // '' clears the date and means "permanent", which the backend maps to null.
+              ...(isStripeManaged ? {} : { endDate: grantExpiry || null }),
+            })}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-accent hover:bg-accent-hover text-white font-medium transition-colors"
+          >
+            {t('common.save')}
+          </button>
         </div>
       </div>
     </div>

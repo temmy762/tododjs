@@ -233,7 +233,30 @@ export const exportUsers = async (req, res) => {
 // @access  Private/Admin
 export const updateUser = async (req, res) => {
   try {
-    const { role, plan, isActive } = req.body;
+    const { role, plan, isActive, endDate } = req.body;
+
+    // Optional expiry for an admin-granted plan.
+    //
+    // Admin grants were permanent by construction: updateUser wrote
+    // status:'active' with endDate:null, and hasActiveWindow's stale-active
+    // guard only fires when endDate EXISTS — so a null endDate never expires
+    // and nothing in the system could ever revoke it. The audit found several
+    // such accounts with hundreds of downloads and no way to time-box them.
+    // Passing endDate now gives a grant a real end; omitting it keeps the
+    // previous permanent behaviour, which is still the right default for
+    // internal/company accounts.
+    let grantEndDate;
+    if (endDate !== undefined) {
+      if (endDate === null || endDate === '') {
+        grantEndDate = null;                       // explicit "never expires"
+      } else {
+        const parsed = new Date(endDate);
+        if (Number.isNaN(parsed.getTime())) {
+          return res.status(400).json({ success: false, message: 'Invalid expiry date' });
+        }
+        grantEndDate = parsed;
+      }
+    }
     const user = await User.findById(req.params.id);
 
     if (!user) {
@@ -248,10 +271,17 @@ export const updateUser = async (req, res) => {
         user.subscription.planId = plan; // keep plan and planId in sync for admin grants
         user.subscription.status = 'active';
         if (!user.subscription.startDate) user.subscription.startDate = new Date();
-        // Only null endDate for true admin-grants (no Stripe sub). If Stripe manages this
-        // subscription, keep the existing endDate so access doesn't become unlimited.
+        // Never override a Stripe-managed endDate from here — Stripe owns the
+        // paid period, and writing it by hand is how records start lying to
+        // the access gate. For a true admin grant (no Stripe sub), use the
+        // expiry the admin chose, or null for a permanent grant.
         if (!user.subscription.stripeSubscriptionId) {
-          user.subscription.endDate = null;
+          user.subscription.endDate = grantEndDate !== undefined ? grantEndDate : null;
+        } else if (grantEndDate !== undefined) {
+          console.warn(
+            `[Admin] updateUser ${user._id}: ignoring endDate — subscription is ` +
+            `Stripe-managed (${user.subscription.stripeSubscriptionId}); Stripe owns the period`
+          );
         }
         user.subscription.grantedByAdmin = true;
       } else {

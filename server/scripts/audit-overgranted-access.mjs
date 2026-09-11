@@ -56,6 +56,7 @@ import mongoose from 'mongoose';
 import stripe from '../config/stripe.js';
 import User, { hasActiveWindow, PAST_DUE_GRACE_MS } from '../models/User.js';
 import Download from '../models/Download.js';
+import { hasPaidPlan, truePaidThrough } from './lib/stripeTruth.mjs';
 
 const argv = process.argv.slice(2);
 const value = (name) => {
@@ -72,62 +73,6 @@ const iso = (d) => (d ? new Date(d).toISOString().slice(0, 16) : '—');
 const days = (ms) => Math.round(ms / DAY);
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// Same both-shapes reader as the webhook handlers. Production's endpoints are on
-// 2026-01-28.clover, where invoice.subscription was removed; reading only the
-// old name returns undefined on every live object. See the note in
-// controllers/stripeController.js.
-const subIdOf = (inv) => {
-  const raw = inv?.subscription ?? inv?.parent?.subscription_details?.subscription ?? null;
-  return (raw && typeof raw === 'object' ? raw.id : raw) || null;
-};
-
-// The plan half of the entitlement question. hasActiveWindow deliberately does
-// NOT consider the plan, and 'free' must be excluded on BOTH fields — the string
-// is truthy, which is how a free-plan account once downloaded (f4f79ce).
-const hasPaidPlan = (s = {}) =>
-  Boolean((s.planId && s.planId !== 'free') || (s.plan && s.plan !== 'free'));
-
-/**
- * The latest period the customer actually PAID for, according to Stripe.
- *
- * Walks paid invoices rather than the subscription object, because
- * handleSubscriptionDeleted nulls stripeSubscriptionId on cancellation — so a
- * cancelled account has no subscription id left to look up, only a customer id.
- * Invoices survive that.
- *
- * @returns {Promise<{paidThrough: number|null, invoice: string|null, source: string}>}
- */
-async function truePaidThrough(sub) {
-  const customerId = sub.stripeCustomerId || null;
-  const subscriptionId = sub.stripeSubscriptionId || null;
-
-  let query;
-  let source;
-  if (customerId) {
-    query = { customer: customerId, status: 'paid', limit: 100 };
-    source = 'customer invoices';
-  } else if (subscriptionId) {
-    query = { subscription: subscriptionId, status: 'paid', limit: 100 };
-    source = 'subscription invoices';
-  } else {
-    return { paidThrough: null, invoice: null, source: 'no Stripe ids on record' };
-  }
-
-  let best = null;
-  let bestInvoice = null;
-  for await (const inv of stripe.invoices.list(query)) {
-    // Ignore invoices belonging to some OTHER subscription on the same customer.
-    const invSub = subIdOf(inv);
-    if (subscriptionId && invSub && invSub !== subscriptionId) continue;
-    const end = inv.lines?.data?.[0]?.period?.end;
-    if (!end) continue;
-    if (best === null || end * 1000 > best) {
-      best = end * 1000;
-      bestInvoice = inv.id;
-    }
-  }
-  return { paidThrough: best, invoice: bestInvoice, source };
-}
 
 // ── Scan ────────────────────────────────────────────────────────────────────
 await mongoose.connect(process.env.MONGODB_URI);
