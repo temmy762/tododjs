@@ -365,13 +365,19 @@ userSchema.methods.canDownload = function() {
     ((this.subscription.planId && this.subscription.planId !== 'free') ||
      (this.subscription.plan && this.subscription.plan !== 'free')));
   
-  const limits = {
-    free: 5,
-    premium: 50,
-    pro: Infinity
-  };
-  
-  // If user has active subscription, allow downloads
+  // NO PER-DAY CAP IS ENFORCED. There was a `limits` table here
+  // ({ free: 5, premium: 50, pro: Infinity }) that nothing ever read — the
+  // function returns on hasActiveSubscription alone. It was removed rather
+  // than wired up, because switching it on would newly restrict paying
+  // customers and no plan advertises a daily limit. Reintroducing caps is a
+  // product decision, not a cleanup.
+  //
+  // downloads.today is therefore decorative as far as access goes. It is also
+  // wrong: resetDailyDownloads below mutates the in-memory document and no
+  // caller saves it, while the real counter is bumped by an atomic $inc in
+  // downloadController — so the stored value never resets and converges on the
+  // lifetime total. Anything that needs a real per-day figure must count the
+  // Download collection, which is what the admin users list now does.
   if (hasActiveSubscription) {
     return true;
   }

@@ -1,5 +1,6 @@
 import User from '../models/User.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
+import Download from '../models/Download.js';
 import { uploadToWasabi, deleteFromWasabi, getSignedDownloadUrl } from '../config/wasabi.js';
 import stripe from '../config/stripe.js';
 import { sendBlockedAccountEmail } from '../services/emailService.js';
@@ -102,6 +103,32 @@ export const getAllUsers = async (req, res) => {
       .skip(skip)
       .limit(parseInt(limit))
       .lean();
+
+    // Today's downloads come from the Download collection, not from the
+    // denormalised user.downloads.today counter.
+    //
+    // That counter is bumped by an atomic $inc on every download but is never
+    // reset in the database: resetDailyDownloads() only mutates an in-memory
+    // document and no caller saves it. So it only ever grows and converges on
+    // the lifetime total — one account showed "87 downloads, +87 today" having
+    // last downloaded anything four weeks earlier. The Downloads panel reads
+    // the Download collection and was right; this panel read the counter and
+    // was wrong.
+    //
+    // One indexed aggregation per page ({ userId: 1, createdAt: -1 } covers
+    // it), scoped to the users actually being displayed.
+    if (users.length) {
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+      const todayCounts = await Download.aggregate([
+        { $match: { userId: { $in: users.map(u => u._id) }, createdAt: { $gte: startOfToday } } },
+        { $group: { _id: '$userId', count: { $sum: 1 } } },
+      ]);
+      const todayByUser = new Map(todayCounts.map(r => [String(r._id), r.count]));
+      for (const u of users) {
+        u.downloads = { ...(u.downloads || {}), today: todayByUser.get(String(u._id)) || 0 };
+      }
+    }
 
     // Compute stats by subscription.plan (covers both Stripe and admin-granted plans).
     // Each count uses buildSegmentQuery so the number on a stat card always

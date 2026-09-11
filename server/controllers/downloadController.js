@@ -199,13 +199,17 @@ export const downloadTrack = async (req, res) => {
       if (user.downloadSuspended) return res.status(403).json(buildSuspensionResponse(user));
       // Check if user can download
       if (!user.canDownload()) {
+        // canDownload returns false for exactly one reason: no active paid
+        // subscription. It enforces no per-day cap. This used to report
+        // "Daily download limit reached. Your plan allows N downloads per
+        // day", so a customer whose subscription had lapsed was told they had
+        // hit a daily limit — describing a restriction that does not exist and
+        // hiding the one that does.
         return res.status(403).json({
           success: false,
-          message: `Daily download limit reached. Your plan allows ${
-            user.subscription.planId === 'free' ? '5' :
-            user.subscription.planId === 'premium' ? '50' : 'unlimited'
-          } downloads per day.`,
-          upgradeRequired: user.subscription.planId !== 'pro'
+          message: 'An active subscription is required to download.',
+          requiresSubscription: true,
+          upgradeRequired: true
         });
       }
 
@@ -303,12 +307,14 @@ export const downloadTrackFile = async (req, res) => {
         return res.status(403).json(buildSuspensionResponse(user));
       }
       if (!user.canDownload()) {
-        const isWithinPeriod = !!user.subscription.endDate && new Date() <= new Date(user.subscription.endDate);
-        const hasSubscription = (user.subscription.status === 'active' || (user.subscription.status === 'cancelled' && isWithinPeriod)) && user.subscription.planId;
+        // Same as above: the only way to land here is no active paid
+        // subscription, so the "daily limit" branch was unreachable and its
+        // condition was a third hand-rolled copy of the access window.
         return res.status(403).json({
           success: false,
-          message: hasSubscription ? 'Daily download limit reached' : 'Active subscription required for downloads',
-          upgradeRequired: !hasSubscription
+          message: 'An active subscription is required to download.',
+          requiresSubscription: true,
+          upgradeRequired: true
         });
       }
     }
