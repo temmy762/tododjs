@@ -190,12 +190,19 @@ if (APPLY && toFix.length) {
 console.log(RULE);
 console.log('SUMMARY');
 console.log(RULE);
-console.log(`  accounts examined                  ${users.length}`);
+// Only accounts that HAVE access can be over-granted, so that population is
+// what "examined" means here — it is the number the audit reports too, and the
+// two must be comparable. Printing users.length instead said "135 examined"
+// against the audit's "47", which invites the reader to think the two tools
+// disagree when they are counting different things.
+const withAccess =
+  skipped.correct + toFix.length + skipped.adminGranted.length + skipped.noEvidence.length;
+console.log(`  accounts with access examined      ${withAccess}`);
 console.log(`  correct — inside a paid period     ${skipped.correct}`);
 console.log(`  TO CORRECT                         ${toFix.length}`);
 console.log(`  admin grants (not Stripe-governed) ${skipped.adminGranted.length}`);
 console.log(`  no Stripe evidence                 ${skipped.noEvidence.length}`);
-console.log(`  skipped: admins ${skipped.admins}, no access ${skipped.noAccess}`);
+console.log(`  skipped: admins ${skipped.admins}, no access ${skipped.noAccess}  (${users.length} users total)`);
 console.log('');
 if (APPLY) {
   console.log(`  WROTE ${written} record(s).`);
