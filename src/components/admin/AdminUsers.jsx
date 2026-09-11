@@ -284,11 +284,37 @@ export default function AdminUsers({ forcedSegment = null, title, subtitle } = {
               {bulkSyncing ? 'Syncing all...' : 'Sync All from Stripe'}
             </button>
             {bulkResult && (
-              <p className={`text-[11px] font-semibold ${bulkResult.success ? 'text-green-400' : 'text-red-400'}`}>
-                {bulkResult.success
-                  ? `✓ ${bulkResult.data?.synced ?? 0} synced, ${bulkResult.data?.skipped ?? 0} skipped, ${bulkResult.data?.failed ?? 0} failed`
-                  : `✗ ${bulkResult.message}`}
-              </p>
+              <div className="flex flex-col items-end gap-1 max-w-md">
+                <p className={`text-[11px] font-semibold ${bulkResult.success ? 'text-green-400' : 'text-red-400'}`}>
+                  {bulkResult.success
+                    ? `✓ ${bulkResult.data?.synced ?? 0} synced, ${bulkResult.data?.skipped ?? 0} skipped, ${bulkResult.data?.failed ?? 0} failed`
+                    : `✗ ${bulkResult.message}`}
+                </p>
+                {/* The API already returns a per-user `results` array naming every
+                    failure and skip — it was simply discarded here, so "3 failed"
+                    was unactionable and an admin had to read PM2 logs to find out
+                    WHICH three. Surface them. */}
+                {bulkResult.success && (() => {
+                  const rows = bulkResult.data?.results || [];
+                  const problems = rows.filter(r => r.result !== 'synced');
+                  if (!problems.length) return null;
+                  return (
+                    <div className="w-full text-right bg-dark-elevated border border-white/10 rounded-lg p-2 max-h-40 overflow-y-auto">
+                      {problems.map((r, i) => (
+                        <p key={`${r.email}-${i}`} className="text-[10px] leading-relaxed">
+                          <span className={r.result === 'error' ? 'text-red-400' : 'text-yellow-400'}>
+                            {r.result === 'error' ? '✗' : '–'}
+                          </span>{' '}
+                          <span className="text-white">{r.email}</span>{' '}
+                          <span className="text-brand-text-tertiary">
+                            {r.result === 'error' ? r.error : r.result}
+                          </span>
+                        </p>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
             )}
           </div>
         </div>

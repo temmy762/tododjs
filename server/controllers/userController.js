@@ -16,6 +16,18 @@ const planMatch = (ids) => ({
 const INDIVIDUAL_PLAN_IDS = ['premium', 'individual-monthly', 'individual_monthly', 'individual-quarterly', 'individual_quarterly'];
 const SHARED_PLAN_IDS = ['pro', 'shared-monthly', 'shared_monthly', 'shared-quarterly', 'shared_quarterly'];
 
+// Stripe statuses that constitute EVIDENCE OF PAYMENT for the current period.
+//
+// Stripe advances current_period_end when it ATTEMPTS a renewal, not when one
+// succeeds, so copying it unconditionally extends paid-through on a renewal
+// that FAILED. handleSubscriptionUpdated (stripeController.js) and
+// requireSubscription (middleware/subscription.js) were both fixed to gate on
+// this in 0b7591f; the two admin sync paths below were missed by that commit
+// and kept writing endDate for past_due/cancelled/unpaid subscriptions — so
+// pressing "Sync All from Stripe" re-granted access the gates had correctly
+// withdrawn. endDate must only ever move forward on evidence of payment.
+const STRIPE_PAID_STATUSES = ['active', 'trialing'];
+
 // Maps a stat-card "segment" to its Mongo filter. Kept in one place so the
 // displayed count (from getAllUsers' stats block) and the filtered table
 // (query built from this same function) can never disagree.
@@ -489,7 +501,16 @@ export const syncUserStripeSubscription = async (req, res) => {
     const statusMap = { active: 'active', canceled: 'cancelled', past_due: 'past_due', unpaid: 'past_due', paused: 'inactive', trialing: 'active' };
     const newStatus = statusMap[stripeSub.status] || user.subscription.status;
 
-    if (newEndDate) user.subscription.endDate = newEndDate;
+    // Only extend paid-through when Stripe reports the subscription as PAID.
+    // See STRIPE_PAID_STATUSES above — an unpaid renewal must not buy access.
+    if (newEndDate && STRIPE_PAID_STATUSES.includes(stripeSub.status)) {
+      user.subscription.endDate = newEndDate;
+    } else if (newEndDate) {
+      console.log(
+        `[Admin] sync user ${user._id}: NOT extending endDate — Stripe status is ` +
+        `'${stripeSub.status}' (unpaid). Keeping paid-through ${user.subscription.endDate}`
+      );
+    }
     user.subscription.status = newStatus;
     user.subscription.cancelAtPeriodEnd = stripeSub.cancel_at_period_end || false;
 
@@ -621,7 +642,18 @@ export const bulkSyncStripeSubscriptions = async (req, res) => {
           : null;
         const newStatus = statusMap[stripeSub.status] || user.subscription.status;
 
-        if (newEndDate) user.subscription.endDate = newEndDate;
+        // Only extend paid-through when Stripe reports the subscription as
+        // PAID. Without this, a bulk sync re-poisoned endDate for every
+        // past_due/cancelled/unpaid account it touched — the remediation
+        // button was itself re-granting the access it was run to correct.
+        if (newEndDate && STRIPE_PAID_STATUSES.includes(stripeSub.status)) {
+          user.subscription.endDate = newEndDate;
+        } else if (newEndDate) {
+          console.log(
+            `[BulkSync] ${user.email}: NOT extending endDate — Stripe status is ` +
+            `'${stripeSub.status}' (unpaid). Keeping paid-through ${user.subscription.endDate}`
+          );
+        }
         user.subscription.status = newStatus;
         user.subscription.cancelAtPeriodEnd = stripeSub.cancel_at_period_end || false;
         if (stripeSub.customer && !user.subscription.stripeCustomerId) {
