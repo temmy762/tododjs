@@ -706,8 +706,25 @@ export const bulkSyncStripeSubscriptions = async (req, res) => {
         }
 
         if (!stripeSub) {
+          // No subscription found — but the lookup may still have REPAIRED
+          // something on the way here. A dead customer or subscription id
+          // cleared above is worth persisting even when nothing is found,
+          // otherwise this branch returns before the diff below and the same
+          // dead id is rediscovered, and re-cleared in memory, on every run
+          // forever — two wasted Stripe calls each time and a record that
+          // keeps reporting 'No such customer' to the audit.
+          const repairedIds =
+            (user.subscription.stripeCustomerId ?? null) !== before.customerId ||
+            (user.subscription.stripeSubscriptionId ?? null) !== before.subscriptionId;
+          if (repairedIds && !dryRun) await user.save();
+
           skipped++;
-          results.push({ email: user.email, result: 'no_stripe_subscription_found' });
+          results.push({
+            email: user.email,
+            result: 'no_stripe_subscription_found',
+            changed: repairedIds,
+            idsRepaired: repairedIds,
+          });
           continue;
         }
 
@@ -777,8 +794,11 @@ export const bulkSyncStripeSubscriptions = async (req, res) => {
     res.status(200).json({
       success: true,
       dryRun,
+      // changedCount spans BOTH buckets: an account can be "skipped" (no
+      // subscription found) and still have a dead id to clear, so counting
+      // changes "of synced" would under-report what Apply is about to do.
       message: dryRun
-        ? `Preview: ${changedCount} of ${synced} account(s) would change, ${skipped} skipped, ${failed} failed`
+        ? `Preview: ${changedCount} change(s) to apply — ${synced} matched, ${skipped} skipped, ${failed} failed`
         : `Bulk sync complete: ${synced} synced, ${skipped} skipped, ${failed} failed`,
       data: { synced, skipped, failed, changed: changedCount, total: users.length, results }
     });
