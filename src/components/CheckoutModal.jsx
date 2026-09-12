@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, CreditCard, Loader, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
+import { X, CreditCard, Loader, AlertCircle, CheckCircle, ArrowRight, Tag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import API_URL from '../config/api';
 
@@ -10,6 +10,46 @@ export default function CheckoutModal({ isOpen, onClose, plan, user }) {
   const [success, setSuccess] = useState(false);
   const [savedCard, setSavedCard] = useState(null);
   const [cardLoading, setCardLoading] = useState(false);
+
+  // Discount code. Checked against Stripe before payment starts, so the total
+  // shown here is the total charged — on both payment paths below.
+  const [promoInput, setPromoInput] = useState('');
+  const [promo, setPromo] = useState(null);
+  const [promoError, setPromoError] = useState('');
+  const [checkingPromo, setCheckingPromo] = useState(false);
+
+  const applyPromo = async () => {
+    const code = promoInput.trim();
+    if (!code || !plan) return;
+    setCheckingPromo(true);
+    setPromoError('');
+    try {
+      const res = await fetch(`${API_URL}/coupons/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('token')}` },
+        body: JSON.stringify({ code, planId: plan.planId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPromo(data.data);
+        setPromoError('');
+      } else {
+        setPromo(null);
+        setPromoError(data.message || t('coupons.invalid', 'That code is not valid'));
+      }
+    } catch {
+      setPromo(null);
+      setPromoError(t('coupons.checkFailed', 'Could not check that code. Try again.'));
+    } finally {
+      setCheckingPromo(false);
+    }
+  };
+
+  const clearPromo = () => {
+    setPromo(null);
+    setPromoInput('');
+    setPromoError('');
+  };
 
   const isSpanish = i18n.language?.startsWith('es');
   const fmtEur = (n) => new Intl.NumberFormat(isSpanish ? 'es-ES' : 'en-US', { style: 'currency', currency: 'EUR' }).format(parseFloat(n));
@@ -24,6 +64,11 @@ export default function CheckoutModal({ isOpen, onClose, plan, user }) {
     setSavedCard(null);
     setError('');
     setSuccess(false);
+    // Clear any previously applied code: the modal is reused across plans and
+    // a discount left over from a different plan would show a stale total.
+    setPromo(null);
+    setPromoInput('');
+    setPromoError('');
     fetch(`${API_URL}/subscriptions/payment-method`, { headers: authHeaders })
       .then(r => r.json())
       .then(data => { if (data.success && data.data) setSavedCard(data.data); })
@@ -40,7 +85,8 @@ export default function CheckoutModal({ isOpen, onClose, plan, user }) {
       const res = await fetch(`${API_URL}/payment/create-checkout-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({ planId: plan.planId })
+        // The code, never a price — the server re-resolves it against Stripe.
+        body: JSON.stringify({ planId: plan.planId, ...(promo ? { promotionCode: promo.code } : {}) })
       });
       const data = await res.json();
       if (data.success) {
@@ -63,7 +109,7 @@ export default function CheckoutModal({ isOpen, onClose, plan, user }) {
       const res = await fetch(`${API_URL}/payment/subscribe-with-saved-card`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({ planId: plan.planId })
+        body: JSON.stringify({ planId: plan.planId, ...(promo ? { promotionCode: promo.code } : {}) })
       });
       const data = await res.json();
       if (data.success) {
@@ -141,6 +187,67 @@ export default function CheckoutModal({ isOpen, onClose, plan, user }) {
               </div>
 
               <PlanSummary />
+
+              {/* Discount code */}
+              <div className="mb-6 -mt-2">
+                {!promo ? (
+                  <>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={promoInput}
+                        onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(''); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') applyPromo(); }}
+                        placeholder={t('coupons.haveACode', 'Have a discount code?')}
+                        className="flex-1 px-3 py-2 bg-dark-elevated border border-white/10 rounded-lg text-white text-sm font-mono tracking-wider placeholder-brand-text-tertiary placeholder:font-sans placeholder:tracking-normal focus:outline-none focus:border-accent transition-colors"
+                      />
+                      <button
+                        onClick={applyPromo}
+                        disabled={checkingPromo || !promoInput.trim()}
+                        className="px-4 py-2 rounded-lg bg-dark-elevated hover:bg-white/10 border border-white/10 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {checkingPromo && <Loader className="w-3.5 h-3.5 animate-spin" />}
+                        {t('coupons.apply', 'Apply')}
+                      </button>
+                    </div>
+                    {promoError && <p className="text-xs text-red-400 mt-2">{promoError}</p>}
+                  </>
+                ) : (
+                  <div className="rounded-lg bg-green-500/10 border border-green-500/30 overflow-hidden">
+                    <div className="flex items-center justify-between gap-3 px-3 py-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Tag className="w-4 h-4 text-green-400 shrink-0" />
+                        <div className="min-w-0">
+                          <div className="text-sm font-mono font-semibold text-green-300 tracking-wider">{promo.code}</div>
+                          <div className="text-[10px] text-green-400/80 truncate">{promo.description}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={clearPromo}
+                        className="text-green-400/60 hover:text-green-300 transition-colors shrink-0"
+                        title={t('coupons.remove', 'Remove')}
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                    <div className="flex items-center justify-between px-3 py-2.5 border-t border-green-500/20 bg-green-500/5">
+                      <span className="text-sm font-semibold text-white">{t('checkout.total')}</span>
+                      <div className="text-right">
+                        <span className="text-xs text-brand-text-tertiary line-through mr-2">{fmtEur(promo.originalPrice)}</span>
+                        <span className="text-lg font-bold text-white">{fmtEur(promo.newPrice)}</span>
+                        <div className="text-[10px] text-green-400">
+                          {/* Stated before purchase, not discovered at renewal. */}
+                          {promo.duration === 'once'
+                            ? t('coupons.firstPaymentOnly', 'First payment only, renewals at full price')
+                            : promo.duration === 'repeating'
+                              ? t('coupons.forMonths', { count: promo.durationInMonths, defaultValue: 'For the first {{count}} month(s)' })
+                              : t('coupons.everyRenewal', 'Applies to every renewal')}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
 
               {/* Error */}
               {error && (
