@@ -482,9 +482,16 @@ function buildPreviewFromZipFile(zipPathOrBuffer, originalName, fileSize, depth 
 }
 
 // Helper: Open a ZIP file with yauzl (supports >2GB)
-function openZipFile(filePath) {
+// `autoClose: false` is what makes an open handle reusable.
+//
+// yauzl auto-closes a lazyEntries zipfile once the entry scan reaches 'end',
+// so after readAllEntries() the handle is dead and openReadStream() fails.
+// That is why the extraction paths below used to REOPEN the archive for every
+// single track. Callers that want to read entries after scanning pass
+// autoClose:false and must close the handle themselves.
+function openZipFile(filePath, options = {}) {
   return new Promise((resolve, reject) => {
-    yauzl.open(filePath, { lazyEntries: true }, (err, zipfile) => {
+    yauzl.open(filePath, { lazyEntries: true, ...options }, (err, zipfile) => {
       if (err) reject(err);
       else resolve(zipfile);
     });
@@ -506,14 +513,33 @@ function readAllEntries(zipfile) {
 }
 
 // Helper: Extract a single entry to a buffer
-function extractEntryToBuffer(zipfile, entry) {
+// Reads one entry from an ALREADY OPEN zipfile — O(1) per entry, because
+// yauzl seeks straight to the entry's local header offset. Carries the same
+// timeout the by-name variant had, so a corrupt entry cannot hang the job.
+function extractEntryToBuffer(zipfile, entry, timeoutMs = 120000) {
   return new Promise((resolve, reject) => {
     zipfile.openReadStream(entry, (err, readStream) => {
       if (err) return reject(err);
+
       const chunks = [];
+      let settled = false;
+      const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        try { readStream.destroy(); } catch { /* ignore */ }
+        reject(new Error(`Timeout reading ZIP entry after ${timeoutMs}ms: ${entry.fileName}`));
+      }, timeoutMs);
+
+      const settle = (fn) => (arg) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        fn(arg);
+      };
+
       readStream.on('data', (chunk) => chunks.push(chunk));
-      readStream.on('end', () => resolve(Buffer.concat(chunks)));
-      readStream.on('error', reject);
+      readStream.on('end', settle(() => resolve(Buffer.concat(chunks))));
+      readStream.on('error', settle(reject));
     });
   });
 }
@@ -1140,21 +1166,28 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       const processZipRecursively = async (zipPath, albumHint, depth = 0) => {
         if (depth > 6) return;
 
-        const zf = await openZipFile(zipPath);
+        // Hold ONE open handle for the whole archive and read every track from
+        // it. This previously scanned the entries, closed the handle, and then
+        // called extractEntryToBufferByName() per track — and that helper
+        // reopens the archive and walks entries from the start until it finds
+        // the name. So importing N tracks cost N full reopens and roughly N^2
+        // entry iterations: a 500-track pack spent most of its time rescanning
+        // a central directory it had already read. Reading from the open handle
+        // seeks straight to each entry instead.
+        const zf = await openZipFile(zipPath, { autoClose: false });
         const zEntries = await readAllEntries(zf);
-        try { zf.close(); } catch { /* ignore */ }
 
-        const mp3Names = zEntries
-          .filter(e => !e.fileName.endsWith('/') && !e.fileName.includes('__MACOSX') && e.fileName.toLowerCase().endsWith('.mp3'))
-          .map(e => e.fileName);
+        const mp3Entries = zEntries
+          .filter(e => !e.fileName.endsWith('/') && !e.fileName.includes('__MACOSX') && e.fileName.toLowerCase().endsWith('.mp3'));
 
         const innerZipNames = zEntries
           .filter(e => !e.fileName.endsWith('/') && !e.fileName.includes('__MACOSX') && e.fileName.toLowerCase().endsWith('.zip'))
           .map(e => e.fileName);
 
-        if (mp3Names.length > 0) {
-          for (const mp3FileName of mp3Names) {
+        try {
+          for (const mp3Entry of mp3Entries) {
             if (await isCancelled()) break;
+            const mp3FileName = mp3Entry.fileName;
             const mp3Parts = mp3FileName.split('/').filter(Boolean);
             const parentFolder = mp3Parts.length >= 2 ? mp3Parts[mp3Parts.length - 2] : null;
             const finalAlbumName = parentFolder || albumHint || datePackName;
@@ -1163,7 +1196,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
             // Each track wrapped in its own try-catch — a Wasabi error or
             // Track.create failure must NOT abort the remaining tracks.
             try {
-              const mp3Buffer = await extractEntryToBufferByName(zipPath, mp3FileName);
+              const mp3Buffer = await extractEntryToBuffer(zf, mp3Entry);
               const mp3Name = path.basename(mp3FileName);
               collection.processingDetail = path.parse(mp3Name).name;
 
@@ -1297,6 +1330,10 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
               console.error(`   ❌ Failed to process track "${mp3FileName}":`, trackErr.message);
             }
           }
+        } finally {
+          // Explicit now that autoClose is off — the handle must not outlive
+          // the loop, and the inner-ZIP pass below opens its own files.
+          try { zf.close(); } catch { /* ignore */ }
         }
 
         for (const innerZipName of innerZipNames) {
@@ -1826,6 +1863,19 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
   // Per-album cover art cache (extracted from first MP3 with embedded picture)
   const albumCoverCache = new Map();
 
+  // Open the archive ONCE and index its entries by name.
+  //
+  // Every track used to be fetched with extractEntryToBufferByName(), which
+  // reopens the archive and walks entries from the start until it matches the
+  // name — so N tracks cost N reopens and roughly N^2 entry iterations. The
+  // comment on that call even noted "fresh yauzl instance per call". One open
+  // handle plus a lookup map turns that into a single scan and an O(1) seek
+  // per track.
+  const zipHandle = await openZipFile(zipFilePath, { autoClose: false });
+  const allZipEntries = await readAllEntries(zipHandle);
+  const entryByName = new Map(allZipEntries.map(e => [e.fileName, e]));
+
+  try {
   // Process each album
   for (const [albumName, albumMp3s] of mp3sByAlbum) {
     const album = await getOrCreateAlbum(albumName);
@@ -1845,8 +1895,13 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
     // Process each MP3 in this album
     for (const mp3Info of albumMp3s) {
       try {
-        // Extract MP3 from ZIP (fresh yauzl instance per call — avoids listener accumulation)
-        const mp3Buffer = await extractEntryToBufferByName(zipFilePath, mp3Info.fileName);
+        // Read from the handle opened above — no reopen, no rescan.
+        const zipEntry = entryByName.get(mp3Info.fileName);
+        if (!zipEntry) {
+          console.log(`      Entry not found in ZIP: ${mp3Info.fileName}`);
+          continue;
+        }
+        const mp3Buffer = await extractEntryToBuffer(zipHandle, zipEntry);
         if (!mp3Buffer) {
           console.log(`      Could not extract ${mp3Info.fileName}`);
           continue;
@@ -1997,7 +2052,11 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
     processedAlbums++;
     console.log(`      Album complete: ${albumTrackCount} tracks uploaded`);
   }
-  
+  } finally {
+    // autoClose is off for this handle, so closing it is our responsibility.
+    try { zipHandle.close(); } catch { /* ignore */ }
+  }
+
   return {
     albums: processedAlbums,
     tracks: totalTracks,
