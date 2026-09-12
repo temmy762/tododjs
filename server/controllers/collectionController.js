@@ -19,6 +19,24 @@ import { sendEmail } from '../services/emailService.js';
 import User from '../models/User.js';
 import { enqueueCollection } from '../services/processingQueue.js';
 import { generateCollectionName, detectGenres, extractDateFromFolderName } from '../utils/collectionNameGenerator.js';
+import crypto from 'crypto';
+
+/**
+ * Short deterministic disambiguator for a Wasabi object key.
+ *
+ * Keys were built from collection/album/file NAMES only, so two entries that
+ * happened to share a filename resolved to the same key and the second upload
+ * silently overwrote the first — leaving two Track documents pointing at one
+ * object, i.e. two tracks that play the same audio. The same applied to album
+ * covers and album ZIPs when an album name repeated across date packs.
+ *
+ * Seeded with something unique to the entry (its full path inside the ZIP, or
+ * the owning document id), so distinct sources can never collide. Deterministic
+ * so reprocessing the same ZIP reuses the same keys instead of orphaning the
+ * previous objects.
+ */
+const keySuffix = (uniqueSource) =>
+  crypto.createHash('sha1').update(String(uniqueSource)).digest('hex').slice(0, 8);
 
 // Strip cloud-storage timestamp suffix from folder names e.g. -20260324T054836Z-1-002
 function cleanDatePackName(name) {
@@ -199,6 +217,44 @@ export const reprocessCollection = async (req, res) => {
     }
 
     const cleanup = String(req.query.cleanup || 'true').toLowerCase() !== 'false';
+
+    const tempDir = path.join(process.cwd(), 'uploads', 'temp');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const outPath = path.join(
+      tempDir,
+      `${Date.now()}-${Math.random().toString(16).slice(2)}-reprocess-${collection._id}.zip`
+    );
+
+    // Fetch the ZIP BEFORE destroying anything.
+    //
+    // This used to deleteMany() the collection's date packs, albums and tracks
+    // first and download afterwards, so any Wasabi failure — a missing object,
+    // a network error, an aborted stream — left the collection permanently
+    // empty with nothing left to rebuild from. `cleanup` defaults to true, so
+    // the destructive ordering was the DEFAULT path. Nothing is deleted now
+    // until the source archive is safely on local disk.
+    console.log(`☁️ Reprocess: downloading stored ZIP from Wasabi: ${collection.zipKey}`);
+    try {
+      const command = new GetObjectCommand({
+        Bucket: process.env.WASABI_BUCKET_NAME,
+        Key: collection.zipKey
+      });
+      const s3Resp = await s3Client.send(command);
+      if (!s3Resp?.Body) throw new Error('Wasabi returned an empty body');
+      await pipelineAsync(s3Resp.Body, fs.createWriteStream(outPath));
+    } catch (downloadErr) {
+      try { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); } catch { /* ignore */ }
+      console.error('Reprocess: ZIP download failed — nothing deleted:', downloadErr.message);
+      return res.status(502).json({
+        success: false,
+        message: `Could not retrieve the stored ZIP (${downloadErr.message}). The collection was left untouched.`
+      });
+    }
+    console.log(`✅ Reprocess: ZIP downloaded to temp file: ${outPath}`);
+
     if (cleanup) {
       await DatePack.deleteMany({ collectionId: collection._id });
       await Album.deleteMany({ collectionId: collection._id });
@@ -214,29 +270,6 @@ export const reprocessCollection = async (req, res) => {
     collection.errorMessage = null;
     collection.missingThumbnail = false;
     await collection.save();
-
-    const tempDir = path.join(process.cwd(), 'uploads', 'temp');
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
-
-    const outPath = path.join(
-      tempDir,
-      `${Date.now()}-${Math.random().toString(16).slice(2)}-reprocess-${collection._id}.zip`
-    );
-
-    console.log(`☁️ Reprocess: downloading stored ZIP from Wasabi: ${collection.zipKey}`);
-    const command = new GetObjectCommand({
-      Bucket: process.env.WASABI_BUCKET_NAME,
-      Key: collection.zipKey
-    });
-    const s3Resp = await s3Client.send(command);
-    if (!s3Resp?.Body) {
-      return res.status(500).json({ success: false, message: 'Wasabi download failed (empty body)' });
-    }
-
-    await pipelineAsync(s3Resp.Body, fs.createWriteStream(outPath));
-    console.log(`✅ Reprocess: ZIP downloaded to temp file: ${outPath}`);
 
     console.log(`🧵 Queuing reprocess background worker for collection: ${collection._id}`);
     enqueueCollection(
@@ -879,6 +912,42 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
   const { categoryOverride = null } = opts;
   const tempDir = path.dirname(zipFilePath);
   const tempFilesToClean = [];
+
+  // Cancellation support.
+  //
+  // cancelCollectionProcessing set status='cancelled' and nothing ever read it,
+  // so the job ran to completion and then overwrote the status with
+  // 'completed' — the Cancel button changed a label for a few minutes and
+  // nothing else. The stored status is now polled between units of work
+  // (throttled, so this costs one tiny query every few seconds at most) and
+  // honoured at every completion point.
+  let cancelObserved = false;
+  let cancelCheckedAtMs = 0;
+  const isCancelled = async () => {
+    if (cancelObserved) return true;
+    const nowMs = Date.now();
+    if (nowMs - cancelCheckedAtMs < 3000) return false;
+    cancelCheckedAtMs = nowMs;
+    try {
+      const snapshot = await Collection.findById(collectionId).select('status').lean();
+      if (snapshot?.status === 'cancelled') {
+        cancelObserved = true;
+        console.log(`⏹  Collection ${collectionId} cancelled by admin — stopping after the current item`);
+      }
+    } catch { /* transient DB error — keep processing rather than abort */ }
+    return cancelObserved;
+  };
+
+  // Leave the record saying 'cancelled' and clean up the source archive.
+  const finishCancelled = async () => {
+    try {
+      await Collection.findByIdAndUpdate(collectionId, {
+        status: 'cancelled',
+        processingDetail: null,
+      });
+    } catch { /* ignore */ }
+    try { if (fs.existsSync(zipFilePath)) fs.unlinkSync(zipFilePath); } catch { /* ignore */ }
+  };
   try {
     console.log(`\n Starting collection processing: ${collection.name}`);
 
@@ -1085,6 +1154,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
 
         if (mp3Names.length > 0) {
           for (const mp3FileName of mp3Names) {
+            if (await isCancelled()) break;
             const mp3Parts = mp3FileName.split('/').filter(Boolean);
             const parentFolder = mp3Parts.length >= 2 ? mp3Parts[mp3Parts.length - 2] : null;
             const finalAlbumName = parentFolder || albumHint || datePackName;
@@ -1122,7 +1192,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
                     const pic = musicMetadata.common.picture[0];
                     const mimeType = pic.format || 'image/jpeg';
                     const ext = mimeType.split('/').pop() || 'jpg';
-                    const coverKey = `collections/${collection.name}/albums/${album.name}/cover.${ext}`;
+                    const coverKey = `collections/${collection.name}/albums/${album.name}/cover-${keySuffix(album._id)}.${ext}`;
                     const coverUpload = await uploadToWasabi(Buffer.from(pic.data), coverKey, mimeType);
                     trackCoverArt = coverUpload.location;
                     trackCoverArtKey = coverKey;
@@ -1185,7 +1255,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
 
               await maybeUpdateCollectionProgressEffective(tracksCreated + 0.35);
 
-              const trackKey = `collections/${collection.name}/albums/${album.name}/${mp3Name}`;
+              const trackKey = `collections/${collection.name}/albums/${album.name}/${path.parse(mp3Name).name}-${keySuffix(mp3FileName)}${path.extname(mp3Name)}`;
               const trackUpload = await uploadToWasabi(mp3Buffer, trackKey, 'audio/mpeg');
 
               await Track.create({
@@ -1230,6 +1300,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
         }
 
         for (const innerZipName of innerZipNames) {
+          if (await isCancelled()) break;
           const nestedAlbumHint = path.basename(innerZipName, '.zip') || albumHint;
           const outPath = path.join(
             tempDir,
@@ -1270,6 +1341,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       let totalBytesNested = 0;
 
       for (let i = 0; i < innerZipEntries.length; i++) {
+        if (await isCancelled()) break;
         const innerZipName = innerZipEntries[i];
         const baseName = path.basename(innerZipName, '.zip');
 
@@ -1341,6 +1413,13 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
         await collection.save();
         try { zipfile.close(); } catch { /* ignore */ }
         console.log(' Nested ZIP processing found no MP3 files. Marking collection as failed.');
+        return;
+      }
+
+      if (cancelObserved) {
+        await finishCancelled();
+        try { zipfile.close(); } catch { /* ignore */ }
+        console.log(' Collection processing stopped — cancelled by admin.');
         return;
       }
 
@@ -1563,6 +1642,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
 
     // Process each date pack
     for (const [datePackName, mp3Files] of mp3FilesByDatePack) {
+      if (await isCancelled()) break;
       const datePackId = resolveDatePackId(datePackName);
       if (!datePackId) {
         console.log(`   Date pack "${datePackName}" not found in existing cards (map keys: ${[...datePackMap.keys()].join(', ')}), skipping`);
@@ -1631,6 +1711,13 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       console.log(`   ZIP date-pack keys: ${zipPackNames.join(', ')}`);
       console.log(`   DB date-pack names: ${dbPackNames.join(', ')}`);
       if (fs.existsSync(zipFilePath)) fs.unlinkSync(zipFilePath);
+      return;
+    }
+
+    if (cancelObserved) {
+      await finishCancelled();
+      try { zipfile.close(); } catch { /* ignore */ }
+      console.log(' Collection processing stopped — cancelled by admin.');
       return;
     }
 
@@ -1795,7 +1882,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
               const pic = musicMetadata.common.picture[0];
               const mimeType = pic.format || 'image/jpeg';
               const ext = mimeType.split('/').pop() || 'jpg';
-              const coverKey = `collections/${collection.name}/albums/${album.name}/cover.${ext}`;
+              const coverKey = `collections/${collection.name}/albums/${album.name}/cover-${keySuffix(album._id)}.${ext}`;
               const coverUpload = await uploadToWasabi(Buffer.from(pic.data), coverKey, mimeType);
               albumCoverCache.set(album._id.toString(), { url: coverUpload.location, key: coverKey });
               Album.findByIdAndUpdate(album._id, { coverArt: coverUpload.location, coverArtKey: coverKey }).catch(() => {});
@@ -1854,7 +1941,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
         );
         
         // Upload track to Wasabi
-        const trackKey = `collections/${collection.name}/date-packs/${datePack.name}/albums/${albumName}/${mp3Name}`;
+        const trackKey = `collections/${collection.name}/date-packs/${datePack.name}/albums/${albumName}/${path.parse(mp3Name).name}-${keySuffix(mp3Info.fileName)}${path.extname(mp3Name)}`;
         const trackUpload = await uploadToWasabi(
           mp3Buffer,
           trackKey,
@@ -1996,7 +2083,7 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
 
     let coverArtUrl = collection.thumbnail;
     if (coverFile) {
-      const coverKey = `collections/${collection.name}/albums/${albumName}/cover${path.extname(coverFile.entryName)}`;
+      const coverKey = `collections/${collection.name}/albums/${albumName}/cover-${keySuffix(datePack._id + '/' + albumName)}${path.extname(coverFile.entryName)}`;
       const coverUpload = await uploadToWasabi(
         coverFile.getData(),
         coverKey,
@@ -2022,7 +2109,7 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
       albumZip.addFile(path.basename(entry.entryName), entry.getData());
     }
     const albumZipBuffer = albumZip.toBuffer();
-    const albumZipKey = `collections/${collection.name}/albums/${albumName}/album.zip`;
+    const albumZipKey = `collections/${collection.name}/albums/${albumName}/album-${keySuffix(datePack._id + '/' + albumName)}.zip`;
     const albumZipUpload = await uploadToWasabi(
       albumZipBuffer,
       albumZipKey,
@@ -2082,7 +2169,7 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
         { genre: null, confidence: 0, source: 'timeout', needsManualReview: true }
       );
 
-      const trackKey = `collections/${collection.name}/albums/${albumName}/${mp3Name}`;
+      const trackKey = `collections/${collection.name}/albums/${albumName}/${path.parse(mp3Name).name}-${keySuffix(mp3Entry.entryName)}${path.extname(mp3Name)}`;
       const trackUpload = await uploadToWasabi(
         mp3Buffer,
         trackKey,
@@ -2343,13 +2430,50 @@ export const deleteCollection = async (req, res) => {
       });
     }
 
+    // Remove the stored objects BEFORE the database rows that point at them.
+    //
+    // This used to delete only collection.zipKey, so every track's audio file
+    // and artwork was left in Wasabi with nothing referencing it — billed
+    // indefinitely and impossible to find afterwards, since the only record of
+    // the keys was the rows being deleted. Same pattern as deleteSource, which
+    // has always done this correctly.
+    //
+    // Each delete is individually guarded: a storage failure must not leave the
+    // database half-deleted, and an object that is already gone is not an error.
+    const deleteKey = async (key, label) => {
+      if (!key) return;
+      try {
+        await deleteFromWasabi(key);
+      } catch (err) {
+        console.error(`deleteCollection: failed to remove ${label} ${key}:`, err.message);
+      }
+    };
+
+    const tracks = await Track.find({ collectionId: collection._id }).select('audioFile.key coverArtKey').lean();
+    for (const track of tracks) {
+      await deleteKey(track.audioFile?.key, 'track audio');
+      await deleteKey(track.coverArtKey, 'track cover');
+    }
+
+    const albums = await Album.find({ collectionId: collection._id }).select('zipKey coverArtKey').lean();
+    for (const album of albums) {
+      await deleteKey(album.zipKey, 'album zip');
+      await deleteKey(album.coverArtKey, 'album cover');
+    }
+
+    const packs = await DatePack.find({ collectionId: collection._id }).select('thumbnailKey').lean();
+    for (const pack of packs) {
+      await deleteKey(pack.thumbnailKey, 'date pack thumbnail');
+    }
+
+    await deleteKey(collection.thumbnailKey, 'collection thumbnail');
+    await deleteKey(collection.zipKey, 'collection zip');
+
+    console.log(`🗑  deleteCollection ${collection._id}: removed ${tracks.length} track file(s), ${albums.length} album asset set(s)`);
+
     await DatePack.deleteMany({ collectionId: collection._id });
     await Album.deleteMany({ collectionId: collection._id });
     await Track.deleteMany({ collectionId: collection._id });
-
-    if (collection.zipKey) {
-      await deleteFromWasabi(collection.zipKey);
-    }
 
     await collection.deleteOne();
 
@@ -2486,9 +2610,26 @@ export const cancelCollectionProcessing = async (req, res) => {
     if (!collection) {
       return res.status(404).json({ success: false, message: 'Collection not found' });
     }
+    // Only a job that is actually running can be cancelled. Marking a finished
+    // collection 'cancelled' would hide a completed upload behind a status that
+    // nothing ever clears.
+    if (!['pending', 'queued', 'processing'].includes(collection.status)) {
+      return res.status(409).json({
+        success: false,
+        message: `Collection is '${collection.status}' and is not processing — nothing to cancel.`
+      });
+    }
+
+    // The worker polls this status between tracks and inner ZIPs (see
+    // processCollectionAsync), so it stops after the item in flight rather than
+    // mid-upload. Tracks already written are kept — cancelling stops further
+    // work, it does not roll back.
     collection.status = 'cancelled';
     await collection.save();
-    res.status(200).json({ success: true, message: 'Processing cancelled' });
+    res.status(200).json({
+      success: true,
+      message: 'Cancelling — processing will stop after the track currently in progress. Tracks already imported are kept.'
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -2504,15 +2645,34 @@ export const retryFailedTracks = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Collection not found' });
     }
     const { trackIds } = req.body;
-    const failedTracks = await Track.find({ _id: { $in: trackIds }, status: 'failed' });
-    for (const track of failedTracks) {
-      track.status = 'pending';
-      await track.save();
+    if (!Array.isArray(trackIds) || trackIds.length === 0) {
+      return res.status(400).json({ success: false, message: 'trackIds must be a non-empty array' });
     }
-    collection.status = 'processing';
-    collection.processingProgress = 0;
-    await collection.save();
-    res.status(200).json({ success: true, message: `Retrying ${failedTracks.length} tracks`, data: { retryCount: failedTracks.length } });
+
+    // NOTE: this endpoint does NOT re-import anything, and no longer pretends to.
+    //
+    // It used to set the tracks to 'pending' and the collection to
+    // 'processing' with 0 progress — but nothing in the system consumes
+    // pending tracks, so the collection sat at "processing, 0%" forever and
+    // the next server restart's orphan recovery marked it 'failed'. Pressing
+    // Retry therefore bricked the collection it was meant to repair.
+    //
+    // Re-importing individual tracks needs a worker that can pull a single
+    // entry from the source archive; that does not exist yet. Until it does,
+    // this resets the track rows and tells the caller plainly what to do
+    // instead, rather than leaving the collection in an unrecoverable state.
+    const result = await Track.updateMany(
+      { _id: { $in: trackIds }, collectionId: collection._id, status: 'failed' },
+      { $set: { status: 'pending' } }
+    );
+
+    res.status(200).json({
+      success: true,
+      message: collection.zipKey
+        ? `${result.modifiedCount} track(s) reset to pending. Per-track re-import is not available yet — use Reprocess to rebuild this collection from its stored ZIP.`
+        : `${result.modifiedCount} track(s) reset to pending. Per-track re-import is not available yet, and this collection has no stored ZIP to reprocess from — it must be re-uploaded.`,
+      data: { retryCount: result.modifiedCount, reprocessAvailable: !!collection.zipKey }
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
