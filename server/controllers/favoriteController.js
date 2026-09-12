@@ -8,34 +8,75 @@ import { getSignedDownloadUrl } from '../config/wasabi.js';
 export const toggleFavorite = async (req, res) => {
   try {
     const { trackId } = req.params;
-    const user = await User.findById(req.user.id);
 
-    const track = await Track.findById(trackId);
+    const track = await Track.findById(trackId).select('_id likes');
     if (!track) {
       return res.status(404).json({ success: false, message: 'Track not found' });
     }
 
-    const index = user.favorites.indexOf(trackId);
-    let isFavorited;
+    // Atomic toggle.
+    //
+    // This used to load the user and the track, mutate both in memory, and save
+    // them one after the other. Two people favouriting the same track at the
+    // same moment each read the same `likes`, both wrote read+1, and one
+    // increment was lost — the count drifted permanently downward with nothing
+    // able to reconcile it. The same read-modify-write on `favorites` could
+    // drop a concurrent change from the same user in two tabs, and a failure
+    // between the two saves left the favourite recorded with the count stale.
+    //
+    // Attempt the removal first: whether the document actually changed is what
+    // tells us which way this toggle went, so the decision and the write are a
+    // single operation with no window in between.
+    const removed = await User.updateOne(
+      { _id: req.user.id, favorites: trackId },
+      { $pull: { favorites: trackId } }
+    );
 
-    if (index > -1) {
-      // Remove from favorites
-      user.favorites.splice(index, 1);
-      track.likes = Math.max(0, (track.likes || 0) - 1);
+    let isFavorited;
+    let delta;
+
+    if (removed.modifiedCount > 0) {
       isFavorited = false;
+      delta = -1;
     } else {
-      // Add to favorites
-      user.favorites.push(trackId);
-      track.likes = (track.likes || 0) + 1;
+      // $addToSet cannot create a duplicate, and modifiedCount tells us whether
+      // THIS request was the one that added it — so a double-click, or two tabs
+      // racing, still counts exactly once.
+      const added = await User.updateOne(
+        { _id: req.user.id },
+        { $addToSet: { favorites: trackId } }
+      );
+      if (added.matchedCount === 0) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
       isFavorited = true;
+      delta = added.modifiedCount > 0 ? 1 : 0;
     }
 
-    await user.save();
-    await track.save();
+    let totalLikes = track.likes || 0;
+
+    if (delta === 1) {
+      const updated = await Track.findByIdAndUpdate(
+        trackId,
+        { $inc: { likes: 1 } },
+        { new: true, projection: 'likes' }
+      );
+      totalLikes = updated?.likes ?? totalLikes;
+    } else if (delta === -1) {
+      // The floor lives in the filter, not in a Math.max after a read — a
+      // read-then-clamp would reintroduce exactly the race being fixed here.
+      // A count already at zero simply does not match, and stays zero.
+      const updated = await Track.findOneAndUpdate(
+        { _id: trackId, likes: { $gt: 0 } },
+        { $inc: { likes: -1 } },
+        { new: true, projection: 'likes' }
+      );
+      totalLikes = updated ? updated.likes : 0;
+    }
 
     res.status(200).json({
       success: true,
-      data: { isFavorited, totalLikes: track.likes }
+      data: { isFavorited, totalLikes }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
