@@ -619,15 +619,19 @@ function extractEntryToFileByName(zipPath, targetFileName, outputPath, timeoutMs
 
           const writeStream = fs.createWriteStream(outputPath);
           pipelineCb(readStream, writeStream, (err) => {
-            cleanup();
-
-            if (err) {
-              return reject(err);
-            }
             if (done) return;
             done = true;
             cleanup();
+            // Close the archive on BOTH outcomes. The error branch used to
+            // reject without setting `done` or closing, so every failed inner
+            // ZIP extraction leaked the open file handle — and the partially
+            // written output was left behind for the temp sweeper to find.
             try { zipfile.close(); } catch { /* ignore */ }
+
+            if (err) {
+              try { if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath); } catch { /* ignore */ }
+              return reject(err);
+            }
             resolve(outputPath);
           });
 
@@ -938,6 +942,9 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
   const { categoryOverride = null } = opts;
   const tempDir = path.dirname(zipFilePath);
   const tempFilesToClean = [];
+  // Declared out here so the finally block can await it before deleting the
+  // source archive it is still streaming from.
+  let zipBackupPromise = Promise.resolve();
 
   // Cancellation support.
   //
@@ -972,7 +979,6 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
         processingDetail: null,
       });
     } catch { /* ignore */ }
-    try { if (fs.existsSync(zipFilePath)) fs.unlinkSync(zipFilePath); } catch { /* ignore */ }
   };
   try {
     console.log(`\n Starting collection processing: ${collection.name}`);
@@ -987,7 +993,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
     // ZIP backup runs in parallel with track processing — never blocks progress.
     // Tracks are individually saved to Wasabi during processing, so the ZIP is
     // just a redundant source backup and does not need to complete first.
-    let zipBackupPromise = Promise.resolve();
+
     if (!opts.skipZipUpload) {
       const zipSizeGB = (fs.statSync(zipFilePath).size / (1024 * 1024 * 1024)).toFixed(2);
       console.log(` Queuing ${zipSizeGB} GB ZIP backup to Wasabi (parallel — not blocking track processing)...`);
@@ -1343,9 +1349,16 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
             tempDir,
             `${Date.now()}-${Math.random().toString(16).slice(2)}-${path.basename(innerZipName)}`
           );
-          await extractEntryToFileByName(zipPath, innerZipName, outPath);
-          await processZipRecursively(outPath, nestedAlbumHint, depth + 1);
-          if (fs.existsSync(outPath)) fs.unlinkSync(outPath);
+          // Registered before extraction so the finally block still removes it
+          // if this throws; unlinked here on the happy path so a deep tree does
+          // not hold every extracted inner ZIP on disk at once.
+          tempFilesToClean.push(outPath);
+          try {
+            await extractEntryToFileByName(zipPath, innerZipName, outPath);
+            await processZipRecursively(outPath, nestedAlbumHint, depth + 1);
+          } finally {
+            try { if (fs.existsSync(outPath)) fs.unlinkSync(outPath); } catch { /* ignore */ }
+          }
         }
       };
 
@@ -1473,13 +1486,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       setImmediate(() => autoAssignThumbnails(collection._id).catch(() => {}));
       setImmediate(() => notifyAdminUncategorized(collection._id, collection.name).catch(() => {}));
 
-      // Wait for ZIP backup stream to finish before deleting the source file
-      await zipBackupPromise;
-      if (fs.existsSync(zipFilePath)) {
-        fs.unlinkSync(zipFilePath);
-        console.log(' Cleaned up temp ZIP file');
-      }
-      return;
+      return;   // temp files are removed by the finally block
     }
 
     const isDateLikeFolderName = (name) => {
@@ -1747,8 +1754,7 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       console.log(` Processing complete but 0 tracks extracted — marking collection as failed.`);
       console.log(`   ZIP date-pack keys: ${zipPackNames.join(', ')}`);
       console.log(`   DB date-pack names: ${dbPackNames.join(', ')}`);
-      if (fs.existsSync(zipFilePath)) fs.unlinkSync(zipFilePath);
-      return;
+      return;   // temp files are removed by the finally block
     }
 
     if (cancelObserved) {
@@ -1771,18 +1777,9 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
     setImmediate(() => autoAssignThumbnails(collection._id).catch(() => {}));
     setImmediate(() => notifyAdminUncategorized(collection._id, collection.name).catch(() => {}));
 
-    // Wait for ZIP backup to finish before deleting the temp file
-    await zipBackupPromise;
-    if (fs.existsSync(zipFilePath)) {
-      fs.unlinkSync(zipFilePath);
-      console.log(' Cleaned up temp ZIP file');
-    }
+    // temp files are removed by the finally block
   } catch (error) {
     console.error('Collection processing error:', error);
-    for (const tempFile of tempFilesToClean) {
-      try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch { /* ignore */ }
-    }
-    try { if (fs.existsSync(zipFilePath)) fs.unlinkSync(zipFilePath); } catch { /* ignore */ }
 
     try {
       const failedCollection = await Collection.findById(collectionId);
@@ -1793,6 +1790,31 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
       }
     } catch (saveErr) {
       console.error('Could not mark collection as failed:', saveErr.message);
+    }
+  } finally {
+    // The ONLY cleanup point, so no exit path can skip it.
+    //
+    // Cleanup used to be repeated at each successful ending and in the catch,
+    // which meant the early returns in between did not do it — most damagingly
+    // the "no MP3s in nested ZIPs" failure, which returned without deleting a
+    // source archive that can be many gigabytes. That is how 23 GB of temp
+    // files accumulated in production. A finally cannot be walked past.
+    //
+    // The backup upload streams FROM this file, so it has to finish (or fail)
+    // before the file is removed. It already carries its own .catch, so this
+    // await only sequences it.
+    try { await zipBackupPromise; } catch { /* already logged by its own catch */ }
+
+    for (const tempFile of tempFilesToClean) {
+      try { if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile); } catch { /* ignore */ }
+    }
+    try {
+      if (fs.existsSync(zipFilePath)) {
+        fs.unlinkSync(zipFilePath);
+        console.log(' Cleaned up temp ZIP file');
+      }
+    } catch (cleanupErr) {
+      console.error('Failed to remove temp ZIP file:', cleanupErr.message);
     }
   }
 }
