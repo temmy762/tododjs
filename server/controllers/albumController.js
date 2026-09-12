@@ -265,7 +265,9 @@ async function processAlbumTracksAsync(album, mp3Files, source, datePack, coverA
           genreConfidence: genreResult.confidence,
           genreSource: genreResult.source,
           genreNeedsReview: genreResult.needsManualReview,
-          bpm: detectedBpm || metadata.bpm || 128,
+          // Null, not 128: an invented BPM is indistinguishable from a measured
+          // one and makes every undetected track match a 120-130 range filter.
+          bpm: detectedBpm || metadata.bpm || null,
           tonality,
           pool: source.name,
           category: album.category || 'Premium Pack',
@@ -428,7 +430,7 @@ export const uploadTrackToAlbum = async (req, res) => {
       genreConfidence: genreResult.confidence,
       genreSource: genreResult.source,
       genreNeedsReview: genreResult.needsManualReview,
-      bpm: detectedBpm || metadata.bpm || 128,
+      bpm: detectedBpm || metadata.bpm || null,   // unknown stays unknown
       tonality,
       pool: source?.name || '',
       coverArt: trackCoverArt,

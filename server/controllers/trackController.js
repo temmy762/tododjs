@@ -496,7 +496,7 @@ export const reanalyzeAlbumTracks = async (req, res) => {
           const { tonality, detectedBpm } = await detectTonality(audioBuffer, metadata);
 
           track.tonality = tonality;
-          track.bpm = detectedBpm || track.bpm || 128;
+          track.bpm = detectedBpm || track.bpm || null;   // unknown stays unknown
           await track.save();
           updated++;
           console.log(`   ✅ Updated: ${track.title} → ${tonality.camelot || 'unknown'} | ${detectedBpm || track.bpm} BPM`);
@@ -783,7 +783,7 @@ async function processOneTrack(mp3Buffer, mp3Name, basePath, userId) {
     genreConfidence: genreResult.confidence,
     genreSource: genreResult.source,
     genreNeedsReview: genreResult.needsManualReview,
-    bpm: detectedBpm || metadata.bpm || 128,
+    bpm: detectedBpm || metadata.bpm || null,   // unknown stays unknown
     tonality,
     coverArt: embeddedCoverUrl || undefined,
     coverArtKey: embeddedCoverKey || undefined,

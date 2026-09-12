@@ -1311,7 +1311,17 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
                 genreConfidence: genreResult.confidence,
                 genreSource: genreResult.source,
                 genreNeedsReview: genreResult.needsManualReview,
-                bpm: metadata.bpm || 128,
+                // Unknown BPM is stored as null, not invented.
+                //
+                // This used to fall back to 128, which is indistinguishable
+                // from a real reading: the track showed a confident "128 BPM"
+                // that nothing had measured. Worse for the main use case, a
+                // BPM range filter is a plain $gte/$lte on this field, so every
+                // undetected track matched a 120-130 search and polluted the
+                // one filter DJs rely on. The field is optional in the schema
+                // and the UI already renders a missing value as "—", so null
+                // displays correctly and drops out of range filters.
+                bpm: metadata.bpm || null,
                 tonality: tonality,
                 pool: collection.platform,
                 coverArt: trackCoverArt,
@@ -2040,7 +2050,7 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
           genreConfidence: genreResult.confidence,
           genreSource: genreResult.source,
           genreNeedsReview: genreResult.needsManualReview,
-          bpm: metadata.bpm || 128,
+          bpm: metadata.bpm || null,   // unknown stays unknown — see note in processZipRecursively
           tonality: tonality,
           pool: collection.platform,
           coverArt: trackCoverArt || '',
@@ -2269,7 +2279,7 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
         genreConfidence: genreResult.confidence,
         genreSource: genreResult.source,
         genreNeedsReview: genreResult.needsManualReview,
-        bpm: metadata.bpm || 128,
+        bpm: metadata.bpm || null,   // unknown stays unknown — see note in processZipRecursively
         tonality: tonality,
         pool: collection.platform,
         coverArt: coverArtUrl,
