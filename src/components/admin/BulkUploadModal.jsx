@@ -385,10 +385,16 @@ export default function BulkUploadModal({ onClose, onSuccess }) {
       });
       const data = await response.json();
       if (data.success) {
+        // Show what the server actually did, and do NOT fake a processing state.
+        //
+        // This used to set status 'processing', start polling and report
+        // "Retrying failed tracks..." regardless of the response. Nothing
+        // re-imports tracks, so the modal sat on a spinner that could never
+        // advance while claiming work was underway. The endpoint now explains
+        // that per-track re-import is unavailable and points at Reprocess;
+        // that message is what the admin needs to read.
         setFailedTracks([]);
-        setProcessingStatus('processing');
-        startPolling(collectionId);
-        setSuccess('Retrying failed tracks...');
+        setSuccess(data.message || 'Failed tracks reset.');
       } else {
         setError(data.message || 'Failed to retry tracks');
       }
