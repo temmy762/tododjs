@@ -987,9 +987,6 @@
     "usedUp": "Agotado",
     "enable": "Activar",
     "disable": "Desactivar",
-    "retire": "Retirar",
-    "retireTitle": "¿Retirar este código?",
-    "retireBody": "El código deja de funcionar inmediatamente. Los clientes que ya reciben este descuento lo conservan: retirar un código nunca sube el precio de un suscriptor existente.",
     "haveACode": "¿Tienes un código de descuento?",
     "enterCode": "Introduce el código",
     "apply": "Aplicar",
@@ -999,6 +996,9 @@
     "subtotal": "Subtotal",
     "firstPaymentOnly": "Solo el primer pago, las renovaciones al precio completo",
     "forMonths": "Durante los primeros {{count}} mes(es)",
-    "everyRenewal": "Se aplica a cada renovación"
+    "everyRenewal": "Se aplica a cada renovación",
+    "delete": "Eliminar",
+    "deleteTitle": "¿Eliminar este código?",
+    "deleteBody": "El código se elimina y deja de funcionar inmediatamente. Los clientes que ya reciben este descuento lo conservan: eliminar un código nunca sube el precio de un suscriptor existente."
   }
 }

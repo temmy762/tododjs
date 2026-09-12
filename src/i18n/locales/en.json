@@ -967,9 +967,6 @@
     "usedUp": "Used up",
     "enable": "Enable",
     "disable": "Disable",
-    "retire": "Retire",
-    "retireTitle": "Retire this code?",
-    "retireBody": "The code stops working immediately. Customers already receiving this discount keep it — retiring a code never raises an existing subscriber’s price.",
     "haveACode": "Have a discount code?",
     "enterCode": "Enter code",
     "apply": "Apply",
@@ -979,6 +976,9 @@
     "subtotal": "Subtotal",
     "firstPaymentOnly": "First payment only, renewals at full price",
     "forMonths": "For the first {{count}} month(s)",
-    "everyRenewal": "Applies to every renewal"
+    "everyRenewal": "Applies to every renewal",
+    "delete": "Delete",
+    "deleteTitle": "Delete this code?",
+    "deleteBody": "The code is removed and stops working immediately. Customers already receiving this discount keep it — deleting a code never raises an existing subscriber’s price."
   }
 }

@@ -67,10 +67,16 @@ export const listCoupons = async (req, res) => {
       expand: ['data.coupon'],
     });
 
-    const rows = promos.data.map(p => ({
-      ...toAdminRow(p),
-      description: describeDiscount(p.coupon),
-    }));
+    const rows = promos.data
+      // Stripe cannot delete a promotion code — only coupons have a delete
+      // endpoint — so a deleted code is tombstoned in its metadata and hidden
+      // here. From the admin's point of view it is gone; from Stripe's it is a
+      // permanently disabled code with no coupon behind it.
+      .filter(p => !p.metadata?.deletedAt)
+      .map(p => ({
+        ...toAdminRow(p),
+        description: describeDiscount(p.coupon),
+      }));
 
     res.status(200).json({ success: true, data: rows });
   } catch (error) {
@@ -220,32 +226,42 @@ export const setCouponActive = async (req, res) => {
   }
 };
 
-// @desc    Retire a code permanently
+// @desc    Delete a code
 // @route   DELETE /api/coupons/:id
 // @access  Private/Admin
 export const deleteCoupon = async (req, res) => {
   try {
-    // Stripe promotion codes cannot be deleted, only deactivated. Deleting the
-    // underlying coupon stops any new use; customers already receiving the
-    // discount keep it, which is the correct behaviour — retiring a code must
-    // not retroactively raise someone's price.
+    // Stripe has no delete endpoint for promotion codes — only coupons can be
+    // deleted — so "delete" is three steps that together make the code gone
+    // and unusable:
+    //   1. deactivate the promotion code, so it stops working immediately
+    //   2. delete the underlying coupon, so nothing can reach the discount
+    //   3. tombstone it in metadata, so listCoupons hides it from the panel
+    //
+    // What deliberately does NOT happen: customers already receiving this
+    // discount keep it. Deleting a code must never retroactively raise the
+    // price of someone who is mid-subscription.
     const promo = await stripe.promotionCodes.retrieve(req.params.id, { expand: ['coupon'] });
 
-    await stripe.promotionCodes.update(promo.id, { active: false });
+    await stripe.promotionCodes.update(promo.id, {
+      active: false,
+      metadata: { ...(promo.metadata || {}), deletedAt: new Date().toISOString() },
+    });
+
     if (promo.coupon?.id) {
       try {
         await stripe.coupons.del(promo.coupon.id);
       } catch (delErr) {
-        // Already gone, or still attached — deactivation above is the part
-        // that matters, so don't fail the request over it.
+        // Already gone, or Stripe refused — the deactivation above is what
+        // actually stops the code, so don't fail the request over it.
         console.warn(`[coupons] coupon ${promo.coupon.id} not deleted: ${delErr.message}`);
       }
     }
 
-    console.log(`[coupons] ${promo.code} retired by admin ${req.user?._id}`);
+    console.log(`[coupons] ${promo.code} deleted by admin ${req.user?._id}`);
     res.status(200).json({
       success: true,
-      message: 'Code retired. Customers already receiving this discount keep it.',
+      message: 'Code deleted. Customers already receiving this discount keep it.',
     });
   } catch (error) {
     console.error('[coupons] delete failed:', error.message);

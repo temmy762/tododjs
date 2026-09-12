@@ -79,17 +79,19 @@ export default function AdminCoupons() {
   const isExpired = (row) => row.expiresAt && new Date(row.expiresAt) <= new Date();
 
   return (
-    <div className="p-8">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h2 className="text-3xl font-bold text-white mb-2">{t('coupons.title', 'Discount Codes')}</h2>
-          <p className="text-brand-text-tertiary">
+    <div className="p-4 md:p-8">
+      {/* Stacks on phones: side-by-side squeezes the subtitle to one word per
+          line and pushes the button off the edge on narrow screens. */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 md:mb-8">
+        <div className="min-w-0">
+          <h2 className="text-2xl md:text-3xl font-bold text-white mb-1 md:mb-2">{t('coupons.title', 'Discount Codes')}</h2>
+          <p className="text-sm md:text-base text-brand-text-tertiary">
             {t('coupons.subtitle', 'Codes customers can enter at checkout. Managed in Stripe.')}
           </p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-xl bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-accent hover:bg-accent-hover text-white text-sm font-medium transition-colors flex-shrink-0"
         >
           <Plus className="w-4 h-4" />
           {t('coupons.create', 'New code')}
@@ -118,8 +120,10 @@ export default function AdminCoupons() {
 
       {!loading && codes.length > 0 && (
         <div className="bg-dark-elevated rounded-xl border border-white/10 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          {/* min-w keeps the six columns readable and lets the container scroll
+              instead of wrapping every cell onto four lines on a phone. */}
+          <div className="overflow-x-auto -mx-px">
+            <table className="w-full min-w-[780px]">
               <thead>
                 <tr className="border-b border-white/10 bg-dark-surface">
                   {[
@@ -185,7 +189,7 @@ export default function AdminCoupons() {
                           <button
                             onClick={() => setConfirmDelete(row)}
                             disabled={busyId === row.id}
-                            title={t('coupons.retire', 'Retire')}
+                            title={t('coupons.delete', 'Delete')}
                             className="p-2 hover:bg-dark-elevated rounded-lg transition-colors text-brand-text-tertiary hover:text-red-400 disabled:opacity-40"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -210,11 +214,11 @@ export default function AdminCoupons() {
 
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <div className="bg-dark-surface rounded-2xl border border-white/10 p-8 max-w-md w-full">
-            <h3 className="text-xl font-bold text-white mb-2">{t('coupons.retireTitle', 'Retire this code?')}</h3>
-            <p className="font-mono text-accent font-semibold mb-4">{confirmDelete.code}</p>
+          <div className="bg-dark-surface rounded-2xl border border-white/10 p-6 sm:p-8 max-w-md w-full">
+            <h3 className="text-xl font-bold text-white mb-2">{t('coupons.deleteTitle', 'Delete this code?')}</h3>
+            <p className="font-mono text-accent font-semibold mb-4 break-all">{confirmDelete.code}</p>
             <p className="text-brand-text-tertiary text-sm mb-6">
-              {t('coupons.retireBody', 'The code stops working immediately. Customers already receiving this discount keep it — retiring a code never raises an existing subscriber’s price.')}
+              {t('coupons.deleteBody', 'The code is removed and stops working immediately. Customers already receiving this discount keep it — deleting a code never raises an existing subscriber’s price.')}
             </p>
             <div className="flex gap-3">
               <button
@@ -228,7 +232,7 @@ export default function AdminCoupons() {
                 disabled={busyId === confirmDelete.id}
                 className="flex-1 px-4 py-2.5 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition-colors disabled:opacity-50"
               >
-                {t('coupons.retire', 'Retire')}
+                {t('coupons.delete', 'Delete')}
               </button>
             </div>
           </div>
@@ -291,7 +295,7 @@ function CreateCodeModal({ onClose, onCreated }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-      <div className="bg-dark-surface rounded-2xl border border-white/10 p-8 max-w-lg w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-dark-surface rounded-2xl border border-white/10 p-5 sm:p-8 max-w-lg w-full max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-bold text-white">{t('coupons.createTitle', 'New discount code')}</h3>
           <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-lg transition-colors">
@@ -323,7 +327,7 @@ function CreateCodeModal({ onClose, onCreated }) {
           <div>
             <label className={label}>{t('coupons.discountType', 'Discount')}</label>
             <div className="flex gap-2">
-              <select value={form.kind} onChange={(e) => set('kind', e.target.value)} className={`${field} flex-1`}>
+              <select value={form.kind} onChange={(e) => set('kind', e.target.value)} className={`${field} flex-1 min-w-0`}>
                 <option value="percent">{t('coupons.percentOff', 'Percentage off')}</option>
                 <option value="amount">{t('coupons.amountOff', 'Fixed amount off')}</option>
               </select>
@@ -333,7 +337,7 @@ function CreateCodeModal({ onClose, onCreated }) {
                   value={form.percentOff}
                   onChange={(e) => set('percentOff', e.target.value)}
                   placeholder="20"
-                  className={`${field} w-28`}
+                  className={`${field} w-24 sm:w-28 flex-shrink-0`}
                 />
               ) : (
                 <input
@@ -341,7 +345,7 @@ function CreateCodeModal({ onClose, onCreated }) {
                   value={form.amountOff}
                   onChange={(e) => set('amountOff', e.target.value)}
                   placeholder="10.00"
-                  className={`${field} w-28`}
+                  className={`${field} w-24 sm:w-28 flex-shrink-0`}
                 />
               )}
             </div>
@@ -370,7 +374,7 @@ function CreateCodeModal({ onClose, onCreated }) {
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className={label}>{t('coupons.maxRedemptions', 'Usage limit')}</label>
               <input
