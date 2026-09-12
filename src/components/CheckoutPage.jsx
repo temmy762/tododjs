@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, X, CreditCard, Shield, Zap, Download, Music, Crown, Users } from 'lucide-react';
+import { Check, X, CreditCard, Shield, Zap, Download, Music, Crown, Users, Tag, Loader } from 'lucide-react';
 import API_URL from '../config/api';
 
 export default function CheckoutPage({ onClose, selectedPlan }) {
@@ -10,6 +10,48 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
   const [plan, setPlan] = useState(null);
   const [loading, setLoading] = useState(false);
   const [fetchingPlan, setFetchingPlan] = useState(true);
+
+  // Discount code state. The code is checked against Stripe BEFORE the customer
+  // is sent to pay, so the total shown here is the total they are charged,
+  // rather than a surprise on the payment page.
+  const [promoInput, setPromoInput] = useState('');
+  const [promo, setPromo] = useState(null);
+  const [promoError, setPromoError] = useState('');
+  const [checkingPromo, setCheckingPromo] = useState(false);
+
+  const applyPromo = async () => {
+    const code = promoInput.trim();
+    if (!code || !plan) return;
+    setCheckingPromo(true);
+    setPromoError('');
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`${API_URL}/coupons/validate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ code, planId: plan.planId }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPromo(data.data);
+        setPromoError('');
+      } else {
+        setPromo(null);
+        setPromoError(data.message || t('coupons.invalid', 'That code is not valid'));
+      }
+    } catch {
+      setPromo(null);
+      setPromoError(t('coupons.checkFailed', 'Could not check that code. Try again.'));
+    } finally {
+      setCheckingPromo(false);
+    }
+  };
+
+  const clearPromo = () => {
+    setPromo(null);
+    setPromoInput('');
+    setPromoError('');
+  };
 
   useEffect(() => {
     if (selectedPlan) {
@@ -93,7 +135,10 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
           'Authorization': `Bearer ${token}`
         },
         body: JSON.stringify({
-          planId: plan.planId
+          planId: plan.planId,
+          // Send the code, not the discounted price. The server re-resolves it
+          // against Stripe, so a tampered price in this request changes nothing.
+          ...(promo ? { promotionCode: promo.code } : {})
         })
       });
 
@@ -192,13 +237,95 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
                 </div>
               </div>
 
+              {/* Discount code */}
+              <div className="mb-4 pb-4 border-b border-white/10">
+                {!promo ? (
+                  <>
+                    <label className="block text-xs font-medium text-brand-text-tertiary mb-2">
+                      {t('coupons.haveACode', 'Have a discount code?')}
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={promoInput}
+                        onChange={(e) => { setPromoInput(e.target.value.toUpperCase()); setPromoError(''); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') applyPromo(); }}
+                        placeholder={t('coupons.enterCode', 'Enter code')}
+                        className="flex-1 px-3 py-2 bg-dark-elevated border border-white/10 rounded-lg text-white text-sm font-mono tracking-wider placeholder-brand-text-tertiary focus:outline-none focus:border-accent transition-colors"
+                      />
+                      <button
+                        onClick={applyPromo}
+                        disabled={checkingPromo || !promoInput.trim()}
+                        className="px-4 py-2 rounded-lg bg-dark-elevated hover:bg-white/10 border border-white/10 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                      >
+                        {checkingPromo && <Loader className="w-3.5 h-3.5 animate-spin" />}
+                        {t('coupons.apply', 'Apply')}
+                      </button>
+                    </div>
+                    {promoError && (
+                      <p className="text-xs text-red-400 mt-2">{promoError}</p>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg bg-green-500/10 border border-green-500/30">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Tag className="w-4 h-4 text-green-400 flex-shrink-0" />
+                      <div className="min-w-0">
+                        <div className="text-sm font-mono font-semibold text-green-300 tracking-wider">{promo.code}</div>
+                        <div className="text-[10px] text-green-400/80 truncate">{promo.description}</div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={clearPromo}
+                      className="text-green-400/60 hover:text-green-300 transition-colors flex-shrink-0"
+                      title={t('coupons.remove', 'Remove')}
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {promo && (
+                <div className="space-y-2 mb-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-brand-text-tertiary">{t('coupons.subtotal', 'Subtotal')}</span>
+                    <span className="text-brand-text-secondary">{fmtEur(promo.originalPrice)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-green-400">{t('coupons.discount', 'Discount')}</span>
+                    <span className="text-green-400">-{fmtEur(promo.discountAmount)}</span>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-6">
                 <span className="text-lg font-bold text-white">{t('checkout.total')}</span>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-white">{fmtEur(price)}</div>
-                  <div className="text-xs text-brand-text-tertiary">
-                    {t('checkout.oneTimePayment')}
-                  </div>
+                  {promo ? (
+                    <>
+                      <div className="flex items-center gap-2 justify-end">
+                        <span className="text-sm text-brand-text-tertiary line-through">{fmtEur(promo.originalPrice)}</span>
+                        <span className="text-2xl font-bold text-white">{fmtEur(promo.newPrice)}</span>
+                      </div>
+                      <div className="text-xs text-green-400">
+                        {/* A first-payment-only discount has to be stated before
+                            purchase, not discovered at the first renewal. */}
+                        {promo.duration === 'once'
+                          ? t('coupons.firstPaymentOnly', 'First payment only, renewals at full price')
+                          : promo.duration === 'repeating'
+                            ? t('coupons.forMonths', { count: promo.durationInMonths, defaultValue: 'For the first {{count}} month(s)' })
+                            : t('coupons.everyRenewal', 'Applies to every renewal')}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-2xl font-bold text-white">{fmtEur(price)}</div>
+                      <div className="text-xs text-brand-text-tertiary">
+                        {t('checkout.oneTimePayment')}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 

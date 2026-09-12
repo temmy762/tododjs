@@ -9,6 +9,24 @@ import User from '../models/User.js';
 import { notifyAdminNewPayment, notifyAdminCancelledSubscription, sendPaymentReceiptEmail, sendSubscriptionCancelledEmail, sendPaymentFailedEmail } from '../services/emailService.js';
 import SubscriptionPlan from '../models/SubscriptionPlan.js';
 import { customerLocaleFields, syncCustomerLocale } from '../utils/stripeLocale.js';
+import { resolvePromotionCode } from './couponController.js';
+
+/**
+ * Turn a typed discount code into the `discounts` array Stripe expects.
+ *
+ * Uses the same resolver as the validate endpoint, so a code accepted on the
+ * checkout page cannot be rejected — or silently ignored — at payment time.
+ * An invalid code is refused rather than dropped: a customer who typed a code
+ * and was charged full price without being told would have a fair complaint.
+ */
+async function buildDiscounts(promotionCode, customerId) {
+  if (!promotionCode || !String(promotionCode).trim()) return { ok: true, discounts: undefined };
+
+  const result = await resolvePromotionCode(promotionCode, { customerId });
+  if (!result.ok) return { ok: false, message: result.message };
+
+  return { ok: true, discounts: [{ promotion_code: result.promo.id }] };
+}
 
 // On staging, resolve the Stripe price ID from the test-mode config instead
 // of the shared production DB's SubscriptionPlan.stripePriceId (a live-mode
@@ -101,6 +119,13 @@ export const subscribeWithSavedCard = async (req, res) => {
       return res.status(400).json({ success: false, message: 'No default payment method on file. Please add a card first.' });
     }
 
+    // Resolve the discount code before charging, so an invalid one is refused
+    // rather than quietly dropped and the customer billed the full price.
+    const savedCardPromo = await buildDiscounts(req.body.promotionCode, customerId);
+    if (!savedCardPromo.ok) {
+      return res.status(400).json({ success: false, message: savedCardPromo.message, invalidCode: true });
+    }
+
     // Create Stripe subscription directly using saved card
     let subscription;
     try {
@@ -109,6 +134,7 @@ export const subscribeWithSavedCard = async (req, res) => {
         items: [{ price: stripePriceId }],
         default_payment_method: pmId,
         payment_behavior: 'error_if_incomplete',
+        ...(savedCardPromo.discounts ? { discounts: savedCardPromo.discounts } : {}),
         metadata: {
           userId: user._id.toString(),
           planId: plan.planId,
@@ -285,6 +311,11 @@ export const createCheckoutSession = async (req, res) => {
     // Create recurring subscription checkout session.
     // Omitting payment_method_types lets Stripe Checkout show all methods enabled
     // in the Dashboard (Google Pay, Apple Pay, Link, card, etc.) automatically.
+    const promo = await buildDiscounts(req.body.promotionCode, stripeCustomerId);
+    if (!promo.ok) {
+      return res.status(400).json({ success: false, message: promo.message, invalidCode: true });
+    }
+
     const session = await stripe.checkout.sessions.create({
       customer: stripeCustomerId,
       line_items: [
@@ -294,6 +325,10 @@ export const createCheckoutSession = async (req, res) => {
         }
       ],
       mode: 'subscription',
+      // Note: Stripe rejects `discounts` together with allow_promotion_codes,
+      // so the code box lives on our checkout page rather than Stripe's. That
+      // is also what lets the customer see the discounted price before paying.
+      ...(promo.discounts ? { discounts: promo.discounts } : {}),
       success_url: `${FRONTEND_BASE}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${FRONTEND_BASE}/subscription/cancel`,
       metadata: {

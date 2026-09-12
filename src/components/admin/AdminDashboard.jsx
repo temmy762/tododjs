@@ -19,7 +19,8 @@ import {
   X,
   Menu,
   Tag,
-  Music2
+  Music2,
+  Ticket
 } from 'lucide-react';
 import AdminOverview from './AdminOverview';
 import AdminTracks from './AdminTracks';
@@ -39,6 +40,7 @@ import AdminMashups from './AdminMashups';
 import AdminCategories from './AdminCategories';
 import AdminMashupCategories from './AdminMashupCategories';
 import AdminUserDevices from './AdminUserDevices';
+import AdminCoupons from './AdminCoupons';
 import ErrorBoundary from '../ErrorBoundary';
 import API_URL from '../../config/api';
 
@@ -111,6 +113,7 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
     { id: 'piracy', label: 'Piracy Detection', icon: ShieldAlert },
     { id: 'devices', label: t('admin.devicesAndSessions'), icon: Monitor },
     { id: 'subscriptions', label: t('admin.subscriptions'), icon: CreditCard },
+    { id: 'coupons', label: t('coupons.title', 'Discount Codes'), icon: Ticket },
     { id: 'analytics', label: t('admin.analytics'), icon: Database },
     { id: 'categories', label: t('admin.categories'), icon: Tag },
     { id: 'mashupCategories', label: 'Mashup Categories', icon: Music2 },
@@ -151,6 +154,8 @@ export default function AdminDashboard({ onClose, user, onUserUpdate }) {
         return <AdminUserDevices />;
       case 'subscriptions':
         return <AdminSubscriptions />;
+      case 'coupons':
+        return <AdminCoupons />;
       case 'analytics':
         return <AdminAnalytics />;
       case 'pools':
