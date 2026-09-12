@@ -44,10 +44,34 @@ function cleanDatePackName(name) {
   return name.replace(/-\d{8}T\d{6}Z-\d+-\d+$/, '').trim();
 }
 
-function withTimeout(promise, timeoutMs, timeoutValue) {
+/**
+ * Resolve with `timeoutValue` if `promise` has not settled in `timeoutMs`.
+ *
+ * THIS DOES NOT CANCEL THE WORK. A JavaScript promise cannot be cancelled;
+ * Promise.race simply ignores the loser. Whatever is running carries on and
+ * its result is thrown away. The wrapper only stops the CALLER waiting.
+ *
+ * Cancellation therefore has to live at the bottom of each path, and now does:
+ *   - essentia (the CPU-heavy part) runs in a worker thread that is
+ *     terminate()d on its own timeout — services/audioAnalysis.js
+ *   - OpenAI calls pass a timeout to the SDK — services/openai.js
+ *   - keyfinder runs via execAsync with a timeout, so the child is killed
+ *   - Spotify and AudD were the gap: bare fetch() with no timeout, which Node
+ *     will wait on indefinitely. Both now use AbortSignal.timeout.
+ *
+ * Anything added below here must bound itself too, or it will leak past this
+ * wrapper exactly the same way.
+ *
+ * Logs on expiry: giving up silently made these invisible — the track simply
+ * ended up with source 'timeout' and nobody knew how often it happened.
+ */
+function withTimeout(promise, timeoutMs, timeoutValue, label = 'analysis') {
   let timer;
   const timeoutPromise = new Promise((resolve) => {
-    timer = setTimeout(() => resolve(timeoutValue), timeoutMs);
+    timer = setTimeout(() => {
+      console.warn(`[timeout] ${label} gave up after ${timeoutMs}ms — continuing without it`);
+      resolve(timeoutValue);
+    }, timeoutMs);
   });
 
   return Promise.race([promise, timeoutPromise]).finally(() => {
@@ -1270,7 +1294,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
               const tonalityResult = await withTimeout(
                 detectTonality(mp3Buffer, metadata),
                 45000,
-                { tonality: null, detectedBpm: null }
+                { tonality: null, detectedBpm: null },
+                'tonality detection'
               );
 
               const tonality = tonalityResult?.tonality || {
@@ -1289,7 +1314,8 @@ async function processCollectionAsync(collectionId, zipFilePath, collection, cre
               const genreResult = await withTimeout(
                 detectGenre(mp3Buffer, metadata),
                 45000,
-                { genre: null, confidence: 0, source: 'timeout', needsManualReview: true }
+                { genre: null, confidence: 0, source: 'timeout', needsManualReview: true },
+                'genre detection'
               );
 
               await maybeUpdateCollectionProgressEffective(tracksCreated + 0.35);
@@ -2006,7 +2032,8 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
         const tonalityResult = await withTimeout(
           detectTonality(mp3Buffer, metadata),
           45000,
-          { tonality: null, detectedBpm: null }
+          { tonality: null, detectedBpm: null },
+          'tonality detection'
         );
         const tonality = tonalityResult?.tonality || {
           key: null,
@@ -2024,7 +2051,8 @@ async function processTracksForDatePack(zipFilePath, mp3Files, datePack, collect
         const genreResult = await withTimeout(
           detectGenre(mp3Buffer, metadata),
           45000,
-          { genre: null, confidence: 0, source: 'timeout', needsManualReview: true }
+          { genre: null, confidence: 0, source: 'timeout', needsManualReview: true },
+          'genre detection'
         );
         
         // Upload track to Wasabi
@@ -2239,7 +2267,8 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
       const tonalityResult = await withTimeout(
         detectTonality(mp3Buffer, metadata),
         45000,
-        { tonality: null, detectedBpm: null }
+        { tonality: null, detectedBpm: null },
+        'tonality detection'
       );
       const tonality = tonalityResult?.tonality || {
         key: null,
@@ -2257,7 +2286,8 @@ async function processDatePack(dateZipBuffer, datePack, collection) {
       const genreResult = await withTimeout(
         detectGenre(mp3Buffer, metadata),
         45000,
-        { genre: null, confidence: 0, source: 'timeout', needsManualReview: true }
+        { genre: null, confidence: 0, source: 'timeout', needsManualReview: true },
+        'genre detection'
       );
 
       const trackKey = `collections/${collection.name}/albums/${albumName}/${path.parse(mp3Name).name}-${keySuffix(mp3Entry.entryName)}${path.extname(mp3Name)}`;

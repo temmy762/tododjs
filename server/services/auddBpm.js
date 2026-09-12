@@ -40,12 +40,20 @@ function parseFeaturesFromAudd(features) {
   return { bpm, camelot, key: keyName, scale };
 }
 
+// Same as Spotify: an unbounded fetch outlives the caller's timeout and keeps
+// its socket. AudD fingerprinting is slower than a metadata lookup, so this
+// allows more headroom than the Spotify call.
+const AUDD_TIMEOUT_MS = Number(process.env.AUDD_TIMEOUT_MS) > 0
+  ? Number(process.env.AUDD_TIMEOUT_MS)
+  : 30000;
+
 async function postForm(endpoint, params) {
   const body = new URLSearchParams({ api_token: process.env.AUDD_API_TOKEN, ...params });
   const res  = await fetch(`${AUDD_API}${endpoint}`, {
     method:  'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body:    body.toString(),
+    signal:  AbortSignal.timeout(AUDD_TIMEOUT_MS),
   });
   if (!res.ok) throw new Error(`AudD HTTP ${res.status}`);
   return res.json();

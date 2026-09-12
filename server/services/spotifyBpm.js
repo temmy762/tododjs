@@ -20,8 +20,16 @@ function isEnabled() {
   return !!(process.env.SPOTIFY_CLIENT_ID && process.env.SPOTIFY_CLIENT_SECRET);
 }
 
+// Node's fetch has no default timeout, so a stalled connection here waits
+// forever. The callers wrap this in a 45s race, but that race only stops the
+// CALLER waiting — the request itself stays open, holding a socket, long after
+// its result has been discarded. Bound it at the source.
+const SPOTIFY_TIMEOUT_MS = Number(process.env.SPOTIFY_TIMEOUT_MS) > 0
+  ? Number(process.env.SPOTIFY_TIMEOUT_MS)
+  : 15000;
+
 async function fetchJson(url, options = {}) {
-  const res = await fetch(url, options);
+  const res = await fetch(url, { signal: AbortSignal.timeout(SPOTIFY_TIMEOUT_MS), ...options });
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Spotify API ${res.status}: ${text.slice(0, 200)}`);
