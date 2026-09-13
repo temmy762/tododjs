@@ -315,7 +315,7 @@ function CreateCodeModal({ onClose, onCreated }) {
             <input
               type="text"
               value={form.code}
-              onChange={(e) => set('code', e.target.value.toUpperCase())}
+              onChange={(e) => set('code', e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
               placeholder="SUMMER20"
               className={`${field} font-mono tracking-wider`}
             />

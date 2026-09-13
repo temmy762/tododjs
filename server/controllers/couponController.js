@@ -48,6 +48,13 @@ function toAdminRow(promo) {
 /** Human-readable summary of a discount, used in the admin list and at checkout. */
 function describeDiscount(coupon) {
   const c = coupon || {};
+
+  // A coupon deleted directly in the Stripe dashboard expands to a stub with
+  // neither field set. Without this guard the row rendered "NaN EUR off".
+  if (c.percent_off == null && c.amount_off == null) {
+    return 'Discount unavailable — the coupon was deleted in Stripe';
+  }
+
   const amount = c.percent_off != null
     ? `${c.percent_off}%`
     : `${(c.amount_off / 100).toFixed(2)} ${(c.currency || 'eur').toUpperCase()}`;
@@ -62,12 +69,13 @@ function describeDiscount(coupon) {
 // @access  Private/Admin
 export const listCoupons = async (req, res) => {
   try {
-    const promos = await stripe.promotionCodes.list({
-      limit: 100,
-      expand: ['data.coupon'],
-    });
+    // Paged, not capped. A flat limit of 100 silently hid every code beyond
+    // the first page once enough had been created.
+    const promos = await stripe.promotionCodes
+      .list({ limit: 100, expand: ['data.coupon'] })
+      .autoPagingToArray({ limit: 1000 });
 
-    const rows = promos.data
+    const rows = promos
       // Stripe cannot delete a promotion code — only coupons have a delete
       // endpoint — so a deleted code is tombstoned in its metadata and hidden
       // here. From the admin's point of view it is gone; from Stripe's it is a
@@ -153,13 +161,29 @@ export const createCoupon = async (req, res) => {
 
     const normalisedCode = String(code).trim().toUpperCase();
 
+    // The form says letters and numbers only; enforce it rather than letting a
+    // stray space reach Stripe and return a raw API error to the admin.
+    if (!/^[A-Z0-9]{3,40}$/.test(normalisedCode)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Use letters and numbers only, between 3 and 40 characters',
+      });
+    }
+
     // Reject a duplicate before creating the coupon, otherwise the coupon is
     // created, the promotion code fails, and an orphan coupon is left behind.
     const existing = await stripe.promotionCodes.list({ code: normalisedCode, limit: 1 });
-    if (existing.data.length) {
+    const clash = existing.data[0];
+    if (clash) {
+      // A deleted code still occupies its name — Stripe keeps promotion codes
+      // permanently. Saying "already exists" about something the admin cannot
+      // see in the list is not a usable error, so say what actually happened.
+      const wasDeleted = !!clash.metadata?.deletedAt;
       return res.status(409).json({
         success: false,
-        message: `The code ${normalisedCode} already exists`,
+        message: wasDeleted
+          ? `${normalisedCode} was used by a code that has been deleted. Stripe keeps codes permanently, so this name cannot be reused — pick a different one.`
+          : `The code ${normalisedCode} already exists`,
       });
     }
 
@@ -278,16 +302,25 @@ export const deleteCoupon = async (req, res) => {
  *
  * @returns {Promise<{ok: true, promo: object} | {ok: false, message: string}>}
  */
-export async function resolvePromotionCode(rawCode, { customerId = null } = {}) {
+export async function resolvePromotionCode(rawCode) {
   const code = String(rawCode || '').trim().toUpperCase();
   if (!code) return { ok: false, message: 'Enter a code' };
 
+  // Deliberately NOT filtered by customer.
+  //
+  // `customer` on this endpoint means "only return codes RESTRICTED to this
+  // customer" — it is not an applicability check. Passing it excluded every
+  // ordinary unrestricted code, so any returning customer (anyone with a
+  // stripeCustomerId, i.e. anyone who had reached checkout before) was told a
+  // perfectly good code was invalid, while brand-new users saw it work.
+  //
+  // Customer-specific restrictions like first_time_transaction are enforced by
+  // Stripe when the discount is applied, and surface as a clear error there.
   const found = await stripe.promotionCodes.list({
     code,
     active: true,
     limit: 1,
     expand: ['data.coupon'],
-    ...(customerId ? { customer: customerId } : {}),
   });
 
   const promo = found.data[0];
@@ -320,9 +353,7 @@ export const validateCoupon = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Invalid plan' });
     }
 
-    const result = await resolvePromotionCode(code, {
-      customerId: req.user?.subscription?.stripeCustomerId || null,
-    });
+    const result = await resolvePromotionCode(code);
     if (!result.ok) {
       return res.status(200).json({ success: false, message: result.message });
     }

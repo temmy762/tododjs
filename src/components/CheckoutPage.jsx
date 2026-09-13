@@ -54,6 +54,14 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
   };
 
   useEffect(() => {
+    // Drop any applied code when the plan changes. The discount preview is
+    // computed against a specific plan's price, so keeping it would show the
+    // customer a subtotal, discount and total belonging to the plan they just
+    // switched away from — agreeing to one price and being billed another.
+    setPromo(null);
+    setPromoInput('');
+    setPromoError('');
+
     if (selectedPlan) {
       // If selectedPlan is already a plan object, use it
       if (typeof selectedPlan === 'object') {
@@ -146,8 +154,16 @@ export default function CheckoutPage({ onClose, selectedPlan }) {
 
       if (data.success) {
         window.location.href = data.url;
+      } else if (data.invalidCode) {
+        // A code can go stale between being validated and being paid with —
+        // expired, fully redeemed, or first-time-only against a returning
+        // customer. Say which, next to the code box, instead of a generic
+        // "could not start checkout" that gives no way to recover.
+        setPromo(null);
+        setPromoError(data.message || t('coupons.invalid', 'That code is not valid'));
+        setLoading(false);
       } else {
-        alert(t('checkout.errorSession'));
+        alert(data.message || t('checkout.errorSession'));
         setLoading(false);
       }
     } catch (error) {
